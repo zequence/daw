@@ -33,9 +33,12 @@ What it requires:
 - Sync is idempotent: re-running updates names and adds new players; health
   check via the latencySamples fingerprint.
 
-Open questions: should sync also create one MIDI track per player channel
-(Cubase-template style), or instruments + channels only? What happens to
-synced channels whose player was deleted on the server (remove vs orphan)?
+Decisions (2026-10-03):
+- Sync also creates one MIDI track per player channel (Cubase-template
+  style), named after the player, so everything is playable right away.
+- When a synced channel's player was deleted on the server, re-sync ASKS
+  per case (there may be MIDI on tracks the user wants to keep): remove the
+  channel, or keep it orphaned/marked.
 
 Interop by observed format only - no VSL code (licensing note applies).
 
