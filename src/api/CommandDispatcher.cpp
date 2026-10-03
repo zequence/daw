@@ -225,6 +225,7 @@ void CommandDispatcher::registerCommands()
                  t->setProperty ("muted", engine.isTrackMuted (id));
                  t->setProperty ("soloed", engine.isTrackSoloed (id));
                  t->setProperty ("armed", id == engine.getArmedTrack());
+                 t->setProperty ("recordMode", engine.isTrackRecordReplace (id) ? "replace" : "add");
 
                  juce::Array<juce::var> outputs;
 
@@ -318,6 +319,22 @@ void CommandDispatcher::registerCommands()
              int id = 0;
              if (! requireTrack (params, respond, id)) return;
              engine.setTrackSoloed (id, params.getProperty ("soloed", true));
+             respond (ok());
+         });
+
+    add ("track.setRecordMode", "Recording mode: 'add' merges takes; 'replace' erases existing material from the first played event until recording stops",
+         "trackId:int mode:'add'|'replace'",
+         [this, requireTrack] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             const auto mode = params.getProperty ("mode", {}).toString();
+
+             if (mode != "add" && mode != "replace")
+                 return respond (fail ("'mode' must be 'add' or 'replace'"));
+
+             engine.setTrackRecordReplace (id, mode == "replace");
              respond (ok());
          });
 

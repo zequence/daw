@@ -27,6 +27,9 @@ public:
     void setSequence (MidiSequence::Ptr s)       { sequence.store (std::move (s)); }
     MidiSequence::Ptr getSequence() const        { return sequence.load(); }
 
+    // Release everything sounding at the next block (replace-recording's first input).
+    void requestKillAllNotes()                   { killAllRequest.store (true); }
+
     //==============================================================================
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer& midi) override
     {
@@ -35,7 +38,7 @@ public:
         const auto& b = transport.getBlock();
         const auto seq = sequence.load();
 
-        if (b.killAtStart)
+        if (b.killAtStart || killAllRequest.exchange (false))
             emitAllNotesOff (midi, 0);
 
         if (! b.playing || b.numSegments == 0)
@@ -211,6 +214,7 @@ private:
 
     const Transport& transport;
     std::atomic<MidiSequence::Ptr> sequence;
+    std::atomic<bool> killAllRequest { false };
 
     std::vector<ActiveNote> activeNotes;
     bool sustainDown[16] = {};

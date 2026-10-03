@@ -176,6 +176,37 @@ const AudioEngine::Instrument* AudioEngine::findInstrument (InstrumentId id) con
     return it != instruments.end() ? &it->second : nullptr;
 }
 
+MidiSourceProcessor* AudioEngine::getSource (TrackId id) const
+{
+    if (auto* track = findTrack (id))
+        if (auto* node = graph.getNodeForId (track->midiSourceNode))
+            return dynamic_cast<MidiSourceProcessor*> (node->getProcessor());
+
+    return nullptr;
+}
+
+MidiSequence::Ptr AudioEngine::eraseRangeFrom (const MidiSequence::Ptr& sequence, juce::int64 start, juce::int64 end)
+{
+    if (sequence == nullptr || end <= start)
+        return sequence;
+
+    auto notes = sequence->getNotes();
+    auto controls = sequence->getControls();
+
+    std::erase_if (notes, [start, end] (const auto& n) { return n.startTick >= start && n.startTick < end; });
+
+    for (auto& note : notes)
+        if (note.startTick < start && note.startTick + note.lengthTicks > start)
+            note.lengthTicks = start - note.startTick;
+
+    std::erase_if (controls, [start, end] (const auto& c) { return c.tick >= start && c.tick < end; });
+
+    if (notes.empty() && controls.empty())
+        return nullptr;
+
+    return MidiSequence::create (std::move (notes), std::move (controls));
+}
+
 MidiRouteProcessor* AudioEngine::getRoute (const Output& output) const
 {
     if (auto* node = graph.getNodeForId (output.routeNode))
@@ -546,6 +577,21 @@ bool AudioEngine::isTrackSoloed (TrackId id) const
     return track != nullptr && track->soloed;
 }
 
+void AudioEngine::setTrackRecordReplace (TrackId id, bool replace)
+{
+    if (auto* track = findTrack (id))
+    {
+        track->recordReplace = replace;
+        emitTrackChanged (id, "recordMode");
+    }
+}
+
+bool AudioEngine::isTrackRecordReplace (TrackId id) const
+{
+    auto* track = findTrack (id);
+    return track != nullptr && track->recordReplace;
+}
+
 void AudioEngine::applyMuteAndSolo()
 {
     const auto anySolo = std::any_of (tracks.begin(), tracks.end(),
@@ -687,8 +733,15 @@ void AudioEngine::removeMarker (juce::int64 tick)
 //==============================================================================
 bool AudioEngine::startRecording()
 {
-    if (findTrack (armedTrack) == nullptr || isRecording())
+    auto* track = findTrack (armedTrack);
+
+    if (track == nullptr || isRecording())
         return false;
+
+    takeIsReplace = track->recordReplace;
+    preTakeSequence = track->sequence;
+    replaceFromTick = -1;
+    erasedUpToTick = -1;
 
     recordingSawPlayback = false;
     recorder->start (armedTrack);
@@ -710,12 +763,49 @@ void AudioEngine::stopRecording()
         return;
 
     const auto trackId = recorder->getTrackId();
-    const auto result = recorder->finish (transport.getPositionTicks());
+    const auto stopTick = transport.getPositionTicks();
+    const auto result = recorder->finish (stopTick);
+
+    // finish() drains the FIFO, so the first input may only be known now.
+    if (takeIsReplace && replaceFromTick < 0 && recorder->getFirstEventTick() >= 0)
+    {
+        replaceFromTick = recorder->getFirstEventTick();
+        erasedUpToTick = replaceFromTick;
+    }
 
     juce::Logger::writeToLog ("Recording stopped on track " + juce::String (trackId) + ": "
                               + juce::String ((int) result.notes.size()) + " notes, "
-                              + juce::String ((int) result.controls.size()) + " control events");
-    mergeIntoTrack (trackId, result);
+                              + juce::String ((int) result.controls.size()) + " control events"
+                              + (takeIsReplace ? " (replace mode)" : ""));
+
+    if (takeIsReplace && replaceFromTick >= 0)
+    {
+        // One undoable step: pre-take material erased from first input to stop, plus the take.
+        auto base = eraseRangeFrom (preTakeSequence, replaceFromTick, juce::jmax (erasedUpToTick, stopTick));
+
+        auto notes = result.notes;
+        auto controls = result.controls;
+
+        if (base != nullptr)
+        {
+            notes.insert (notes.end(), base->getNotes().begin(), base->getNotes().end());
+            controls.insert (controls.end(), base->getControls().begin(), base->getControls().end());
+        }
+
+        if (auto* track = findTrack (trackId))
+            applySequence (*track, preTakeSequence);   // so the undo snapshot is the pre-take state
+
+        setTrackSequence (trackId, notes.empty() && controls.empty()
+                                       ? nullptr
+                                       : MidiSequence::create (std::move (notes), std::move (controls)));
+    }
+    else
+    {
+        mergeIntoTrack (trackId, result);
+    }
+
+    takeIsReplace = false;
+    preTakeSequence = nullptr;
 
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
     data->setProperty ("trackId", trackId);
@@ -731,9 +821,39 @@ void AudioEngine::pollRecording()
 
     recorder->poll();
 
-    // Commit each loop pass so it's audible on the next one.
-    if (recorder->consumeWrapFlag())
+    if (takeIsReplace)
+    {
+        recorder->consumeWrapFlag();   // replace mode commits once, at stop
+
+        // First input starts the replacement: cut sounding notes and begin erasing.
+        if (replaceFromTick < 0 && recorder->getFirstEventTick() >= 0)
+        {
+            replaceFromTick = recorder->getFirstEventTick();
+            erasedUpToTick = replaceFromTick;
+
+            if (auto* source = getSource (recorder->getTrackId()))
+                source->requestKillAllNotes();
+        }
+
+        // Erase pre-take material under the playhead so you hear it vanish as you play.
+        if (replaceFromTick >= 0)
+        {
+            const auto position = transport.getPositionTicks();
+
+            if (position > erasedUpToTick)
+            {
+                if (auto* track = findTrack (recorder->getTrackId()))
+                    applySequence (*track, eraseRangeFrom (track->sequence, erasedUpToTick, position));
+
+                erasedUpToTick = position;
+            }
+        }
+    }
+    else if (recorder->consumeWrapFlag())
+    {
+        // Add mode: commit each loop pass so it's audible on the next one.
         mergeIntoTrack (recorder->getTrackId(), recorder->takePending());
+    }
 
     // The transport reports playing only once the audio thread has confirmed it.
     if (transport.isPlaying())
@@ -834,6 +954,7 @@ bool AudioEngine::saveProject (const juce::File& file)
         e->setAttribute ("muted", track.muted);
         e->setAttribute ("soloed", track.soloed);
         e->setAttribute ("armed", id == armedTrack);
+        e->setAttribute ("recordReplace", track.recordReplace);
 
         for (auto& output : track.outputs)
         {
@@ -1023,6 +1144,7 @@ void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std:
         setTrackName (trackId, e->getStringAttribute ("name"));
         setTrackMuted (trackId, e->getBoolAttribute ("muted"));
         setTrackSoloed (trackId, e->getBoolAttribute ("soloed"));
+        setTrackRecordReplace (trackId, e->getBoolAttribute ("recordReplace"));
 
         for (auto* o : e->getChildWithTagNameIterator ("OUTPUT"))
         {

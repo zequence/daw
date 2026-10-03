@@ -89,6 +89,12 @@ public:
     void setTrackSoloed (TrackId, bool);
     bool isTrackSoloed (TrackId) const;
 
+    // Recording mode (DESIGN.md): false = add to existing (merge), true = replace on
+    // first input (existing material plays until you play; from then it's erased
+    // under the playhead until recording stops).
+    void setTrackRecordReplace (TrackId, bool);
+    bool isTrackRecordReplace (TrackId) const;
+
     void setTrackSequence (TrackId, MidiSequence::Ptr);   // records clip history (undo)
     MidiSequence::Ptr getTrackSequence (TrackId) const;
     void addToTrackSequence (TrackId, std::vector<MidiSequence::Note>, std::vector<MidiSequence::Control>);
@@ -175,6 +181,7 @@ private:
         std::vector<MidiSequence::Ptr> undoStack, redoStack;
         std::vector<Output> outputs;
         bool muted = false, soloed = false;
+        bool recordReplace = false;                 // false = add, true = replace on first input
     };
 
     // Runs the transport once per device callback, before the graph renders the block.
@@ -211,6 +218,8 @@ private:
     void restoreProjectTracks (const juce::XmlElement& root, const std::map<int, InstrumentId>& instrumentIds,
                                juce::StringArray& warnings);
     void applySequence (Track&, MidiSequence::Ptr);   // pushes to the source node, no history
+    static MidiSequence::Ptr eraseRangeFrom (const MidiSequence::Ptr&, juce::int64 start, juce::int64 end);
+    MidiSourceProcessor* getSource (TrackId) const;
     void updateMidiRouting();                 // keeps midiIn -> route connections matching the armed track
     void emitEvent (const juce::String& type, juce::DynamicObject::Ptr data = nullptr);
     void emitTrackChanged (TrackId, const juce::String& change);
@@ -232,6 +241,11 @@ private:
     NodeID audioOutNode, midiInNode, recorderNode;
     std::unique_ptr<MidiRecorder> recorder;
     bool recordingSawPlayback = false;
+
+    // Replace-on-first-input state for the active take
+    bool takeIsReplace = false;
+    MidiSequence::Ptr preTakeSequence;
+    juce::int64 replaceFromTick = -1, erasedUpToTick = -1;
 
     std::map<TrackId, Track> tracks;
     std::map<InstrumentId, Instrument> instruments;

@@ -28,9 +28,14 @@ public:
         openNotes.clear();
         pending = {};
         wrapped = false;
+        firstEventTick = -1;
         recording = true;
         processor.setActive (true);
     }
+
+    // Tick of the first captured event, or -1 while nothing has been played.
+    // Drives "replace on first input" recording.
+    juce::int64 getFirstEventTick() const noexcept { return firstEventTick; }
 
     bool isRecording() const noexcept   { return recording; }
     int getTrackId() const noexcept     { return trackId; }
@@ -72,6 +77,9 @@ private:
             wrapped = true;
             return;
         }
+
+        if (firstEventTick < 0)
+            firstEventTick = event.tick;
 
         const juce::MidiMessage message (event.data, event.size, 0.0);
 
@@ -132,6 +140,7 @@ private:
     std::vector<OpenNote> openNotes;
     Result pending;
     int trackId = 0;
+    juce::int64 firstEventTick = -1;
     bool recording = false, wrapped = false;
 
     JUCE_DECLARE_NON_COPYABLE (MidiRecorder)

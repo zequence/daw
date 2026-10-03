@@ -43,8 +43,15 @@ public:
         instrumentButton.setTooltip ("Open this track's instrument (plugin GUI and rack entry)");
         instrumentButton.onClick = [this] { if (owner.onOpenInstrument) owner.onOpenInstrument (trackId); };
 
+        recordModeButton.setTooltip ("Recording mode - Add: merge new takes into the clip. "
+                                     "Rpl: from your first played note, existing material is replaced until you stop.");
+        recordModeButton.onClick = [this]
+        {
+            engine.setTrackRecordReplace (trackId, ! engine.isTrackRecordReplace (trackId));
+        };
+
         for (auto* c : std::initializer_list<juce::Component*> { &armButton, &editorButton, &soloButton,
-                                                                 &muteButton, &instrumentButton })
+                                                                 &muteButton, &instrumentButton, &recordModeButton })
         {
             c->setWantsKeyboardFocus (false);
             addAndMakeVisible (c);
@@ -62,6 +69,11 @@ public:
         muteButton.setToggleState (engine.isTrackMuted (trackId), juce::dontSendNotification);
         soloButton.setToggleState (engine.isTrackSoloed (trackId), juce::dontSendNotification);
         instrumentButton.setEnabled (! engine.getTrackOutputs (trackId).empty());
+
+        const auto replace = engine.isTrackRecordReplace (trackId);
+        recordModeButton.setButtonText (replace ? "Rpl" : "Add");
+        recordModeButton.setColour (juce::TextButton::buttonColourId,
+                                    replace ? juce::Colours::darkred.darker (0.3f) : juce::Colour (0xff333842));
 
         if (! nameLabel.isBeingEdited())
             nameLabel.setText (engine.getTrackName (trackId), juce::dontSendNotification);
@@ -116,6 +128,8 @@ public:
             b->setBounds (buttons.removeFromLeft (26));
             buttons.removeFromLeft (3);
         }
+
+        recordModeButton.setBounds (buttons.removeFromLeft (34));
     }
 
 private:
@@ -125,7 +139,7 @@ private:
 
     juce::Label nameLabel;
     juce::TextButton armButton { "R" }, editorButton { "E" }, soloButton { "S" },
-                     muteButton { "M" }, instrumentButton { "I" };
+                     muteButton { "M" }, instrumentButton { "I" }, recordModeButton { "Add" };
     bool selected = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Row)
