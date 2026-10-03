@@ -2,8 +2,8 @@
 #include "../api/CommandDispatcher.h"
 #include "ColorPalette.h"
 
-ArrangementView::ArrangementView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
-    : engine (e), dispatcher (d), axis (a)
+ArrangementView::ArrangementView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a, sidebar::VerticalScroll& v)
+    : engine (e), dispatcher (d), axis (a), vscroll (v)
 {
     setWantsKeyboardFocus (false);
     startTimerHz (30);
@@ -12,6 +12,43 @@ ArrangementView::ArrangementView (AudioEngine& e, CommandDispatcher& d, TimeAxis
 ArrangementView::~ArrangementView() = default;
 
 //==============================================================================
+int ArrangementView::contentHeight (const Items& items)
+{
+    int total = 0;
+
+    for (auto& item : items)
+        total += sidebar::heightOf (item);
+
+    return total;
+}
+
+int ArrangementView::rowTop (const Items& items, size_t index) const
+{
+    int y = -vscroll.y;
+
+    for (size_t i = 0; i < index && i < items.size(); ++i)
+        y += sidebar::heightOf (items[i]);
+
+    return y;
+}
+
+int ArrangementView::itemIndexAt (const Items& items, int targetY) const
+{
+    int y = -vscroll.y;
+
+    for (size_t i = 0; i < items.size(); ++i)
+    {
+        const auto height = sidebar::heightOf (items[i]);
+
+        if (targetY >= y && targetY < y + height)
+            return (int) i;
+
+        y += height;
+    }
+
+    return -1;
+}
+
 juce::int64 ArrangementView::nearestBar (juce::int64 tick) const
 {
     const auto map = engine.getTransport().getTempoMap();
@@ -35,17 +72,11 @@ const std::vector<PhraseBlock>& ArrangementView::blocksFor (AudioEngine::TrackId
     return entry.blocks;
 }
 
-int ArrangementView::laneIndexAt (int y) const
-{
-    return scrollLane + y / laneHeight;
-}
-
-juce::Rectangle<int> ArrangementView::blockRect (const BlockRef& block, int laneIndex) const
+juce::Rectangle<int> ArrangementView::blockRect (const BlockRef& block, int laneTop) const
 {
     const auto x = tickToX (block.startTick);
     const auto right = tickToX (block.endTick);
-    const auto y = (laneIndex - scrollLane) * laneHeight;
-    return { x, y + 6, juce::jmax (8, right - x), laneHeight - 12 };
+    return { x, laneTop + 6, juce::jmax (8, right - x), sidebar::trackRowHeight - 12 };
 }
 
 ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)
@@ -53,13 +84,13 @@ ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)
     if (position.x < TimeAxis::gutter)
         return {};
 
-    const auto trackIds = engine.getArrangeTrackOrder();
-    const auto lane = laneIndexAt (position.y);
+    const auto items = itemsNow();
+    const auto index = itemIndexAt (items, position.y);
 
-    if (lane < 0 || lane >= (int) trackIds.size())
+    if (index < 0 || items[(size_t) index].member == 0)
         return {};
 
-    const auto trackId = trackIds[(size_t) lane];
+    const auto trackId = items[(size_t) index].member;
     const auto tick = xToTick (position.x);
 
     for (auto& block : blocksFor (trackId))
@@ -112,11 +143,11 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
     }
     else
     {
-        const auto lane = laneIndexAt (position.y);
-        const auto trackIds = engine.getArrangeTrackOrder();
+        const auto items = itemsNow();
+        const auto index = itemIndexAt (items, position.y);
 
-        if (lane >= 0 && lane < (int) trackIds.size() && onSelectTrack)
-            onSelectTrack (trackIds[(size_t) lane]);
+        if (index >= 0 && items[(size_t) index].member != 0 && onSelectTrack)
+            onSelectTrack (items[(size_t) index].member);
     }
 
     repaint();
@@ -167,9 +198,10 @@ void ArrangementView::mouseWheelMove (const juce::MouseEvent& event, const juce:
 {
     if (! axis.handleWheel (event, wheel))
     {
-        const auto laneCount = (int) engine.getArrangeTrackOrder().size();
-        scrollLane = juce::jlimit (0, juce::jmax (0, laneCount - 1),
-                                   scrollLane + (wheel.deltaY > 0 ? -1 : 1));
+        // Plain wheel scrolls the rows - shared with the sidebar
+        const auto items = itemsNow();
+        const auto maxScroll = juce::jmax (0, contentHeight (items) - getHeight());
+        vscroll.set (juce::jlimit (0, maxScroll, vscroll.y - (int) (wheel.deltaY * 160.0f)));
     }
 
     repaint();
@@ -246,15 +278,16 @@ void ArrangementView::showBlockMenu (const BlockRef& block)
 //==============================================================================
 void ArrangementView::timerCallback()
 {
-    // Playhead, shared axis, or any engine mutation (clips, folders, markers,
-    // tempo...) - the engine's state revision covers everything we display.
+    // Playhead, shared axis, shared vertical scroll, or any engine mutation.
     const auto playhead = engine.getTransport().getPositionTicks();
     const auto needsRepaint = playhead != lastPlayheadTick || axis.revision != lastAxisRevision
-                                || engine.getStateRevision() != lastEngineRevision;
+                                || engine.getStateRevision() != lastEngineRevision
+                                || vscroll.revision != lastVScrollRevision;
 
     lastPlayheadTick = playhead;
     lastAxisRevision = axis.revision;
     lastEngineRevision = engine.getStateRevision();
+    lastVScrollRevision = vscroll.revision;
 
     if (needsRepaint && isShowing())
         repaint();
@@ -266,20 +299,32 @@ void ArrangementView::paint (juce::Graphics& g)
     g.fillAll (juce::Colour (0xff1a1c1f));
 
     const auto map = engine.getTransport().getTempoMap();
+    const auto items = itemsNow();
+    const auto opacity = colours::opacityFrom (engine.getSettingsFile());
 
-    // Lane order follows the sidebar's folder tree; collapsed folders hide their lanes
-    const auto trackIds = engine.getArrangeTrackOrder();
-
-    // --- Lanes background ---
-    for (int lane = scrollLane; lane < (int) trackIds.size(); ++lane)
+    // --- Row backgrounds (same Y axis as the sidebar rows) ---
     {
-        const auto y = (lane - scrollLane) * laneHeight;
+        int y = -vscroll.y, trackParity = 0;
 
-        if (y > getHeight())
-            break;
+        for (auto& item : items)
+        {
+            const auto height = sidebar::heightOf (item);
 
-        g.setColour (lane % 2 == 0 ? juce::Colour (0xff202327) : juce::Colour (0xff24272c));
-        g.fillRect (0, y, getWidth(), laneHeight);
+            if (y + height > 0 && y < getHeight())
+            {
+                if (item.folder != 0)
+                    g.setColour (juce::Colour (0xff1d2024));
+                else
+                    g.setColour (trackParity % 2 == 0 ? juce::Colour (0xff202327) : juce::Colour (0xff24272c));
+
+                g.fillRect (0, y, getWidth(), height);
+            }
+
+            if (item.member != 0)
+                ++trackParity;
+
+            y += height;
+        }
     }
 
     // --- Bar lines ---
@@ -313,89 +358,112 @@ void ArrangementView::paint (juce::Graphics& g)
     }
 
     // --- Phrase blocks ---
-    for (int lane = scrollLane; lane < (int) trackIds.size(); ++lane)
     {
-        const auto trackId = trackIds[(size_t) lane];
-        const auto y = (lane - scrollLane) * laneHeight;
+        int y = -vscroll.y;
 
-        if (y > getHeight())
-            break;
-
-        const auto sequence = engine.getTrackSequence (trackId);
-
-        for (auto& block : blocksFor (trackId))
+        for (auto& item : items)
         {
-            BlockRef ref { trackId, block.startTick, block.endTick };
-            const auto isSelected = selected.valid() && selected.trackId == trackId
-                                      && selected.startTick == block.startTick;
-            const auto isDragged = dragging.valid() && dragging.trackId == trackId
-                                     && dragging.startTick == block.startTick && didDrag;
+            const auto height = sidebar::heightOf (item);
 
-            if (isDragged)
+            if (item.member == 0 || y + height <= 0 || y >= getHeight())
             {
-                ref.startTick += dragDeltaTicks;
-                ref.endTick += dragDeltaTicks;
-            }
-
-            const auto rect = blockRect (ref, lane);
-
-            if (rect.getRight() < TimeAxis::gutter || rect.getX() > getWidth())
+                y += height;
                 continue;
-
-            g.setColour (isSelected || isDragged ? juce::Colour (0xcc7aa3d4) : juce::Colour (0x995d8fc4));
-            g.fillRoundedRectangle (rect.toFloat(), 4.0f);
-
-            // Regions carry the track color as an all-around border (ISSUES.md)
-            if (const auto hex = engine.getTrackColour (trackId); hex.isNotEmpty())
-            {
-                g.setColour (AudioEngine::colourFromHex (hex)
-                                 .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
-                g.drawRoundedRectangle (rect.toFloat(), 4.0f, 1.8f);
-            }
-            else
-            {
-                g.setColour (juce::Colours::black.withAlpha (0.4f));
-                g.drawRoundedRectangle (rect.toFloat(), 4.0f, 1.0f);
             }
 
-            // Mini note preview
-            if (sequence != nullptr && block.noteCount > 0)
-            {
-                g.setColour (juce::Colours::white.withAlpha (0.5f));
+            const auto trackId = item.member;
+            const auto sequence = engine.getTrackSequence (trackId);
 
-                for (auto& note : sequence->getNotes())
+            // The whole region inherits the track color (ISSUES.md): the border is
+            // pronounced and colorful, the box brighter and less colorful.
+            const auto base = AudioEngine::colourFromHex (engine.getTrackColour (trackId),
+                                                          juce::Colour (0xff8a8f98));
+            const auto fill = base.withMultipliedSaturation (0.45f).withMultipliedBrightness (1.2f);
+
+            for (auto& block : blocksFor (trackId))
+            {
+                BlockRef ref { trackId, block.startTick, block.endTick };
+                const auto isSelected = selected.valid() && selected.trackId == trackId
+                                          && selected.startTick == block.startTick;
+                const auto isDragged = dragging.valid() && dragging.trackId == trackId
+                                         && dragging.startTick == block.startTick && didDrag;
+
+                if (isDragged)
                 {
-                    if (note.startTick < block.startTick || note.startTick >= block.endTick)
-                        continue;
+                    ref.startTick += dragDeltaTicks;
+                    ref.endTick += dragDeltaTicks;
+                }
 
-                    const auto tickShift = isDragged ? dragDeltaTicks : 0;
-                    const auto nx = tickToX (note.startTick + tickShift);
-                    const auto nw = juce::jmax (1, (int) ((double) note.lengthTicks / axis.ticksPerPixel));
-                    const auto ny = rect.getBottom() - 4 - (note.key - 24) * (rect.getHeight() - 8) / 84;
-                    g.fillRect (nx, juce::jlimit (rect.getY() + 2, rect.getBottom() - 3, ny), nw, 2);
+                const auto rect = blockRect (ref, y);
+
+                if (rect.getRight() < TimeAxis::gutter || rect.getX() > getWidth())
+                    continue;
+
+                g.setColour (fill.withAlpha (isSelected || isDragged ? 0.95f : 0.6f));
+                g.fillRoundedRectangle (rect.toFloat(), 4.0f);
+
+                g.setColour ((isSelected || isDragged ? base.interpolatedWith (juce::Colours::white, 0.45f)
+                                                      : base).withAlpha (opacity));
+                g.drawRoundedRectangle (rect.toFloat(), 4.0f, 1.8f);
+
+                // Mini note preview
+                if (sequence != nullptr && block.noteCount > 0)
+                {
+                    g.setColour (juce::Colours::black.withAlpha (0.45f));
+
+                    for (auto& note : sequence->getNotes())
+                    {
+                        if (note.startTick < block.startTick || note.startTick >= block.endTick)
+                            continue;
+
+                        const auto tickShift = isDragged ? dragDeltaTicks : 0;
+                        const auto nx = tickToX (note.startTick + tickShift);
+                        const auto nw = juce::jmax (1, (int) ((double) note.lengthTicks / axis.ticksPerPixel));
+                        const auto ny = rect.getBottom() - 4 - (note.key - 24) * (rect.getHeight() - 8) / 84;
+                        g.fillRect (nx, juce::jlimit (rect.getY() + 2, rect.getBottom() - 3, ny), nw, 2);
+                    }
                 }
             }
+
+            y += height;
         }
     }
 
-    // --- Gutter (shared left column): track names over a solid background ---
+    // --- Gutter (shared left column): names over a solid background ---
     g.setColour (juce::Colour (0xff1d1f23));
     g.fillRect (0, 0, TimeAxis::gutter, getHeight());
     g.setColour (juce::Colour (0xff2e3136));
     g.fillRect (TimeAxis::gutter - 1, 0, 1, getHeight());
 
-    for (int lane = scrollLane; lane < (int) trackIds.size(); ++lane)
     {
-        const auto y = (lane - scrollLane) * laneHeight;
+        int y = -vscroll.y;
 
-        if (y > getHeight())
-            break;
+        for (auto& item : items)
+        {
+            const auto height = sidebar::heightOf (item);
 
-        g.setColour (juce::Colours::white.withAlpha (0.45f));
-        g.setFont (juce::FontOptions (10.0f));
-        g.drawFittedText (engine.getTrackName (trackIds[(size_t) lane]),
-                          4, y + 4, TimeAxis::gutter - 8, laneHeight - 8,
-                          juce::Justification::topLeft, 3);
+            if (y + height > 0 && y < getHeight())
+            {
+                if (item.folder != 0)
+                {
+                    g.setColour (juce::Colours::white.withAlpha (0.55f));
+                    g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+                    g.drawFittedText (engine.getFolderName (item.folder),
+                                      4, y + 2, TimeAxis::gutter - 8, height - 4,
+                                      juce::Justification::centredLeft, 2);
+                }
+                else
+                {
+                    g.setColour (juce::Colours::white.withAlpha (0.45f));
+                    g.setFont (juce::FontOptions (10.0f));
+                    g.drawFittedText (engine.getTrackName (item.member),
+                                      4, y + 4, TimeAxis::gutter - 8, height - 8,
+                                      juce::Justification::topLeft, 3);
+                }
+            }
+
+            y += height;
+        }
     }
 
     // --- Playhead ---
@@ -408,7 +476,7 @@ void ArrangementView::paint (juce::Graphics& g)
     }
 
     // --- Empty hint ---
-    if (trackIds.empty())
+    if (items.empty())
     {
         g.setColour (juce::Colours::grey);
         g.setFont (juce::FontOptions (14.0f));

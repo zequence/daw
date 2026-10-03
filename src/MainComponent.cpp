@@ -1241,9 +1241,13 @@ void MainComponent::resized()
         sidebarWidth = juce::jmax (180, getWidth() * 15 / 100);
 
     const auto currentSidebarWidth = sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth;
+    const auto timelineHeight = timelineBar.getPreferredHeight();
     auto sidebar = area.removeFromLeft (currentSidebarWidth);
 
-    collapseButton.setBounds (sidebar.removeFromTop (24).reduced (2, 1));
+    // The sidebar lists start at the same y as the content views (below the
+    // timeline bar), so their rows share the arrangement's Y axis exactly.
+    auto sidebarTop = sidebar.removeFromTop (timelineHeight);
+    collapseButton.setBounds (sidebarTop.removeFromTop (24).reduced (2, 1));
 
     trackList.setBounds (sidebar);
     channelList.setBounds (sidebar);
@@ -1254,7 +1258,7 @@ void MainComponent::resized()
     // Timeline bar + content container. The bar spans exactly the content area, so
     // its local x coordinates (and the shared TimeAxis gutter) line up with the
     // arrangement lanes and the piano roll grid below it.
-    timelineBar.setBounds (area.removeFromTop (timelineBar.getPreferredHeight()));
+    timelineBar.setBounds (area.removeFromTop (timelineHeight));
 
     for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView, &audioRegionsView,
                                                                 &instrumentsView, &instrumentEditorView, &historyView })

@@ -3,19 +3,7 @@
 
 namespace
 {
-    constexpr int rowHeight = 56;
-    constexpr int folderRowHeight = 28;      // about half a channel row
-    constexpr int indentPerLevel = 10;
-
-    // The slight area on the left that shows what belongs to which folder.
-    void paintIndentGuides (juce::Graphics& g, int depth, int height)
-    {
-        for (int level = 1; level <= depth; ++level)
-        {
-            g.setColour (juce::Colours::gold.withAlpha (0.18f + 0.04f * (float) level));
-            g.fillRect (level * indentPerLevel - 6, 0, 2, height);
-        }
-    }
+    using sidebar::indentPerLevel;
 }
 
 //==============================================================================
@@ -131,21 +119,16 @@ public:
         g.setColour (selected ? juce::Colour (0xff39404d) : juce::Colour (0xff2b2e33));
         g.fillRoundedRectangle (bounds, 4.0f);
 
-        // The track color shows as a left border only (ISSUES.md)
-        if (const auto hex = engine.getTrackColour (trackId); hex.isNotEmpty())
-        {
-            g.setColour (AudioEngine::colourFromHex (hex)
-                             .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
-            g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
-        }
+        // The track color shows as a left border only; uncolored = grey (ISSUES.md)
+        g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (trackId), juce::Colour (0xff6d7178))
+                         .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
+        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
 
         if (selected)
         {
             g.setColour (juce::Colour (0xff6c87b5));
             g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
         }
-
-        paintIndentGuides (g, depth, getHeight());
     }
 
     void resized() override
@@ -190,7 +173,7 @@ public:
         nameLabel.setText (engine.getFolderName (folderId), juce::dontSendNotification);
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
-        nameLabel.setColour (juce::Label::textColourId, juce::Colours::gold.withAlpha (0.85f));
+        // Same text color as the tracks; the bold smaller font sets folders apart (ISSUES.md)
         nameLabel.setFont (juce::FontOptions (13.0f, juce::Font::bold));
         nameLabel.onTextChange = [this]
         {
@@ -249,12 +232,10 @@ public:
         g.setColour (juce::Colour (0xff2e3038));
         g.fillRoundedRectangle (bounds, 4.0f);
 
-        if (const auto hex = engine.getFolderColour (folderId); hex.isNotEmpty())
-        {
-            g.setColour (AudioEngine::colourFromHex (hex)
-                             .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
-            g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
-        }
+        // Folder color as a left border; uncolored = grey (like tracks)
+        g.setColour (AudioEngine::colourFromHex (engine.getFolderColour (folderId), juce::Colour (0xff6d7178))
+                         .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
+        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
 
         // Collapse triangle
         const auto collapsed = engine.isFolderCollapsed (folderId);
@@ -266,10 +247,8 @@ public:
         else
             triangle.addTriangle (cx - 5.0f, cy - 3.0f, cx + 5.0f, cy - 3.0f, cx, cy + 5.0f);
 
-        g.setColour (juce::Colours::gold.withAlpha (0.8f));
+        g.setColour (juce::Colours::white.withAlpha (0.7f));
         g.fillPath (triangle);
-
-        paintIndentGuides (g, depth, getHeight());
     }
 
     void resized() override
@@ -288,7 +267,7 @@ private:
 };
 
 //==============================================================================
-TrackList::TrackList (AudioEngine& e) : engine (e)
+TrackList::TrackList (AudioEngine& e, sidebar::VerticalScroll& v) : engine (e), vscroll (v)
 {
     // Adding tracks/folders lives in the right-click menus (ISSUES.md: header
     // buttons removed)
@@ -315,6 +294,16 @@ void TrackList::refresh()
         rebuildRows();
     }
 
+    // Two-way sync with the shared vertical scroll (the arrangement is on the
+    // same Y axis): follow it when someone else moved it, push our own scrolling.
+    if (vscroll.revision != lastScrollRevision)
+        viewport.setViewPosition (viewport.getViewPositionX(), vscroll.y);
+    else if (viewport.getViewPositionY() != vscroll.y)
+        vscroll.set (viewport.getViewPositionY());
+
+    vscroll.set (viewport.getViewPositionY());   // viewport clamping wins
+    lastScrollRevision = vscroll.revision;
+
     // Drop selections that no longer exist
     const auto trackIds = engine.getTrackIds();
     std::erase_if (multiSelection, [&trackIds] (auto id)
@@ -333,7 +322,7 @@ void TrackList::refresh()
 
 int TrackList::heightOfItem (const AudioEngine::SidebarItem& item)
 {
-    return item.folder != 0 ? folderRowHeight : rowHeight;
+    return sidebar::heightOf (item);
 }
 
 void TrackList::rebuildRows()

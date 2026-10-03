@@ -30,17 +30,11 @@ Claude is unsure of an issue they will pose a question.
 
 # Arrange view
 
-- [ ] Region height and Y-coordinate should follow channels.
-      (Milestone-sized as part of "Unified track area" in MILESTONES.md: the
-      sidebar and arrange view become one unit, which solves this, the
-      scroll sync and the folder spans by construction.)
-- [ ] Scrolling should sync with sidebar
-      (part of "Unified track area", see above)
 - [ ] Draw regions for folders that span the content inside them.
-      (part of "Unified track area", see above)
+      (small now that folder rows exist as lanes on the shared Y axis)
 - [ ] Double clicking a folder in the midi UI will load the editor and show the combined midi. This also selects all midi channels inside it.
-      (Milestone-sized: multi-channel editing; builds on the unified track
-      area. Pairs with the editor's channel dropdown below.)
+      (Milestone-sized: multi-channel editing. Pairs with the editor's
+      channel dropdown below.)
 
 # Midi editor
 

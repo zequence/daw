@@ -107,15 +107,6 @@ private:
         return item.folder != 0 ? folderRowHeight : rowHeight;
     }
 
-    static void paintIndentGuides (juce::Graphics& g, int depth, int height)
-    {
-        for (int level = 1; level <= depth; ++level)
-        {
-            g.setColour (juce::Colours::gold.withAlpha (0.18f + 0.04f * (float) level));
-            g.fillRect (level * indentPerLevel - 6, 0, 2, height);
-        }
-    }
-
     //==========================================================================
     struct Row final : juce::Component
     {
@@ -213,8 +204,6 @@ private:
             const auto proportion = juce::jlimit (0.0f, 1.0f, juce::jmap (db, -60.0f, 0.0f, 0.0f, 1.0f));
             g.setColour (meterLevel >= 1.0f ? juce::Colours::red : juce::Colours::limegreen);
             g.fillRect (meter.withWidth (meter.getWidth() * proportion));
-
-            paintIndentGuides (g, depth, getHeight());
         }
 
         void resized() override
@@ -246,7 +235,6 @@ private:
             nameLabel.setText (engine.getFolderName (folderId), juce::dontSendNotification);
             nameLabel.setEditable (false, true);
             nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
-            nameLabel.setColour (juce::Label::textColourId, juce::Colours::gold.withAlpha (0.85f));
             nameLabel.setFont (juce::FontOptions (13.0f, juce::Font::bold));
             nameLabel.onTextChange = [this]
             {
@@ -305,12 +293,9 @@ private:
             g.setColour (juce::Colour (0xff2e3038));
             g.fillRoundedRectangle (bounds, 4.0f);
 
-            if (const auto hex = engine.getFolderColour (folderId); hex.isNotEmpty())
-            {
-                g.setColour (AudioEngine::colourFromHex (hex)
-                                 .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
-                g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
-            }
+            g.setColour (AudioEngine::colourFromHex (engine.getFolderColour (folderId), juce::Colour (0xff6d7178))
+                             .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
+            g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
 
             const auto collapsed = engine.isFolderCollapsed (folderId);
             juce::Path triangle;
@@ -321,10 +306,8 @@ private:
             else
                 triangle.addTriangle (cx - 5.0f, cy - 3.0f, cx + 5.0f, cy - 3.0f, cx, cy + 5.0f);
 
-            g.setColour (juce::Colours::gold.withAlpha (0.8f));
+            g.setColour (juce::Colours::white.withAlpha (0.7f));
             g.fillPath (triangle);
-
-            paintIndentGuides (g, depth, getHeight());
         }
 
         void resized() override

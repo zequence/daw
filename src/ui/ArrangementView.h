@@ -3,25 +3,27 @@
 #include "../AudioEngine.h"
 #include "../model/PhraseBlocks.h"
 #include "TimeAxis.h"
+#include "SidebarMetrics.h"
 
 class CommandDispatcher;
 
-// The Midi-domain default view: one lane per track, showing computed phrase blocks
-// (meta-regions, see DESIGN.md), plus marker lines, the playhead and the shared
-// gutter with track names. Time (ruler, markers, loop, tempo) lives in the
-// TimelineBar above; this view aligns to the same TimeAxis.
+// The Midi-domain default view: lanes on the SAME Y axis as the track list
+// (same row heights and order, folder rows included) sharing its vertical
+// scroll, showing computed phrase blocks (meta-regions, see DESIGN.md), marker
+// lines and the playhead. Time lives in the TimelineBar above (shared TimeAxis).
 //
 // Interactions:
 //   drag a block              move it (snaps to bars; clip.moveRange)
 //   ctrl+drag a block         copy it (clip.copyRange)
 //   right-click a block       loop / repeat / open in editor / erase
 //   double-click a block      open it in the MIDI editor
-//   wheel / shift+wheel       scroll lanes / time    ctrl+wheel          zoom time
+//   wheel / shift+wheel       scroll rows (shared with sidebar) / time
+//   ctrl+wheel                zoom time
 class ArrangementView final : public juce::Component,
                               private juce::Timer
 {
 public:
-    ArrangementView (AudioEngine&, CommandDispatcher&, TimeAxis&);
+    ArrangementView (AudioEngine&, CommandDispatcher&, TimeAxis&, sidebar::VerticalScroll&);
     ~ArrangementView() override;
 
     std::function<void (AudioEngine::TrackId)> onOpenEditor, onSelectTrack;
@@ -42,14 +44,20 @@ private:
         bool valid() const noexcept { return trackId != 0 && endTick > startTick; }
     };
 
+    using Items = std::vector<AudioEngine::SidebarItem>;
+
+    Items itemsNow() const                   { return engine.getSidebarItems (true, true); }
+    static int contentHeight (const Items&);
+    int rowTop (const Items&, size_t index) const;        // view-local y (scroll applied)
+    int itemIndexAt (const Items&, int y) const;          // -1 when below all rows
+
     juce::int64 xToTick (int x) const        { return axis.xToTick (x); }
     int tickToX (juce::int64 tick) const     { return axis.tickToX (tick); }
     juce::int64 nearestBar (juce::int64 tick) const;
 
     const std::vector<PhraseBlock>& blocksFor (AudioEngine::TrackId);
-    int laneIndexAt (int y) const;
     BlockRef blockAt (juce::Point<int>);
-    juce::Rectangle<int> blockRect (const BlockRef&, int laneIndex) const;
+    juce::Rectangle<int> blockRect (const BlockRef&, int laneTop) const;
 
     void runCommand (const juce::String& cmd, juce::DynamicObject::Ptr params);
     void showBlockMenu (const BlockRef&);
@@ -59,11 +67,11 @@ private:
     AudioEngine& engine;
     CommandDispatcher& dispatcher;
     TimeAxis& axis;
+    sidebar::VerticalScroll& vscroll;
 
-    // View state (time scroll/zoom live in the shared axis)
-    int scrollLane = 0;
+    // View state (time scroll/zoom live in the shared axis; vertical in vscroll)
     juce::int64 lastPlayheadTick = -1;
-    int lastAxisRevision = -1, lastEngineRevision = -1;
+    int lastAxisRevision = -1, lastEngineRevision = -1, lastVScrollRevision = -1;
 
     // Block cache per track (recomputed when the sequence pointer changes)
     struct CacheEntry
@@ -80,8 +88,6 @@ private:
     juce::Point<int> dragStart;
     juce::int64 dragDeltaTicks = 0;
     bool dragIsCopy = false, didDrag = false;
-
-    static constexpr int laneHeight = 52;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ArrangementView)
 };

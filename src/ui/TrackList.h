@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../AudioEngine.h"
+#include "SidebarMetrics.h"
 
 // The MIDI-domain sidebar: compact track rows with R/E/S/M/I buttons, grouped by
 // folders (Cubase-style). Folder rows are half a track row tall, nest arbitrarily,
@@ -15,7 +16,7 @@
 class TrackList final : public juce::Component
 {
 public:
-    explicit TrackList (AudioEngine&);
+    TrackList (AudioEngine&, sidebar::VerticalScroll&);   // scroll shared with the arrangement
     ~TrackList() override;
 
     void refresh();
@@ -57,6 +58,8 @@ private:
     std::vector<AudioEngine::TrackId> selectionInVisualOrder() const;
 
     AudioEngine& engine;
+    sidebar::VerticalScroll& vscroll;
+    int lastScrollRevision = -1;
     juce::Viewport viewport;
     RowContainer rowContainer { *this };
 

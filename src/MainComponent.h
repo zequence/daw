@@ -90,9 +90,11 @@ private:
     juce::Rectangle<int> transportPanel;   // painted behind the unit
     int topbarSeparators[2] = { 0, 0 };    // lines between the topbar's groups
 
-    // Sidebar
+    // Sidebar. The track list and the arrangement share one vertical scroll
+    // (same Y axis); declared before both.
+    sidebar::VerticalScroll trackScroll;
     juce::TextButton collapseButton { "<<" };
-    TrackList trackList { engine };
+    TrackList trackList { engine, trackScroll };
     AudioChannelList channelList { engine };
     int sidebarWidth = 0;            // 0 = not yet computed (defaults to ~15% of the window)
     bool sidebarCollapsed = false;
@@ -125,7 +127,7 @@ private:
 
     // Content views
     PlaceholderView audioRegionsView { "Audio regions" };
-    ArrangementView arrangementView { engine, commandDispatcher, timeAxis };
+    ArrangementView arrangementView { engine, commandDispatcher, timeAxis, trackScroll };
     PianoRollView pianoRollView { engine, commandDispatcher, timeAxis };
     InstrumentsView instrumentsView { engine };
     InstrumentEditorView instrumentEditorView { engine };

@@ -94,6 +94,16 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Sidebar
 
+- [x] Uncolored tracks should be grey
+      (tracks and folders without a color draw a grey left border)
+- [x] Remove the yellow lines that show where expanded folders begin and end.
+      Track side colors do this already.
+      (gold indent guides removed from both sidebars; the gold folder text
+      and triangle went neutral too)
+- [x] Folder name text should be about the same color as the tracks. The font
+      size, and/or the font puts them apart visually.
+      (folder labels use the same text color as tracks; bold 13 px vs the
+      tracks' regular 14 px keeps them distinct)
 - [x] Colored tracks (and regions): selectable colors in right-click menu; the
       color shown only as a left border; regions get colored borders (all
       around); a slide control for opacity in settings/theming with visible
@@ -155,6 +165,24 @@ resolution notes. Newest additions go at the top of each chapter.
       instrument's existing ones - wherever the user moved them - so
       re-organisation and renames are never fought. Only the synced channel
       NAMES are immutable; folders and tracks are ordinary.)
+
+# Arrange view
+
+- [x] The entire region inherits the track color. The borders are more
+      pronounced and colorful, while the box itself is brighter and less
+      colorful.
+      (region fill = the track color desaturated and brightened, border =
+      the full color at the Theming opacity; selection brightens the fill
+      and whitens the border; uncolored tracks render grey)
+- [x] Region height and Y-coordinate should follow channels.
+      (the arrangement lanes now sit on the SAME Y axis as the track list:
+      same row order and heights, folder rows included as bands)
+- [x] Scrolling should sync with sidebar
+      (one shared vertical scroll: wheel in either the track list or the
+      arrangement moves both; in the editor, the wheel scrolls whatever it
+      is over - piano roll inside the editor, the channel list over the
+      sidebar. The sidebar lists also start below the timeline bar now, so
+      rows align pixel-exactly.)
 
 # Midi record
 
