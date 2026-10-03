@@ -1,43 +1,39 @@
 #pragma once
 
 #include "AudioEngine.h"
-#include "PluginWindow.h"
 
-// One track in the track list: arm, name, instrument picker, editor, mute, volume, meter.
+// One MIDI track in the track list: arm, name, output picker, instrument editor,
+// demo/clear clip, MIDI solo/mute, and (interim, until the Audio view exists) the
+// volume and meter of the first output's audio channel.
 class TrackRow final : public juce::Component
 {
 public:
     TrackRow (AudioEngine&, AudioEngine::TrackId, const juce::String& name);
-    ~TrackRow() override;
 
     AudioEngine::TrackId getTrackId() const noexcept { return trackId; }
 
     void setArmed (bool);
-    void updateMeter();
+    void refresh();   // meter, output label, button states; call from a UI timer
 
-    std::function<void (AudioEngine::TrackId)> onArmClicked, onRemoveClicked, onSetDemo, onClearClip;
+    std::function<void (AudioEngine::TrackId)> onArmClicked, onRemoveClicked, onSetDemo, onClearClip,
+                                               onChooseOutput, onOpenInstrument;
 
     void paint (juce::Graphics&) override;
     void resized() override;
 
 private:
-    void showInstrumentMenu();
-    void loadInstrument (const juce::PluginDescription&);
-    void clearInstrument();
-    void openEditor();
-    void closeEditor();
+    AudioChannelProcessor* getFirstOutputChannel() const;
 
     AudioEngine& engine;
     const AudioEngine::TrackId trackId;
 
-    juce::TextButton armButton { "R" }, instrumentButton { "(no instrument)" }, editButton { "Edit" },
-                     demoButton { "Demo" }, clearButton { "Clear" }, muteButton { "M" }, removeButton { "X" };
+    juce::TextButton armButton { "R" }, outputButton { "(no output)" }, editButton { "Edit" },
+                     demoButton { "Demo" }, clearButton { "Clear" },
+                     soloButton { "S" }, muteButton { "M" }, removeButton { "X" };
     juce::Label nameLabel;
     juce::Slider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     float meterLevel = 0.0f;
     bool armed = false;
-
-    std::unique_ptr<PluginWindow> pluginWindow;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TrackRow)
 };

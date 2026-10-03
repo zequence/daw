@@ -1,5 +1,5 @@
 #include "../src/AudioEngine.h"
-#include "../src/TrackChannelProcessor.h"
+#include "../src/engine/AudioChannelProcessor.h"
 #include "../src/model/DemoSequence.h"
 
 // Full-stack check: real audio device, real VST3 instrument, demo sequence, measured at
@@ -48,16 +48,17 @@ public:
 
         const auto track = engine.addTrack();
 
-        std::atomic<int> loadResult { 0 };
-        engine.loadInstrument (track, description,
-                               [&loadResult] (bool ok, const juce::String&) { loadResult = ok ? 1 : -1; });
+        std::atomic<int> loadedInstrument { -1 };
+        engine.addInstrument (description,
+                              [&loadedInstrument] (auto id, const juce::String&) { loadedInstrument = id; });
 
-        pumpUntil ([&loadResult] { return loadResult.load() != 0; }, 15000);
-        expect (loadResult == 1, "instrument failed to load");
+        pumpUntil ([&loadedInstrument] { return loadedInstrument.load() != -1; }, 15000);
+        expect (loadedInstrument > 0, "instrument failed to load");
 
-        if (loadResult != 1)
+        if (loadedInstrument <= 0)
             return;
 
+        engine.addTrackOutput (track, loadedInstrument, 1);
         engine.setTrackSequence (track, makeDemoSequence());
         pump (400);   // let the graph rebuild with the new connections
 
@@ -65,13 +66,15 @@ public:
 
         float maxPeak = 0.0f;
         const auto deadline = juce::Time::getMillisecondCounter() + 2500;
+        auto* channel = engine.getAudioChannel (engine.getAudioChannelForInstrument (loadedInstrument));
+        expect (channel != nullptr, "instrument has no audio channel");
 
         while (juce::Time::getMillisecondCounter() < deadline)
         {
-            pump (100);
+            pump (50);
 
-            if (auto* channel = engine.getChannel (track))
-                maxPeak = juce::jmax (maxPeak, channel->takePeak());
+            if (channel != nullptr)
+                maxPeak = juce::jmax (maxPeak, channel->getLastPeak());
         }
 
         engine.getTransport().stop();

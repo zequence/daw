@@ -2,6 +2,7 @@
 
 #include "AudioEngine.h"
 #include "TrackRow.h"
+#include "PluginWindow.h"
 #include "PluginScanProcess.h"
 #include "diagnostics/PerformancePanel.h"
 
@@ -22,6 +23,11 @@ private:
     void addTrack();
     void removeTrack (AudioEngine::TrackId);
     void armTrack (AudioEngine::TrackId);
+    void chooseTrackOutput (AudioEngine::TrackId);
+    void chooseNewInstrumentFor (AudioEngine::TrackId);
+    void openInstrumentEditorForTrack (AudioEngine::TrackId);
+    void openInstrumentEditor (AudioEngine::InstrumentId);
+    TrackRow* findRow (AudioEngine::TrackId) const;
     void showAudioSettings();
     void showPluginsMenu();
     void showPluginManager();
@@ -52,6 +58,7 @@ private:
     juce::Viewport trackViewport;
     juce::Component trackContainer;
     std::vector<std::unique_ptr<TrackRow>> trackRows;
+    std::map<AudioEngine::InstrumentId, std::unique_ptr<PluginWindow>> instrumentEditors;
     int trackCounter = 0;
 
     juce::MidiKeyboardState keyboardState;

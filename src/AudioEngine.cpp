@@ -1,11 +1,14 @@
 #include "AudioEngine.h"
-#include "TrackChannelProcessor.h"
 #include "UserData.h"
+#include "engine/AudioChannelProcessor.h"
 #include "engine/MidiSourceProcessor.h"
+#include "engine/MidiRouteProcessor.h"
+#include "engine/MidiRecorderProcessor.h"
 
 namespace
 {
     constexpr auto audioStateKey = "audioDeviceState";
+    constexpr auto midiChannelIndex = juce::AudioProcessorGraph::midiChannelIndex;
     using IOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
 }
 
@@ -28,8 +31,7 @@ AudioEngine::AudioEngine (juce::PropertiesFile& settingsToUse)
     // Permanent tap on the live MIDI input for recording.
     auto recorderNodePtr = graph.addNode (std::make_unique<MidiRecorderProcessor> (transport));
     recorderNode = recorderNodePtr->nodeID;
-    graph.addConnection ({ { midiInNode, juce::AudioProcessorGraph::midiChannelIndex },
-                           { recorderNode, juce::AudioProcessorGraph::midiChannelIndex } });
+    graph.addConnection ({ { midiInNode, midiChannelIndex }, { recorderNode, midiChannelIndex } });
     recorder = std::make_unique<MidiRecorder> (static_cast<MidiRecorderProcessor&> (*recorderNodePtr->getProcessor()));
 
     player.setProcessor (&graph);
@@ -124,17 +126,203 @@ const AudioEngine::Track* AudioEngine::findTrack (TrackId id) const
     return it != tracks.end() ? &it->second : nullptr;
 }
 
+AudioEngine::Instrument* AudioEngine::findInstrument (InstrumentId id)
+{
+    auto it = instruments.find (id);
+    return it != instruments.end() ? &it->second : nullptr;
+}
+
+const AudioEngine::Instrument* AudioEngine::findInstrument (InstrumentId id) const
+{
+    auto it = instruments.find (id);
+    return it != instruments.end() ? &it->second : nullptr;
+}
+
+MidiRouteProcessor* AudioEngine::getRoute (const Output& output) const
+{
+    if (auto* node = graph.getNodeForId (output.routeNode))
+        return dynamic_cast<MidiRouteProcessor*> (node->getProcessor());
+
+    return nullptr;
+}
+
+//==============================================================================
+void AudioEngine::addInstrument (const juce::PluginDescription& description, InstrumentCallback callback)
+{
+    auto* device = deviceManager.getCurrentAudioDevice();
+    const auto sampleRate = device != nullptr ? device->getCurrentSampleRate() : 48000.0;
+    const auto blockSize  = device != nullptr ? device->getCurrentBufferSizeSamples() : 512;
+
+    std::weak_ptr<int> alive = lifetimeToken;
+    const auto startMs = juce::Time::getMillisecondCounterHiRes();
+    juce::Logger::writeToLog ("Loading instrument: " + description.name + " (" + description.fileOrIdentifier + ")");
+
+    formatManager.createPluginInstanceAsync (description, sampleRate, blockSize,
+        [this, alive, callback, startMs, name = description.name]
+        (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error)
+        {
+            if (alive.expired())
+                return;
+
+            juce::Logger::writeToLog ((instance != nullptr ? "Loaded instrument: " : "FAILED to load instrument: ") + name
+                                      + " in " + juce::String (juce::roundToInt (juce::Time::getMillisecondCounterHiRes() - startMs)) + " ms"
+                                      + (error.isNotEmpty() ? " - " + error : juce::String()));
+
+            if (instance == nullptr)
+            {
+                if (callback) callback (0, error);
+                return;
+            }
+
+            const auto numOuts = instance->getTotalNumOutputChannels();
+            const auto id = nextInstrumentId++;
+
+            Instrument instrument;
+            instrument.name = name;
+            instrument.pluginNode = graph.addNode (std::move (instance))->nodeID;
+
+            // Give the instrument its audio channel strip.
+            AudioChannel channel;
+            channel.name = name;
+            channel.node = graph.addNode (std::make_unique<AudioChannelProcessor>())->nodeID;
+
+            for (int ch = 0; ch < 2; ++ch)
+                graph.addConnection ({ { channel.node, ch }, { audioOutNode, ch } });
+
+            // Only the first stereo pair for now; multi-output routing comes later.
+            if (numOuts == 1)
+            {
+                graph.addConnection ({ { instrument.pluginNode, 0 }, { channel.node, 0 } });
+                graph.addConnection ({ { instrument.pluginNode, 0 }, { channel.node, 1 } });
+            }
+            else
+            {
+                for (int ch = 0; ch < juce::jmin (2, numOuts); ++ch)
+                    graph.addConnection ({ { instrument.pluginNode, ch }, { channel.node, ch } });
+            }
+
+            const auto channelId = nextAudioChannelId++;
+            channel.input = id;
+            audioChannels[channelId] = channel;
+
+            instrument.audioChannel = channelId;
+            instruments[id] = std::move (instrument);
+
+            if (callback) callback (id, {});
+        });
+}
+
+void AudioEngine::removeInstrument (InstrumentId id)
+{
+    auto* instrument = findInstrument (id);
+
+    if (instrument == nullptr)
+        return;
+
+    for (auto& [trackId, track] : tracks)
+    {
+        for (auto it = track.outputs.begin(); it != track.outputs.end();)
+        {
+            if (it->instrument == id)
+            {
+                graph.removeNode (it->routeNode);
+                it = track.outputs.erase (it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+    }
+
+    graph.removeNode (instrument->pluginNode);
+
+    if (auto channelIt = audioChannels.find (instrument->audioChannel); channelIt != audioChannels.end())
+    {
+        graph.removeNode (channelIt->second.node);
+        audioChannels.erase (channelIt);
+    }
+
+    instruments.erase (id);
+}
+
+std::vector<std::pair<AudioEngine::InstrumentId, juce::String>> AudioEngine::getInstruments() const
+{
+    std::vector<std::pair<InstrumentId, juce::String>> result;
+
+    for (auto& [id, instrument] : instruments)
+        result.emplace_back (id, instrument.name);
+
+    return result;
+}
+
+juce::AudioPluginInstance* AudioEngine::getInstrumentPlugin (InstrumentId id) const
+{
+    if (auto* instrument = findInstrument (id))
+        if (auto* node = graph.getNodeForId (instrument->pluginNode))
+            return dynamic_cast<juce::AudioPluginInstance*> (node->getProcessor());
+
+    return nullptr;
+}
+
+juce::String AudioEngine::getInstrumentName (InstrumentId id) const
+{
+    if (auto* instrument = findInstrument (id))
+        return instrument->name;
+
+    return {};
+}
+
+void AudioEngine::setInstrumentChannelName (InstrumentId id, int midiChannel, const juce::String& name)
+{
+    if (auto* instrument = findInstrument (id))
+    {
+        if (name.isEmpty())
+            instrument->channelNames.erase (midiChannel);
+        else
+            instrument->channelNames[midiChannel] = name;
+    }
+}
+
+juce::String AudioEngine::getInstrumentChannelName (InstrumentId id, int midiChannel) const
+{
+    if (auto* instrument = findInstrument (id))
+        if (auto it = instrument->channelNames.find (midiChannel); it != instrument->channelNames.end())
+            return it->second;
+
+    return {};
+}
+
+int AudioEngine::getNumLoadedInstruments() const
+{
+    return (int) instruments.size();
+}
+
+//==============================================================================
+AudioChannelProcessor* AudioEngine::getAudioChannel (AudioChannelId id) const
+{
+    if (auto it = audioChannels.find (id); it != audioChannels.end())
+        if (auto* node = graph.getNodeForId (it->second.node))
+            return dynamic_cast<AudioChannelProcessor*> (node->getProcessor());
+
+    return nullptr;
+}
+
+AudioEngine::AudioChannelId AudioEngine::getAudioChannelForInstrument (InstrumentId id) const
+{
+    if (auto* instrument = findInstrument (id))
+        return instrument->audioChannel;
+
+    return 0;
+}
+
+//==============================================================================
 AudioEngine::TrackId AudioEngine::addTrack()
 {
     const auto id = nextTrackId++;
 
     Track track;
-    track.channelNode = graph.addNode (std::make_unique<TrackChannelProcessor>())->nodeID;
     track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport))->nodeID;
-
-    for (int ch = 0; ch < 2; ++ch)
-        graph.addConnection ({ { track.channelNode, ch }, { audioOutNode, ch } });
-
     tracks[id] = track;
 
     if (armedTrack == 0)
@@ -150,129 +338,109 @@ void AudioEngine::removeTrack (TrackId id)
     if (track == nullptr)
         return;
 
-    graph.removeNode (track->instrumentNode);
-    graph.removeNode (track->channelNode);
+    for (auto& output : track->outputs)
+        graph.removeNode (output.routeNode);
+
     graph.removeNode (track->midiSourceNode);
     tracks.erase (id);
 
     if (armedTrack == id)
         setArmedTrack (tracks.empty() ? 0 : tracks.begin()->first);
+
+    applyMuteAndSolo();
 }
 
-void AudioEngine::loadInstrument (TrackId id, const juce::PluginDescription& description, LoadCallback callback)
+void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, int midiChannel)
+{
+    auto* track = findTrack (trackId);
+    auto* instrument = findInstrument (instrumentId);
+
+    if (track == nullptr || instrument == nullptr)
+        return;
+
+    Output output;
+    output.instrument = instrumentId;
+    output.midiChannel = juce::jlimit (1, 16, midiChannel);
+    output.routeNode = graph.addNode (std::make_unique<MidiRouteProcessor> (output.midiChannel))->nodeID;
+
+    graph.addConnection ({ { track->midiSourceNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } });
+    graph.addConnection ({ { output.routeNode, midiChannelIndex }, { instrument->pluginNode, midiChannelIndex } });
+
+    if (trackId == armedTrack)
+        graph.addConnection ({ { midiInNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } });
+
+    track->outputs.push_back (output);
+    applyMuteAndSolo();
+
+    juce::Logger::writeToLog ("Track " + juce::String (trackId) + " output -> "
+                              + instrument->name + " ch " + juce::String (output.midiChannel));
+}
+
+void AudioEngine::clearTrackOutputs (TrackId id)
+{
+    if (auto* track = findTrack (id))
+    {
+        for (auto& output : track->outputs)
+            graph.removeNode (output.routeNode);
+
+        track->outputs.clear();
+    }
+}
+
+std::vector<AudioEngine::TrackOutput> AudioEngine::getTrackOutputs (TrackId id) const
+{
+    std::vector<TrackOutput> result;
+
+    if (auto* track = findTrack (id))
+        for (auto& output : track->outputs)
+            result.push_back ({ output.instrument, output.midiChannel });
+
+    return result;
+}
+
+void AudioEngine::setTrackMuted (TrackId id, bool muted)
+{
+    if (auto* track = findTrack (id))
+    {
+        track->muted = muted;
+        applyMuteAndSolo();
+    }
+}
+
+bool AudioEngine::isTrackMuted (TrackId id) const
 {
     auto* track = findTrack (id);
-
-    if (track == nullptr)
-        return;
-
-    const auto generation = ++track->loadGeneration;
-
-    auto* device = deviceManager.getCurrentAudioDevice();
-    const auto sampleRate = device != nullptr ? device->getCurrentSampleRate() : 48000.0;
-    const auto blockSize  = device != nullptr ? device->getCurrentBufferSizeSamples() : 512;
-
-    std::weak_ptr<int> alive = lifetimeToken;
-    const auto startMs = juce::Time::getMillisecondCounterHiRes();
-    juce::Logger::writeToLog ("Loading plugin: " + description.name + " (" + description.fileOrIdentifier + ")");
-
-    formatManager.createPluginInstanceAsync (description, sampleRate, blockSize,
-        [this, alive, id, generation, callback, startMs, name = description.name]
-        (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error)
-        {
-            if (alive.expired())
-                return;
-
-            juce::Logger::writeToLog ((instance != nullptr ? "Loaded plugin: " : "FAILED to load plugin: ") + name
-                                      + " in " + juce::String (juce::roundToInt (juce::Time::getMillisecondCounterHiRes() - startMs)) + " ms"
-                                      + (error.isNotEmpty() ? " - " + error : juce::String()));
-
-            auto* t = findTrack (id);
-
-            // Track removed, or a newer load was requested while this one was in flight.
-            if (t == nullptr || t->loadGeneration != generation)
-                return;
-
-            if (instance == nullptr)
-            {
-                if (callback) callback (false, error);
-                return;
-            }
-
-            graph.removeNode (t->instrumentNode);
-            t->instrumentNode = graph.addNode (std::move (instance))->nodeID;
-            connectInstrument (*t);
-            updateMidiRouting();
-
-            if (callback) callback (true, {});
-        });
+    return track != nullptr && track->muted;
 }
 
-void AudioEngine::clearInstrument (TrackId id)
+void AudioEngine::setTrackSoloed (TrackId id, bool soloed)
 {
     if (auto* track = findTrack (id))
     {
-        ++track->loadGeneration;
-        graph.removeNode (track->instrumentNode);
-        track->instrumentNode = {};
+        track->soloed = soloed;
+        applyMuteAndSolo();
     }
 }
 
-void AudioEngine::connectInstrument (const Track& track)
+bool AudioEngine::isTrackSoloed (TrackId id) const
 {
-    auto* node = graph.getNodeForId (track.instrumentNode);
-
-    if (node == nullptr)
-        return;
-
-    const auto midiChannel = juce::AudioProcessorGraph::midiChannelIndex;
-    const auto sequencerLinked = graph.addConnection ({ { track.midiSourceNode, midiChannel },
-                                                        { track.instrumentNode, midiChannel } });
-    if (! sequencerLinked)
-        juce::Logger::writeToLog ("WARNING: sequencer MIDI connection was refused by the graph");
-
-    // Only the first stereo pair for now; multi-output routing comes later.
-    const auto numOuts = node->getProcessor()->getTotalNumOutputChannels();
-
-    if (numOuts == 1)
-    {
-        graph.addConnection ({ { track.instrumentNode, 0 }, { track.channelNode, 0 } });
-        graph.addConnection ({ { track.instrumentNode, 0 }, { track.channelNode, 1 } });
-    }
-    else
-    {
-        for (int ch = 0; ch < juce::jmin (2, numOuts); ++ch)
-            graph.addConnection ({ { track.instrumentNode, ch }, { track.channelNode, ch } });
-    }
+    auto* track = findTrack (id);
+    return track != nullptr && track->soloed;
 }
 
-juce::AudioPluginInstance* AudioEngine::getInstrument (TrackId id) const
+void AudioEngine::applyMuteAndSolo()
 {
-    if (auto* track = findTrack (id))
-        if (auto* node = graph.getNodeForId (track->instrumentNode))
-            return dynamic_cast<juce::AudioPluginInstance*> (node->getProcessor());
-
-    return nullptr;
-}
-
-int AudioEngine::getNumLoadedInstruments() const
-{
-    int count = 0;
+    const auto anySolo = std::any_of (tracks.begin(), tracks.end(),
+                                      [] (const auto& entry) { return entry.second.soloed; });
 
     for (auto& [id, track] : tracks)
-        if (graph.getNodeForId (track.instrumentNode) != nullptr)
-            ++count;
+    {
+        const auto audible = ! track.muted && (! anySolo || track.soloed);
 
-    return count;
-}
-
-TrackChannelProcessor* AudioEngine::getChannel (TrackId id) const
-{
-    if (auto* track = findTrack (id))
-        if (auto* node = graph.getNodeForId (track->channelNode))
-            return dynamic_cast<TrackChannelProcessor*> (node->getProcessor());
-
-    return nullptr;
+        for (auto& output : track.outputs)
+            if (auto* route = getRoute (output))
+                route->setRouteEnabled (audible);
+    }
 }
 
 //==============================================================================
@@ -317,6 +485,7 @@ void AudioEngine::setTempoBpm (double bpm)
     transport.locate (tick);
 }
 
+//==============================================================================
 bool AudioEngine::startRecording()
 {
     if (findTrack (armedTrack) == nullptr || isRecording())
@@ -412,16 +581,17 @@ void AudioEngine::setArmedTrack (TrackId id)
 
 void AudioEngine::updateMidiRouting()
 {
-    const auto midiChannel = juce::AudioProcessorGraph::midiChannelIndex;
-
     for (auto& [id, track] : tracks)
     {
-        const juce::AudioProcessorGraph::Connection connection { { midiInNode, midiChannel },
-                                                                 { track.instrumentNode, midiChannel } };
+        for (auto& output : track.outputs)
+        {
+            const juce::AudioProcessorGraph::Connection connection { { midiInNode, midiChannelIndex },
+                                                                     { output.routeNode, midiChannelIndex } };
 
-        if (id == armedTrack)
-            graph.addConnection (connection);
-        else
-            graph.removeConnection (connection);
+            if (id == armedTrack)
+                graph.addConnection (connection);
+            else
+                graph.removeConnection (connection);
+        }
     }
 }

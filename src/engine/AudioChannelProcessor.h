@@ -2,23 +2,25 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-// Per-track stereo channel strip: gain, mute and peak metering.
-// Sits between a track's instrument plugin and the master output.
-class TrackChannelProcessor final : public juce::AudioProcessor
+// A stereo audio channel strip: gain, mute and peak metering.
+// Sits between an input (an instrument, later a device input) and the master output.
+class AudioChannelProcessor final : public juce::AudioProcessor
 {
 public:
-    TrackChannelProcessor()
+    AudioChannelProcessor()
         : AudioProcessor (BusesProperties()
                               .withInput  ("Input",  juce::AudioChannelSet::stereo(), true)
                               .withOutput ("Output", juce::AudioChannelSet::stereo(), true))
     {
     }
 
-    void setGain (float newGain) noexcept   { gain.store (newGain); }
+    void setGain (float newGain) noexcept    { gain.store (newGain); }
+    float getGain() const noexcept           { return gain.load(); }
     void setMuted (bool shouldMute) noexcept { muted.store (shouldMute); }
+    bool isMuted() const noexcept            { return muted.load(); }
 
-    // Returns the peak since the last call and resets it (call from the UI thread).
-    float takePeak() noexcept               { return peak.exchange (0.0f); }
+    // Peak of the most recent block; any number of readers may poll this.
+    float getLastPeak() const noexcept       { return peak.load(); }
 
     //==============================================================================
     void prepareToPlay (double, int) override { lastGain = muted.load() ? 0.0f : gain.load(); }
@@ -41,12 +43,11 @@ public:
         for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
             blockPeak = juce::jmax (blockPeak, buffer.getMagnitude (ch, 0, buffer.getNumSamples()));
 
-        auto previous = peak.load();
-        while (blockPeak > previous && ! peak.compare_exchange_weak (previous, blockPeak)) {}
+        peak.store (blockPeak);
     }
 
     //==============================================================================
-    const juce::String getName() const override             { return "Track Channel"; }
+    const juce::String getName() const override             { return "Audio Channel"; }
     bool acceptsMidi() const override                       { return false; }
     bool producesMidi() const override                      { return false; }
     double getTailLengthSeconds() const override            { return 0.0; }
@@ -65,5 +66,5 @@ private:
     std::atomic<bool> muted { false };
     float lastGain = 1.0f;
 
-    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TrackChannelProcessor)
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioChannelProcessor)
 };

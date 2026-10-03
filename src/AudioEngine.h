@@ -6,16 +6,26 @@
 #include "engine/MidiRecorder.h"
 #include "model/MidiSequence.h"
 
-class TrackChannelProcessor;
+class AudioChannelProcessor;
 class MidiSourceProcessor;
+class MidiRouteProcessor;
 
 // Owns the audio device, the plugin catalogue and the processing graph.
-// Each track is: [instrument plugin] -> [TrackChannelProcessor] -> master output.
-// Live MIDI (hardware inputs + on-screen keyboard) is routed to the armed track only.
+//
+// Signal flow (see GUI_DESIGN.md):
+//   MIDI tracks --MIDI--> instruments (rack) --audio--> audio channels --> master out
+//
+// A track owns clips and sends MIDI through any number of outputs, each targeting one
+// (instrument, MIDI channel). Instruments are plugin instances shared by any number of
+// tracks. Every instrument currently gets one audio channel (strip with gain/mute/meter);
+// device inputs and summing come later. Track mute/solo act on MIDI, before the
+// instruments; audio channel mute acts on audio.
 class AudioEngine
 {
 public:
     using TrackId = int;
+    using InstrumentId = int;
+    using AudioChannelId = int;
     using NodeID  = juce::AudioProcessorGraph::NodeID;
 
     explicit AudioEngine (juce::PropertiesFile& settings);
@@ -36,25 +46,57 @@ public:
     juce::Array<juce::PluginDescription> getInstrumentTypes() const;
 
     //==============================================================================
-    TrackId addTrack();
-    void removeTrack (TrackId);
+    // The instrument rack
+    using InstrumentCallback = std::function<void (InstrumentId, const juce::String& error)>;
+    void addInstrument (const juce::PluginDescription&, InstrumentCallback);   // id 0 + error on failure
+    void removeInstrument (InstrumentId);                                      // detaches any track outputs
 
-    using LoadCallback = std::function<void (bool success, const juce::String& error)>;
-    void loadInstrument (TrackId, const juce::PluginDescription&, LoadCallback);
-    void clearInstrument (TrackId);
-
-    juce::AudioPluginInstance* getInstrument (TrackId) const;
-    TrackChannelProcessor* getChannel (TrackId) const;
+    std::vector<std::pair<InstrumentId, juce::String>> getInstruments() const;
+    juce::AudioPluginInstance* getInstrumentPlugin (InstrumentId) const;
+    juce::String getInstrumentName (InstrumentId) const;
+    void setInstrumentChannelName (InstrumentId, int midiChannel, const juce::String&);
+    juce::String getInstrumentChannelName (InstrumentId, int midiChannel) const;
     int getNumLoadedInstruments() const;
 
     //==============================================================================
-    Transport& getTransport()                       { return transport; }
+    // Audio channels (one per instrument for now; device inputs and summing later)
+    AudioChannelProcessor* getAudioChannel (AudioChannelId) const;
+    AudioChannelId getAudioChannelForInstrument (InstrumentId) const;          // 0 if none
+
+    //==============================================================================
+    // MIDI tracks
+    TrackId addTrack();
+    void removeTrack (TrackId);
+
+    struct TrackOutput
+    {
+        InstrumentId instrument = 0;
+        int midiChannel = 1;
+    };
+
+    void addTrackOutput (TrackId, InstrumentId, int midiChannel);
+    void clearTrackOutputs (TrackId);
+    std::vector<TrackOutput> getTrackOutputs (TrackId) const;
+
+    void setTrackMuted (TrackId, bool);       // MIDI mute: stops events, releases held notes
+    bool isTrackMuted (TrackId) const;
+    void setTrackSoloed (TrackId, bool);
+    bool isTrackSoloed (TrackId) const;
 
     void setTrackSequence (TrackId, MidiSequence::Ptr);
     MidiSequence::Ptr getTrackSequence (TrackId) const;
 
+    void setArmedTrack (TrackId);             // live MIDI follows the armed track's outputs
+    TrackId getArmedTrack() const noexcept    { return armedTrack; }
+
+    //==============================================================================
+    Transport& getTransport()                 { return transport; }
+
     double getTempoBpm() const;
     void setTempoBpm (double bpm);
+
+    // End of the bar containing the last event of any track's sequence (used as the loop end).
+    juce::int64 getLoopEndTicks() const;
 
     //==============================================================================
     // Recording captures live MIDI onto the armed track, merging with any existing clip.
@@ -63,20 +105,37 @@ public:
     bool isRecording() const      { return recorder != nullptr && recorder->isRecording(); }
     void pollRecording();         // call regularly from a UI timer while the app runs
 
-    // End of the bar containing the last event of any track's sequence (used as the loop end).
-    juce::int64 getLoopEndTicks() const;
-
-    void setArmedTrack (TrackId);
-    TrackId getArmedTrack() const noexcept                { return armedTrack; }
-
     void saveSettings();
 
 private:
+    struct Instrument
+    {
+        NodeID pluginNode;
+        juce::String name;
+        AudioChannelId audioChannel = 0;
+        std::map<int, juce::String> channelNames;   // 1..16; absent = unnamed
+    };
+
+    struct AudioChannel
+    {
+        NodeID node;
+        InstrumentId input = 0;                     // 0 = none (device inputs later)
+        juce::String name;
+    };
+
+    struct Output
+    {
+        InstrumentId instrument = 0;
+        int midiChannel = 1;
+        NodeID routeNode;
+    };
+
     struct Track
     {
-        NodeID instrumentNode, channelNode, midiSourceNode;
-        MidiSequence::Ptr sequence;   // message-thread copy, for UI queries
-        int loadGeneration = 0;
+        NodeID midiSourceNode;
+        MidiSequence::Ptr sequence;                 // message-thread copy, for UI queries
+        std::vector<Output> outputs;
+        bool muted = false, soloed = false;
     };
 
     // Runs the transport once per device callback, before the graph renders the block.
@@ -106,9 +165,13 @@ private:
 
     Track* findTrack (TrackId);
     const Track* findTrack (TrackId) const;
+    Instrument* findInstrument (InstrumentId);
+    const Instrument* findInstrument (InstrumentId) const;
+    MidiRouteProcessor* getRoute (const Output&) const;
+
+    void updateMidiRouting();                 // keeps midiIn -> route connections matching the armed track
+    void applyMuteAndSolo();
     void mergeIntoTrack (TrackId, const MidiRecorder::Result&);
-    void connectInstrument (const Track&);
-    void updateMidiRouting();
     void enableAllMidiInputsIfFirstRun (bool hadSavedState);
 
     juce::PropertiesFile& settings;
@@ -117,15 +180,21 @@ private:
     juce::KnownPluginList knownPlugins;
     juce::AudioProcessorGraph graph;
     juce::AudioProcessorPlayer player;
-    TempoMap::Ptr masterTempoMap;     // message-thread authority; transport gets snapshots
+    TempoMap::Ptr masterTempoMap;             // message-thread authority; transport gets snapshots
     Transport transport;
     IOCallback ioCallback { *this };
 
     NodeID audioOutNode, midiInNode, recorderNode;
     std::unique_ptr<MidiRecorder> recorder;
     bool recordingSawPlayback = false;
+
     std::map<TrackId, Track> tracks;
-    TrackId nextTrackId = 1, armedTrack = 0;
+    std::map<InstrumentId, Instrument> instruments;
+    std::map<AudioChannelId, AudioChannel> audioChannels;
+    TrackId nextTrackId = 1;
+    InstrumentId nextInstrumentId = 1;
+    AudioChannelId nextAudioChannelId = 1;
+    TrackId armedTrack = 0;
 
     // Async plugin-creation callbacks hold a weak_ptr to this so they can detect engine destruction.
     std::shared_ptr<int> lifetimeToken = std::make_shared<int>();

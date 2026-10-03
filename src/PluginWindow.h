@@ -18,6 +18,7 @@ public:
             editor = new juce::GenericAudioProcessorEditor (plugin);
 
         setUsingNativeTitleBar (true);
+        setAlwaysOnTop (true);   // see GUI_DESIGN.md; becomes a setting later
         setContentOwned (editor, true);
         setResizable (editor->isResizable(), false);
         centreWithSize (getWidth(), getHeight());

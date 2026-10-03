@@ -108,8 +108,6 @@ MainComponent::MainComponent (AudioEngine& e)
     engine.getDeviceManager().addChangeListener (this);
     engine.getKnownPlugins().addChangeListener (this);
 
-    addTrack();
-
     setSize (1000, 640);
     startTimerHz (30);
 }
@@ -120,6 +118,8 @@ MainComponent::~MainComponent()
     keyboardState.removeListener (this);
     engine.getDeviceManager().removeChangeListener (this);
     engine.getKnownPlugins().removeChangeListener (this);
+
+    instrumentEditors.clear();
 
     if (audioDialog != nullptr)  delete audioDialog.getComponent();
     if (pluginDialog != nullptr) delete pluginDialog.getComponent();
@@ -136,7 +136,9 @@ void MainComponent::addTrack()
     const auto id = engine.addTrack();
 
     auto row = std::make_unique<TrackRow> (engine, id, "Track " + juce::String (++trackCounter));
-    row->onArmClicked    = [this] (auto trackId) { armTrack (trackId); };
+    row->onArmClicked      = [this] (auto trackId) { armTrack (trackId); };
+    row->onChooseOutput    = [this] (auto trackId) { chooseTrackOutput (trackId); };
+    row->onOpenInstrument  = [this] (auto trackId) { openInstrumentEditorForTrack (trackId); };
     row->onSetDemo = [this] (auto trackId)
     {
         engine.setTrackSequence (trackId, makeDemoSequence());
@@ -158,6 +160,152 @@ void MainComponent::addTrack()
 
     armTrack (engine.getArmedTrack());
     layoutTracks();
+
+    // Ask where the new track should send its MIDI.
+    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), id]
+                                     { if (safe != nullptr) safe->chooseTrackOutput (id); });
+}
+
+TrackRow* MainComponent::findRow (AudioEngine::TrackId id) const
+{
+    for (auto& row : trackRows)
+        if (row->getTrackId() == id)
+            return row.get();
+
+    return nullptr;
+}
+
+//==============================================================================
+void MainComponent::chooseTrackOutput (AudioEngine::TrackId trackId)
+{
+    auto* row = findRow (trackId);
+
+    if (row == nullptr)
+        return;
+
+    const auto outputs = engine.getTrackOutputs (trackId);
+    const auto safe = juce::Component::SafePointer<MainComponent> (this);
+
+    juce::PopupMenu menu;
+
+    for (auto& [instrumentId, name] : engine.getInstruments())
+    {
+        juce::PopupMenu channels;
+
+        for (int ch = 1; ch <= 16; ++ch)
+        {
+            const auto current = ! outputs.empty()
+                                   && outputs.front().instrument == instrumentId
+                                   && outputs.front().midiChannel == ch;
+            const auto channelName = engine.getInstrumentChannelName (instrumentId, ch);
+
+            channels.addItem ("Channel " + juce::String (ch) + (channelName.isNotEmpty() ? "  (" + channelName + ")" : ""),
+                              true, current,
+                              [safe, trackId, id = instrumentId, ch]
+                              {
+                                  if (safe != nullptr)
+                                  {
+                                      safe->engine.clearTrackOutputs (trackId);
+                                      safe->engine.addTrackOutput (trackId, id, ch);
+                                  }
+                              });
+        }
+
+        menu.addSubMenu (name, channels);
+    }
+
+    if (! engine.getInstruments().empty())
+        menu.addSeparator();
+
+    menu.addItem ("New instrument...", [safe, trackId] { if (safe != nullptr) safe->chooseNewInstrumentFor (trackId); });
+
+    if (! outputs.empty())
+        menu.addItem ("No output", [safe, trackId] { if (safe != nullptr) safe->engine.clearTrackOutputs (trackId); });
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (row));
+}
+
+void MainComponent::chooseNewInstrumentFor (AudioEngine::TrackId trackId)
+{
+    const auto types = engine.getInstrumentTypes();
+
+    juce::PopupMenu menu;
+
+    if (types.isEmpty())
+        menu.addItem (1, "No instruments found - use Plugins > Scan first", false, false);
+    else
+        juce::KnownPluginList::addToMenu (menu, types, juce::KnownPluginList::sortByManufacturer);
+
+    menu.showMenuAsync (juce::PopupMenu::Options(),
+                        [safe = juce::Component::SafePointer<MainComponent> (this), trackId, types] (int result)
+                        {
+                            if (safe == nullptr || result == 0)
+                                return;
+
+                            const auto index = juce::KnownPluginList::getIndexChosenByMenu (types, result);
+
+                            if (! juce::isPositiveAndBelow (index, types.size()))
+                                return;
+
+                            const auto description = types.getReference (index);
+                            safe->statusLabel.setText ("Loading " + description.name + "...", juce::dontSendNotification);
+
+                            safe->engine.addInstrument (description,
+                                [safe, trackId, name = description.name] (auto instrumentId, const juce::String& error)
+                                {
+                                    if (safe == nullptr)
+                                        return;
+
+                                    safe->statusLabel.setText ("", juce::dontSendNotification);
+
+                                    if (instrumentId == 0)
+                                    {
+                                        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon,
+                                                                                "Couldn't load plugin", name + "\n\n" + error);
+                                        return;
+                                    }
+
+                                    safe->engine.clearTrackOutputs (trackId);
+                                    safe->engine.addTrackOutput (trackId, instrumentId, 1);
+                                    safe->openInstrumentEditor (instrumentId);
+                                });
+                        });
+}
+
+void MainComponent::openInstrumentEditorForTrack (AudioEngine::TrackId trackId)
+{
+    const auto outputs = engine.getTrackOutputs (trackId);
+
+    if (! outputs.empty())
+        openInstrumentEditor (outputs.front().instrument);
+}
+
+void MainComponent::openInstrumentEditor (AudioEngine::InstrumentId instrumentId)
+{
+    auto& window = instrumentEditors[instrumentId];
+
+    if (window != nullptr)
+    {
+        window->setVisible (true);
+        window->toFront (true);
+        return;
+    }
+
+    auto* plugin = engine.getInstrumentPlugin (instrumentId);
+
+    if (plugin == nullptr)
+    {
+        instrumentEditors.erase (instrumentId);
+        return;
+    }
+
+    window = std::make_unique<PluginWindow> (*plugin, engine.getInstrumentName (instrumentId));
+    window->onClose = [safe = juce::Component::SafePointer<MainComponent> (this), instrumentId]
+    {
+        // Defer deletion: we're inside the window's own callback.
+        juce::MessageManager::callAsync ([safe, instrumentId]
+                                         { if (safe != nullptr) safe->instrumentEditors.erase (instrumentId); });
+    };
 }
 
 void MainComponent::removeTrack (AudioEngine::TrackId id)
@@ -307,7 +455,7 @@ void MainComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
 void MainComponent::timerCallback()
 {
     for (auto& row : trackRows)
-        row->updateMeter();
+        row->refresh();
 
     engine.pollRecording();
 
