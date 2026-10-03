@@ -13,6 +13,7 @@
 #include "ui/PianoRollView.h"
 #include "ui/ArrangementView.h"
 #include "ui/HistoryView.h"
+#include "ui/TimelineBar.h"
 
 // The single-window shell:
 //   topbar (menu, domain buttons, transport) / sidebar + content container / status + keyboard.
@@ -83,7 +84,7 @@ private:
                      instrumentsButton { "Instruments" }, historyButton { "History" };
     juce::TextButton rtzButton { "|<" }, playButton { "Play" }, recordButton { "Rec" }, loopButton { "Loop" },
                      perfButton { "Perf" };
-    juce::Label bpmLabel, positionLabel;
+    juce::Label bpmLabel;   // position readout lives in the timeline bar
 
     // Sidebar
     juce::TextButton collapseButton { "<<" };
@@ -114,10 +115,14 @@ private:
         int startWidth = 0;
     } sidebarResizer { *this };
 
+    // Timeline (the one shared time axis; the bar owns the ruler, markers and readout)
+    TimeAxis timeAxis;
+    TimelineBar timelineBar { engine, commandDispatcher, timeAxis };
+
     // Content views
     PlaceholderView audioRegionsView { "Audio regions" };
-    ArrangementView arrangementView { engine, commandDispatcher };
-    PianoRollView pianoRollView { engine, commandDispatcher };
+    ArrangementView arrangementView { engine, commandDispatcher, timeAxis };
+    PianoRollView pianoRollView { engine, commandDispatcher, timeAxis };
     InstrumentsView instrumentsView { engine };
     InstrumentEditorView instrumentEditorView { engine };
     HistoryView historyView { commandDispatcher };

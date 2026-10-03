@@ -27,6 +27,12 @@ below. If Claude is unsure of an issue they will pose a question.
       (asks only when there are unsaved changes: Save / Discard / Cancel; the
       untouched startup state doesn't count as unsaved)
 
+# Top bar
+
+- [x] Clicking on UI buttons toggles that UI between the UI and arrange mode.
+      (Instruments and History toggle back to the current domain's arrange view
+      when clicked while open; Escape still works too)
+
 # Midi record
 
 - [ ] New mode for record: punch in/out - needs fine-grained settings, not

@@ -43,13 +43,27 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     menuButton.onClick = [this] { showMainMenu(); };
     midiDomainButton.onClick = [this] { setDomain (Domain::midi); };
     audioDomainButton.onClick = [this] { setDomain (Domain::audio); };
+    // The Instruments and History buttons toggle: clicking again returns to the
+    // domain's arrange view (ISSUES.md "Top bar").
     instrumentsButton.onClick = [this]
     {
+        if (contentView == ContentView::instruments || contentView == ContentView::instrumentEditor)
+        {
+            setDomain (domain);
+            return;
+        }
+
         instrumentsView.focusTrack (selectedTrack);
         showContent (ContentView::instruments);
     };
 
-    historyButton.onClick = [this] { showContent (ContentView::history); };
+    historyButton.onClick = [this]
+    {
+        if (contentView == ContentView::history)
+            setDomain (domain);
+        else
+            showContent (ContentView::history);
+    };
 
     rtzButton.setTooltip ("Return to start (Home)");
     rtzButton.onClick = [this] { engine.getTransport().returnToZero(); };
@@ -88,9 +102,6 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         engine.setTempoBpm (bpmLabel.getText().getDoubleValue());
         bpmLabel.setText (juce::String (engine.getTempoBpm(), 1), juce::dontSendNotification);
     };
-
-    positionLabel.setJustificationType (juce::Justification::centredLeft);
-    positionLabel.setColour (juce::Label::textColourId, juce::Colours::white);
 
     perfButton.setTooltip ("Performance monitor (F12)");
     perfButton.setClickingTogglesState (true);
@@ -183,9 +194,9 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     for (auto* c : std::initializer_list<juce::Component*> {
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
-             &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &positionLabel, &perfButton,
+             &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &perfButton,
              &collapseButton, &trackList, &channelList, &sidebarResizer,
-             &arrangementView, &audioRegionsView, &pianoRollView,
+             &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
              &instrumentsView, &instrumentEditorView, &historyView, &settingsView,
              &statusLabel, &keyboard })
         addAndMakeVisible (c);
@@ -852,16 +863,6 @@ void MainComponent::timerCallback()
     playButton.setButtonText (transport.isPlaying() ? "Stop" : "Play");
     recordButton.setToggleState (engine.isRecording(), juce::dontSendNotification);
 
-    const auto map = transport.getTempoMap();
-    const auto position = map->ticksToBarsBeats (transport.getPositionTicks());
-    const auto seconds = transport.getPositionSeconds();
-    const auto minutes = (int) (seconds / 60.0);
-
-    positionLabel.setText (juce::String (position.bar) + "." + juce::String (position.beat)
-                             + "   " + juce::String (minutes)
-                             + ":" + juce::String (seconds - minutes * 60.0, 1).paddedLeft ('0', 4),
-                           juce::dontSendNotification);
-
     if (trackList.isShowing())
         trackList.refresh();
 
@@ -1000,8 +1001,6 @@ void MainComponent::resized()
     bpmLabel.setBounds (toolbar.removeFromLeft (56));
     toolbar.removeFromLeft (8);
     perfButton.setBounds (toolbar.removeFromRight (50));
-    toolbar.removeFromRight (6);
-    positionLabel.setBounds (toolbar);
 
     // Bottom
     statusLabel.setBounds (area.removeFromBottom (statusHeight).reduced (8, 1));
@@ -1025,7 +1024,11 @@ void MainComponent::resized()
     sidebarResizer.setBounds (area.removeFromLeft (6));
     sidebarResizer.setVisible (! sidebarCollapsed);
 
-    // Content container
+    // Timeline bar + content container. The bar spans exactly the content area, so
+    // its local x coordinates (and the shared TimeAxis gutter) line up with the
+    // arrangement lanes and the piano roll grid below it.
+    timelineBar.setBounds (area.removeFromTop (TimelineBar::barHeight));
+
     for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView, &audioRegionsView,
                                                                 &instrumentsView, &instrumentEditorView, &historyView })
         view->setBounds (area);

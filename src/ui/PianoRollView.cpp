@@ -56,8 +56,8 @@ namespace
 }
 
 //==============================================================================
-PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d)
-    : engine (e), dispatcher (d)
+PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
+    : engine (e), dispatcher (d), axis (a)
 {
     setWantsKeyboardFocus (true);
 
@@ -175,21 +175,16 @@ void PianoRollView::setTrack (AudioEngine::TrackId id)
 }
 
 //==============================================================================
-juce::Rectangle<int> PianoRollView::rulerArea() const
-{
-    return { keysWidth, toolbarHeight, getWidth() - keysWidth, rulerHeight };
-}
-
 juce::Rectangle<int> PianoRollView::keysArea() const
 {
-    return { 0, toolbarHeight + rulerHeight, keysWidth,
-             getHeight() - toolbarHeight - rulerHeight - laneHeight };
+    return { 0, toolbarHeight, keysWidth,
+             getHeight() - toolbarHeight - laneHeight };
 }
 
 juce::Rectangle<int> PianoRollView::gridArea() const
 {
-    return { keysWidth, toolbarHeight + rulerHeight, getWidth() - keysWidth,
-             getHeight() - toolbarHeight - rulerHeight - laneHeight };
+    return { keysWidth, toolbarHeight, getWidth() - keysWidth,
+             getHeight() - toolbarHeight - laneHeight };
 }
 
 juce::Rectangle<int> PianoRollView::laneArea() const
@@ -199,12 +194,12 @@ juce::Rectangle<int> PianoRollView::laneArea() const
 
 juce::int64 PianoRollView::xToTick (int x) const
 {
-    return scrollTick + (juce::int64) juce::jmax (0.0, (x - keysWidth) * ticksPerPixel);
+    return axis.xToTick (x);
 }
 
 int PianoRollView::tickToX (juce::int64 tick) const
 {
-    return keysWidth + (int) ((double) (tick - scrollTick) / ticksPerPixel);
+    return axis.tickToX (tick);
 }
 
 int PianoRollView::yToKey (int y) const
@@ -563,17 +558,6 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
     dragKeyOffset = 0;
     dragChangedSomething = false;
 
-    if (rulerArea().contains (position))
-    {
-        dispatcher.run ("transport.locate", toVar ([&]
-        {
-            auto p = juce::DynamicObject::Ptr (new juce::DynamicObject());
-            p->setProperty ("tick", snapTick (xToTick (position.x)));
-            return p;
-        }()));
-        return;
-    }
-
     if (laneArea().contains (position))
     {
         drag = Drag::lane;
@@ -636,7 +620,7 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
 
     if (drag == Drag::move || drag == Drag::resize)
     {
-        const auto rawTicks = (juce::int64) ((position.x - dragStart.x) * ticksPerPixel);
+        const auto rawTicks = (juce::int64) ((position.x - dragStart.x) * axis.ticksPerPixel);
         const auto grid = snapTicksOrZero();
         dragTickOffset = grid > 0 ? (rawTicks / juce::jmax ((juce::int64) 1, grid)) * grid : rawTicks;
         dragKeyOffset = drag == Drag::move ? (dragStart.y - position.y) / keyHeight : 0;
@@ -697,7 +681,7 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
                     }
                 }
 
-                if (best >= 0 && bestDistance < (juce::int64) (20 * ticksPerPixel))
+                if (best >= 0 && bestDistance < (juce::int64) (20 * axis.ticksPerPixel))
                     velocityPreview[best] = velocity;
             }
         }
@@ -771,21 +755,8 @@ void PianoRollView::mouseMove (const juce::MouseEvent& event)
 
 void PianoRollView::mouseWheelMove (const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
 {
-    if (event.mods.isCtrlDown())
-    {
-        const auto mouseTick = xToTick (event.x);
-        ticksPerPixel = juce::jlimit (400.0, 200000.0, ticksPerPixel * (wheel.deltaY > 0 ? 0.8 : 1.25));
-        scrollTick = juce::jmax ((juce::int64) 0, mouseTick - (juce::int64) ((event.x - keysWidth) * ticksPerPixel));
-    }
-    else if (event.mods.isShiftDown())
-    {
-        scrollTick = juce::jmax ((juce::int64) 0,
-                                 scrollTick - (juce::int64) (wheel.deltaY * 40 * ticksPerPixel * 8));
-    }
-    else
-    {
+    if (! axis.handleWheel (event, wheel))
         topKey = juce::jlimit (24, 127, topKey + (wheel.deltaY > 0 ? 2 : -2));
-    }
 
     repaint();
 }
@@ -869,12 +840,14 @@ void PianoRollView::timerCallback()
     undoButton.setEnabled (engine.canUndoClip (trackId));
     redoButton.setEnabled (engine.canRedoClip (trackId));
 
-    // Follow the playhead whenever it moves - during playback or a locate while stopped.
+    // Follow the playhead whenever it moves - during playback or a locate while
+    // stopped - and the shared axis when another view scrolled or zoomed it.
     const auto playhead = engine.getTransport().getPositionTicks();
 
-    if (playhead != lastPlayheadTick && isShowing())
+    if ((playhead != lastPlayheadTick || axis.revision != lastAxisRevision) && isShowing())
     {
         lastPlayheadTick = playhead;
+        lastAxisRevision = axis.revision;
         repaint();
     }
 }
@@ -927,16 +900,13 @@ void PianoRollView::paint (juce::Graphics& g)
         }
     }
 
-    // --- Bar/beat lines + ruler ---
-    const auto ruler = rulerArea();
-    g.setColour (juce::Colour (0xff232529));
-    g.fillRect (ruler);
-
+    // --- Bar/beat lines (the timeline bar above shows the numbers) ---
     const auto lane = laneArea();
     const auto endTick = xToTick (getWidth());
-    auto barTick = map->getBarStart (scrollTick);
+    auto barTick = map->getBarStart (axis.scrollTick);
+    int guard = 0;
 
-    while (barTick < endTick)
+    while (barTick < endTick && ++guard < 3000)
     {
         const auto ticksPerBeat = map->getTicksPerBeat (barTick);
         const auto ticksPerBar = map->getTicksPerBar (barTick);
@@ -952,14 +922,6 @@ void PianoRollView::paint (juce::Graphics& g)
             g.setColour (isBar ? juce::Colour (0xff45494f) : juce::Colour (0xff2e3136));
             g.fillRect (x, grid.getY(), 1, grid.getHeight());
             g.fillRect (x, lane.getY(), 1, lane.getHeight());
-
-            if (isBar)
-            {
-                g.setColour (juce::Colours::lightgrey);
-                g.setFont (juce::FontOptions (11.0f));
-                g.drawText (juce::String (map->ticksToBarsBeats (beatTick).bar),
-                            x + 3, ruler.getY() + 6, 40, 14, juce::Justification::left);
-            }
         }
 
         barTick += ticksPerBar;
@@ -1141,7 +1103,7 @@ void PianoRollView::paint (juce::Graphics& g)
     if (playheadX >= grid.getX() && playheadX <= getWidth())
     {
         g.setColour (juce::Colours::white.withAlpha (0.7f));
-        g.fillRect (playheadX, ruler.getY(), 1, getHeight() - ruler.getY());
+        g.fillRect (playheadX, grid.getY(), 1, getHeight() - grid.getY());
     }
 
     // --- Empty hint ---

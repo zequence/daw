@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../AudioEngine.h"
+#include "TimeAxis.h"
 
 class CommandDispatcher;
 
@@ -17,14 +18,14 @@ class CommandDispatcher;
 //   right-click note      delete                         Delete                   delete selection
 //   Ctrl+Z / Ctrl+Y       undo / redo                    Ctrl+A                   select all
 //   wheel                 scroll keys                    shift+wheel              scroll time
-//   ctrl+wheel            zoom time                      ruler click              locate
+//   ctrl+wheel            zoom time                      (the timeline bar above locates)
 //   lane drag             velocity: set values; CC/bend: draw a curve (one undo step per stroke)
 //   lane right-drag       CC/bend: erase the dragged range
 class PianoRollView final : public juce::Component,
                             private juce::Timer
 {
 public:
-    PianoRollView (AudioEngine&, CommandDispatcher&);
+    PianoRollView (AudioEngine&, CommandDispatcher&, TimeAxis&);
     ~PianoRollView() override;
 
     void setTrack (AudioEngine::TrackId);
@@ -45,8 +46,7 @@ private:
     enum class LaneMode { velocity, pitchBend, controller };
 
     //==============================================================================
-    // Geometry
-    juce::Rectangle<int> rulerArea() const;
+    // Geometry (time <-> x comes from the shared axis; keysWidth == TimeAxis::gutter)
     juce::Rectangle<int> keysArea() const;
     juce::Rectangle<int> gridArea() const;
     juce::Rectangle<int> laneArea() const;
@@ -91,13 +91,13 @@ private:
     //==============================================================================
     AudioEngine& engine;
     CommandDispatcher& dispatcher;
+    TimeAxis& axis;
     AudioEngine::TrackId trackId = 0;
     MidiSequence::Ptr lastSeen;
 
-    // View state
-    double ticksPerPixel = 16000.0;        // ~60 px per quarter note initially
+    // View state (time scroll/zoom live in the shared axis)
     juce::int64 lastPlayheadTick = -1;
-    juce::int64 scrollTick = 0;
+    int lastAxisRevision = -1;
     int keyHeight = 12;
     int topKey = 84;                       // highest visible key (C6)
 
@@ -125,7 +125,7 @@ private:
     juce::Label trackLabel;
     std::vector<int> lastCcList;           // CCs currently offered by laneBox
 
-    static constexpr int rulerHeight = 26, keysWidth = 56, laneHeight = 80, toolbarHeight = 30;
+    static constexpr int keysWidth = TimeAxis::gutter, laneHeight = 80, toolbarHeight = 30;
     static constexpr juce::int64 laneDrawQuantum = Ticks::perQuarterNote / 32;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PianoRollView)

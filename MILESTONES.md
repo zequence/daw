@@ -3,18 +3,11 @@
 Things we want to implement but aren't about to do yet. When one starts, it moves
 out of here (into work, with any open questions going through ISSUES.md).
 
-## Timeline bar (scoped 2026-10-03)
+## Tempo / meter editing in the timeline bar
 
-Sits under the menu, on top of the different non-full-window gui modes. Has:
-- time (hours:min:sec:ms) (hours only when non-zero)
-- tempo track
-- time signature track
-- markers
-- bars
-
-Decision: **one shared time axis** - the bar owns scroll/zoom, arrangement and
-piano roll align to it and lose their own rulers; markers/tempo/signature are
-displayed and later edited here. This is also where tempo/meter editing lands.
+The timeline bar (done 2026-10-03) displays the tempo and time-signature
+tracks; editing changes there (insert/drag/remove tempo and meter changes,
+ramps) lands in the bar later.
 
 ## Articulation / expression maps
 
