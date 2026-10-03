@@ -1,6 +1,7 @@
 #include "CommandDispatcher.h"
 #include "../integrations/VeproState.h"
 #include "../integrations/VeproServer.h"
+#include <AppVersion.h>
 #include "../engine/AudioChannelProcessor.h"
 #include "../engine/HistoryManager.h"
 
@@ -128,6 +129,7 @@ void CommandDispatcher::registerCommands()
          [this] (const juce::var&, Respond respond)
          {
              auto result = object();
+             result->setProperty ("version", ORCHESTRAL_DAW_VERSION);
              result->setProperty ("ticksPerQuarterNote", Ticks::perQuarterNote);
              result->setProperty ("tracks", (int) engine.getTrackIds().size());
              result->setProperty ("instruments", engine.getNumLoadedInstruments());

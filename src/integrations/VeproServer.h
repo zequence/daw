@@ -28,6 +28,34 @@ namespace vepro
         return juce::File ("C:\\ProgramData\\VSL\\Vienna Ensemble Pro\\mcp\\vepro-api-cli.exe");
     }
 
+    // Runs one CLI command line with a hard timeout, capturing stdout through a
+    // temp file. A pipe would deadlock: we must not wait for exit before reading,
+    // but blocking reads can't honour a timeout when the CLI hangs. The file does
+    // both - the CLI writes freely, and a hung process gets killed on deadline.
+    inline juce::String runCliCapture (const juce::String& commandLine, int timeoutMs, juce::String& error)
+    {
+        juce::TemporaryFile temp ("vepro-cli");
+        const auto wrapped = "cmd.exe /s /c \"" + commandLine + " > \""
+                               + temp.getFile().getFullPathName() + "\"\"";
+
+        juce::ChildProcess child;
+
+        if (! child.start (wrapped, 0))
+        {
+            error = "couldn't start the VE Pro CLI";
+            return {};
+        }
+
+        if (! child.waitForProcessToFinish (timeoutMs))
+        {
+            child.kill();
+            error = "the VE Pro CLI timed out";
+            return {};
+        }
+
+        return temp.getFile().loadFileAsString();
+    }
+
     // ZeroConf discovery through the CLI: fills host/port with the announced
     // server. Blocking; false + 'error' set when nothing announces itself.
     inline bool discoverServer (const juce::File& cli, juce::String& host, int& port, juce::String& error)
@@ -38,22 +66,14 @@ namespace vepro
             return false;
         }
 
-        juce::ChildProcess child;
+        const auto output = runCliCapture (cli.getFullPathName().quoted() + " discover", 15000, error);
 
-        if (! child.start (juce::StringArray { cli.getFullPathName(), "discover" }, juce::ChildProcess::wantStdOut))
+        if (error.isNotEmpty())
         {
-            error = "couldn't start the VE Pro CLI";
+            error = "VE Pro server discovery failed: " + error;
             return false;
         }
 
-        if (! child.waitForProcessToFinish (15000))
-        {
-            child.kill();
-            error = "VE Pro server discovery timed out";
-            return false;
-        }
-
-        const auto output = child.readAllProcessOutput();
         const auto jsonStart = output.indexOf ("{");
         const auto parsed = jsonStart >= 0 ? juce::JSON::parse (output.substring (jsonStart)) : juce::var();
 
@@ -79,8 +99,6 @@ namespace vepro
             return {};
         }
 
-        juce::ChildProcess child;
-
         // Build the command line ourselves: JUCE doesn't escape embedded quotes on
         // Windows, which silently mangles the JSON payload (CRT rules: \" inside "...").
         const auto json = juce::JSON::toString (payload, true);
@@ -88,22 +106,14 @@ namespace vepro
                                + " call --host " + host + " --port " + juce::String (port)
                                + " --payload-json \"" + json.replace ("\\", "\\\\").replace ("\"", "\\\"") + "\"";
 
-        if (! child.start (command, juce::ChildProcess::wantStdOut))
+        const auto output = runCliCapture (command, 15000, error);
+
+        if (error.isNotEmpty())
         {
-            error = "couldn't start the VE Pro CLI";
+            error += " talking to " + host + ":" + juce::String (port)
+                       + " (is the server running and the address right?)";
             return {};
         }
-
-        // Hard timeout: a CLI aimed at a dead or wedged service must never hang us
-        if (! child.waitForProcessToFinish (15000))
-        {
-            child.kill();
-            error = "the VE Pro CLI timed out talking to " + host + ":" + juce::String (port)
-                      + " (is the server running and the address right?)";
-            return {};
-        }
-
-        const auto output = child.readAllProcessOutput();
 
         const auto jsonStart = output.indexOf ("{");
 

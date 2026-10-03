@@ -118,6 +118,19 @@ target_link_libraries(OrchestralDAWTests
         juce::juce_recommended_warning_flags)
 
 #==============================================================================
+# App version header, regenerated every build from git (commit count + hash,
+# -dirty when the tree has uncommitted changes). app.status reports it.
+add_custom_target(OrchestralDAWVersion
+    COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DOUT=${CMAKE_BINARY_DIR}/generated/AppVersion.h
+            -P ${CMAKE_SOURCE_DIR}/cmake/GenVersion.cmake
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/generated/AppVersion.h)
+
+foreach(target OrchestralDAW OrchestralDAWTests)
+    add_dependencies(${target} OrchestralDAWVersion)
+    target_include_directories(${target} PRIVATE ${CMAKE_BINARY_DIR}/generated)
+endforeach()
+
+#==============================================================================
 # Ship the scanner next to the app so the app can launch it.
 add_dependencies(OrchestralDAW OrchestralDAWScanner)
 add_custom_command(TARGET OrchestralDAW POST_BUILD
