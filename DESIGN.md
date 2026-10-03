@@ -10,7 +10,11 @@ That one sentence contains three pillars:
    musical time, edited like any other content and applied sample-accurately.
 2. **Content generation** - transforms and generators built into the app (quantize,
    humanize, arpeggiate, CC-curve shaping, legato overlap...) and external generation
-   by scripts or agents writing through the API.
+   by scripts or agents writing through the API. Eventually this goes non-linear:
+   using the application like something similar to Pure Data - generator and logic
+   nodes patched together, running live - not only typical DAW functions. That will
+   need its own UI, which comes later; until then the engine and command layer must
+   simply not assume the linear timeline is the only driver.
 3. **Agent interoperability** - everything the application can do is reachable,
    discoverable and observable through its control API (see API.md). An AI agent is a
    first-class operator of the application, not an add-on.
@@ -46,4 +50,8 @@ These keep the pillars true as the app grows:
   share the piano roll machinery. Parameter targeting must use stable parameter IDs,
   not indices.
 - Content transforms: arrive with the MIDI editor as `clip.*` commands.
+- Non-linear patching: far field, but the ground is prepared - the engine is already a
+  processor graph (sources, routes, instruments are nodes), nodes pull time from the
+  transport per block rather than being driven by it, and patching maps onto future
+  `node.*` commands.
 - Event subscription and richer `describe` (examples, semantics): planned.
