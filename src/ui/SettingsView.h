@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../AudioEngine.h"
+#include "../integrations/VeproState.h"
 
 // Full-window settings page (replaces the whole UI; close with X or ESC).
 // Tab system (ISSUES.md "Settings Window"): a category column on the left
@@ -26,7 +27,7 @@ public:
         closeButton.onClick = [this] { if (onClose) onClose(); };
         addAndMakeVisible (closeButton);
 
-        categories.names = { "Audio & MIDI", "Plugins", "Tracks", "Agents (MCP)", "Key commands" };
+        categories.names = { "Audio & MIDI", "Plugins", "Tracks", "Agents (MCP)", "Integrations", "Key commands" };
         categories.onSelect = [this] (int index) { setCategory (index); };
         addAndMakeVisible (categories);
 
@@ -91,6 +92,33 @@ public:
                                  + juce::String (settings.getIntValue (mcpPortKey, 53218)) + "/mcp");
         page.addAndMakeVisible (mcpRegisterHint);
 
+        // --- Integrations ---
+        veproVersionLabel.setText ("Vienna Ensemble Pro Server version", juce::dontSendNotification);
+        veproVersionLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
+        page.addAndMakeVisible (veproVersionLabel);
+
+        veproVersionHint.setText ("Used by instrument.connectVepro: the connection-state format differs "
+                                  "between Pro Server releases.", juce::dontSendNotification);
+        veproVersionHint.setColour (juce::Label::textColourId, juce::Colours::grey);
+        veproVersionHint.setFont (juce::FontOptions (12.0f));
+        page.addAndMakeVisible (veproVersionHint);
+
+        const auto versions = vepro::supportedVersions();
+
+        for (int i = 0; i < versions.size(); ++i)
+            veproVersionBox.addItem (versions[i], i + 1);
+
+        const auto currentVersion = settings.getValue (vepro::versionSettingsKey, vepro::defaultVersion());
+        veproVersionBox.setSelectedItemIndex (juce::jmax (0, versions.indexOf (currentVersion)),
+                                              juce::dontSendNotification);
+        veproVersionBox.setWantsKeyboardFocus (false);
+        veproVersionBox.onChange = [this]
+        {
+            engine.getSettingsFile().setValue (vepro::versionSettingsKey, veproVersionBox.getText());
+            engine.getSettingsFile().saveIfNeeded();
+        };
+        page.addAndMakeVisible (veproVersionBox);
+
         for (auto* c : std::initializer_list<juce::Component*> { &scanButton, &retryButton, &rescanButton,
                                                                  &onTopToggle, &autoRecordToggle, &mcpToggle })
         {
@@ -134,7 +162,7 @@ public:
     }
 
 private:
-    enum Category { audioMidi = 0, plugins, tracks, agents, keyCommands };
+    enum Category { audioMidi = 0, plugins, tracks, agents, integrations, keyCommands };
 
     void setCategory (int index)
     {
@@ -162,6 +190,9 @@ private:
 
         for (auto* c : std::initializer_list<juce::Component*> { &mcpToggle, &mcpStatus, &mcpRegisterHint })
             c->setVisible (category == agents);
+
+        for (auto* c : std::initializer_list<juce::Component*> { &veproVersionLabel, &veproVersionBox, &veproVersionHint })
+            c->setVisible (category == integrations);
 
         switch (category)
         {
@@ -193,6 +224,14 @@ private:
                 y += 22;
                 mcpRegisterHint.setBounds (4, y, juce::jmin (620, width - 8), 24);
                 y += 32;
+                break;
+
+            case integrations:
+                veproVersionLabel.setBounds (4, y, 280, 22);
+                veproVersionBox.setBounds (288, y, 120, 24);
+                y += 30;
+                veproVersionHint.setBounds (4, y, width - 8, 18);
+                y += 26;
                 break;
 
             case keyCommands:
@@ -290,6 +329,8 @@ private:
     juce::ToggleButton mcpToggle { "Run the MCP server for AI agents (starts with the app)" };
     juce::Label mcpStatus;
     juce::TextEditor mcpRegisterHint;
+    juce::Label veproVersionLabel, veproVersionHint;
+    juce::ComboBox veproVersionBox;
 
     juce::Rectangle<int> keyCommandsBounds;
 

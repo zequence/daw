@@ -1,4 +1,5 @@
 #include "CommandDispatcher.h"
+#include "../integrations/VeproState.h"
 #include "../engine/AudioChannelProcessor.h"
 #include "../engine/HistoryManager.h"
 
@@ -1237,6 +1238,56 @@ void CommandDispatcher::registerCommands()
 
              plugin->setStateInformation (decoded.getData(), (int) decoded.getDataSize());
              respond (ok());
+         });
+
+    add ("instrument.connectVepro",
+         "Connect a loaded Vienna Ensemble Pro plugin to a server instance by synthesizing its "
+         "connection state. The state format is versioned per Pro Server release; the default "
+         "comes from Settings > Integrations",
+         "instrumentId:int instance:string [host:string=127.0.0.1] [hostName:string=localhost] "
+         "[decoupled:bool=true] [version:string]",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const int id = (int) params.getProperty ("instrumentId", 0);
+             auto* plugin = engine.getInstrumentPlugin (id);
+
+             if (plugin == nullptr)
+                 return respond (fail ("no instrument with id " + juce::String (id) + " (see instrument.list)"));
+
+             if (! plugin->getPluginDescription().name.containsIgnoreCase ("Vienna Ensemble"))
+                 return respond (fail ("instrument " + juce::String (id) + " is '"
+                                       + plugin->getPluginDescription().name
+                                       + "', not a Vienna Ensemble Pro plugin"));
+
+             const auto instance = params.getProperty ("instance", {}).toString();
+
+             if (instance.isEmpty())
+                 return respond (fail ("'instance' (the server instance's name) is required"));
+
+             const auto version = params.hasProperty ("version")
+                                      ? params.getProperty ("version", {}).toString()
+                                      : engine.getSettingsFile().getValue (vepro::versionSettingsKey,
+                                                                           vepro::defaultVersion());
+
+             vepro::ConnectTarget target;
+             target.instanceName = instance;
+             target.hostAddress = params.getProperty ("host", "127.0.0.1").toString();
+             target.hostName = params.getProperty ("hostName", "localhost").toString();
+             target.decoupled = params.getProperty ("decoupled", true);
+
+             const auto state = vepro::buildConnectionState (version, target);
+
+             if (state.getSize() == 0)
+                 return respond (fail ("unsupported VE Pro Server version '" + version
+                                       + "' (supported: " + vepro::supportedVersions().joinIntoString (", ")
+                                       + "; select in Settings > Integrations)"));
+
+             plugin->setStateInformation (state.getData(), (int) state.getSize());
+
+             auto o = object();
+             o->setProperty ("version", version);
+             o->setProperty ("instance", instance);
+             respond (ok (juce::var (o.get())));
          });
 
     //==========================================================================
