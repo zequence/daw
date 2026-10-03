@@ -58,10 +58,17 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     menuButton.setButtonText (juce::String::fromUTF8 ("\xE2\x98\xB0"));   // hamburger
     menuButton.setTooltip ("Main menu");
     menuButton.onClick = [this] { showMainMenu(); };
+
+    midiDomainButton.setTooltip ("Midi domain: the arrangement and the track list");
     midiDomainButton.onClick = [this] { setDomain (Domain::midi); };
+
+    audioDomainButton.setTooltip ("Audio domain: audio regions and the channel list");
     audioDomainButton.onClick = [this] { setDomain (Domain::audio); };
     // The Instruments and History buttons toggle: clicking again returns to the
     // domain's arrange view (ISSUES.md "Top bar").
+    instrumentsButton.setTooltip ("The instrument rack (click again or Esc to return to arrange)");
+    historyButton.setTooltip ("Global history: click an entry to time-travel (click again or Esc to return)");
+
     instrumentsButton.onClick = [this]
     {
         if (contentView == ContentView::instruments || contentView == ContentView::instrumentEditor)

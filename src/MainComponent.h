@@ -147,6 +147,9 @@ private:
     int lastEngineRevision = -1;    // topbar widgets follow engine mutations
     std::map<AudioEngine::InstrumentId, std::unique_ptr<PluginWindow>> pluginWindows;
 
+    // Without a TooltipWindow, component tooltips never show (ISSUES.md "Global")
+    juce::TooltipWindow tooltipWindow { this, 700 };
+
     juce::File currentProjectFile;
     std::unique_ptr<juce::FileChooser> fileChooser;
 

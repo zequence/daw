@@ -135,6 +135,9 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     };
     addAndMakeVisible (quantizeButton);
 
+    undoButton.setTooltip ("Undo the last clip edit on this track (Ctrl+Z)");
+    redoButton.setTooltip ("Redo (Ctrl+Y / Ctrl+Shift+Z)");
+
     undoButton.onClick = [this]
     {
         auto params = new juce::DynamicObject();
