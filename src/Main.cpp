@@ -3,6 +3,7 @@
 #include "UserData.h"
 #include "api/CommandDispatcher.h"
 #include "api/ApiServer.h"
+#include "api/EventBroadcaster.h"
 #include "api/McpProcess.h"
 #include "ui/SettingsView.h"
 
@@ -40,17 +41,23 @@ public:
             apiServer = std::make_unique<ApiServer> (*dispatcher);
 
             if (apiServer->start (port))
+            {
                 juce::Logger::writeToLog ("API listening on 127.0.0.1:" + juce::String (port));
+                eventBroadcaster = std::make_unique<EventBroadcaster> (*engine, *apiServer);
+            }
             else
+            {
                 juce::Logger::writeToLog ("API could not listen on port " + juce::String (port)
                                           + " (already in use?)");
+            }
         }
     }
 
     void shutdown() override
     {
-        mcpProcess.reset();   // the adapter talks to the API server: kill it first
-        apiServer.reset();    // stop accepting commands
+        mcpProcess.reset();       // the adapter talks to the API server: kill it first
+        eventBroadcaster.reset(); // detach from the engine before anything it watches dies
+        apiServer.reset();        // stop accepting commands
         mainWindow.reset();   // UI (and plugin editors) before the engine
         dispatcher.reset();
         engine.reset();
@@ -93,6 +100,7 @@ private:
     std::unique_ptr<AudioEngine> engine;
     std::unique_ptr<CommandDispatcher> dispatcher;
     std::unique_ptr<ApiServer> apiServer;
+    std::unique_ptr<EventBroadcaster> eventBroadcaster;
     std::unique_ptr<McpProcess> mcpProcess;
     std::unique_ptr<MainWindow> mainWindow;
 };

@@ -44,6 +44,26 @@ Quick test from a terminal while the app is running:
 | recording | `record.start`, `record.stop` |
 | projects | `project.save`, `project.load`, `project.new` |
 
+## Events (subscribe)
+
+Send `{"cmd": "subscribe"}` on a connection and the app pushes events as JSON lines on
+that same connection, interleaved with your replies (replies carry `ok`, events carry
+`event`). `{"cmd": "unsubscribe"}` stops them.
+
+```
+{"event":"transport","playing":true,"recording":false,"looping":false,"positionTicks":0,"bar":1,"beat":1,"bpm":120}
+{"event":"position", ...}                      every 0.5 s while playing
+{"event":"trackAdded","id":3,"name":"Twin 3"}  also trackRemoved, trackChanged {id, change}
+{"event":"clipChanged","trackId":3,"notes":42,"controls":7}
+{"event":"instrumentAdded","id":1,"name":"Twin 3","audioChannelId":1}   also instrumentRemoved
+{"event":"markerAdded","tick":0,"name":"intro"}                         also markerRemoved
+{"event":"tempoChanged","bpm":101}
+{"event":"recordingStarted","trackId":3}  /  {"event":"recordingFinished","trackId":3,"notes":12,"controls":80}
+{"event":"projectCleared"} / {"event":"projectLoaded","path":"..."} / {"event":"projectSaved","path":"..."}
+```
+
+trackChanged's `change` is one of: name, muted, soloed, armed, outputs.
+
 ## Agents
 
 There is no separate "agent API": agents use this same surface. The MCP adapter in

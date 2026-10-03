@@ -36,6 +36,8 @@ public:
         listener.close();
         stopThread (5000);
 
+        const juce::ScopedLock lock (connectionsLock);
+
         for (auto& connection : connections)
             connection->close();
 
@@ -43,6 +45,25 @@ public:
     }
 
     int getPort() const noexcept { return port; }
+
+    // Push an event line to every connection that sent "subscribe". Message thread.
+    void broadcastEvent (const juce::var& event)
+    {
+        const juce::ScopedLock lock (connectionsLock);
+
+        bool anySubscribed = false;
+        for (auto& connection : connections)
+            anySubscribed = anySubscribed || connection->subscribed.load();
+
+        if (! anySubscribed)
+            return;
+
+        const auto line = juce::JSON::toString (event, true);
+
+        for (auto& connection : connections)
+            if (connection->subscribed.load() && connection->isThreadRunning())
+                connection->sendLine (line);
+    }
 
 private:
     //==============================================================================
@@ -116,7 +137,25 @@ private:
                     if (dispatcher == nullptr)
                         return;
 
-                    dispatcher->dispatch (line, [self] (const juce::var& reply)
+                    const auto parsed = juce::JSON::parse (line);
+                    const auto cmd = parsed.getProperty ("cmd", {}).toString();
+
+                    // Subscriptions are per-connection, so the server handles them itself.
+                    if (cmd == "subscribe" || cmd == "unsubscribe")
+                    {
+                        self->subscribed.store (cmd == "subscribe");
+
+                        auto reply = new juce::DynamicObject();
+                        reply->setProperty ("ok", true);
+
+                        if (const auto id = parsed.getProperty ("id", {}); ! id.isVoid())
+                            reply->setProperty ("id", id);
+
+                        self->sendLine (juce::JSON::toString (juce::var (reply), true));
+                        return;
+                    }
+
+                    dispatcher->dispatchParsed (parsed, [self] (const juce::var& reply)
                     {
                         self->sendLine (juce::JSON::toString (reply, true));
                     });
@@ -135,6 +174,7 @@ private:
         ApiServer& owner;
         std::unique_ptr<juce::StreamingSocket> socket;
         juce::CriticalSection writeLock;
+        std::atomic<bool> subscribed { false };
     };
 
     //==============================================================================
@@ -147,11 +187,11 @@ private:
             if (incoming == nullptr)
                 continue;
 
-            // Prune finished connections
-            std::erase_if (connections, [] (const auto& c) { return ! c->isThreadRunning(); });
-
             auto connection = std::make_shared<Connection> (*this, incoming);
             connection->startThread();
+
+            const juce::ScopedLock lock (connectionsLock);
+            std::erase_if (connections, [] (const auto& c) { return ! c->isThreadRunning(); });
             connections.push_back (std::move (connection));
         }
     }
@@ -159,6 +199,7 @@ private:
     CommandDispatcher& dispatcher;
     juce::StreamingSocket listener;
     std::vector<std::shared_ptr<Connection>> connections;
+    juce::CriticalSection connectionsLock;
     int port = 0;
 
     JUCE_DECLARE_NON_COPYABLE (ApiServer)

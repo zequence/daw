@@ -47,7 +47,11 @@ void CommandDispatcher::add (const juce::String& name, const juce::String& descr
 
 void CommandDispatcher::dispatch (const juce::String& message, Respond out)
 {
-    const auto parsed = juce::JSON::parse (message);
+    dispatchParsed (juce::JSON::parse (message), std::move (out));
+}
+
+void CommandDispatcher::dispatchParsed (const juce::var& parsed, Respond out)
+{
     const auto id = parsed.getProperty ("id", {});
 
     auto respond = [out = std::move (out), id] (juce::var reply)
@@ -771,6 +775,20 @@ void CommandDispatcher::registerCommands()
 
              respond (ok());
          });
+
+    //==========================================================================
+    // These two are handled per-connection by the socket server; they exist here so
+    // describe documents them (and so in-process callers get a helpful error).
+    add ("subscribe", "Receive push events on this socket connection (events are JSON lines with an "
+                      "\"event\" field: transport, position, trackAdded/Removed/Changed, clipChanged, "
+                      "instrumentAdded/Removed, markerAdded/Removed, tempoChanged, recordingStarted/"
+                      "Finished, projectCleared/Loaded/Saved)", "",
+         [] (const juce::var&, Respond respond)
+         { respond (fail ("subscribe only works on a TCP connection (the socket server handles it)")); });
+
+    add ("unsubscribe", "Stop receiving push events on this socket connection", "",
+         [] (const juce::var&, Respond respond)
+         { respond (fail ("unsubscribe only works on a TCP connection (the socket server handles it)")); });
 
     //==========================================================================
     add ("marker.list", "Project markers (named positions dividing the song into parts)", "",

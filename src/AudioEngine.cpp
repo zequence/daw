@@ -114,6 +114,44 @@ juce::Array<juce::PluginDescription> AudioEngine::getInstrumentTypes() const
 }
 
 //==============================================================================
+void AudioEngine::emitEvent (const juce::String& type, juce::DynamicObject::Ptr data)
+{
+    if (eventSink == nullptr)
+        return;
+
+    auto object = data != nullptr ? data : juce::DynamicObject::Ptr (new juce::DynamicObject());
+    object->setProperty ("event", type);
+    eventSink (juce::var (object.get()));
+}
+
+void AudioEngine::emitTrackChanged (TrackId id, const juce::String& change)
+{
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    data->setProperty ("change", change);
+    emitEvent ("trackChanged", data);
+}
+
+void AudioEngine::emitClipChanged (TrackId id)
+{
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("trackId", id);
+
+    if (auto* track = findTrack (id); track != nullptr && track->sequence != nullptr)
+    {
+        data->setProperty ("notes", (int) track->sequence->getNotes().size());
+        data->setProperty ("controls", (int) track->sequence->getControls().size());
+    }
+    else
+    {
+        data->setProperty ("notes", 0);
+        data->setProperty ("controls", 0);
+    }
+
+    emitEvent ("clipChanged", data);
+}
+
+//==============================================================================
 AudioEngine::Track* AudioEngine::findTrack (TrackId id)
 {
     auto it = tracks.find (id);
@@ -208,6 +246,12 @@ void AudioEngine::addInstrument (const juce::PluginDescription& description, Ins
             instrument.audioChannel = channelId;
             instruments[id] = std::move (instrument);
 
+            auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+            data->setProperty ("id", id);
+            data->setProperty ("name", name);
+            data->setProperty ("audioChannelId", channelId);
+            emitEvent ("instrumentAdded", data);
+
             if (callback) callback (id, {});
         });
 }
@@ -244,6 +288,10 @@ void AudioEngine::removeInstrument (InstrumentId id)
     }
 
     instruments.erase (id);
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    emitEvent ("instrumentRemoved", data);
 }
 
 std::vector<std::pair<AudioEngine::InstrumentId, juce::String>> AudioEngine::getInstruments() const
@@ -329,6 +377,11 @@ AudioEngine::TrackId AudioEngine::addTrack()
     if (armedTrack == 0)
         setArmedTrack (id);
 
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    data->setProperty ("name", tracks[id].name);
+    emitEvent ("trackAdded", data);
+
     return id;
 }
 
@@ -349,6 +402,10 @@ void AudioEngine::removeTrack (TrackId id)
         setArmedTrack (tracks.empty() ? 0 : tracks.begin()->first);
 
     applyMuteAndSolo();
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    emitEvent ("trackRemoved", data);
 }
 
 std::vector<AudioEngine::TrackId> AudioEngine::getTrackIds() const
@@ -372,8 +429,13 @@ juce::String AudioEngine::getTrackName (TrackId id) const
 void AudioEngine::setTrackName (TrackId id, const juce::String& name)
 {
     if (auto* track = findTrack (id))
+    {
         if (name.isNotEmpty())
+        {
             track->name = name;
+            emitTrackChanged (id, "name");
+        }
+    }
 }
 
 std::vector<AudioEngine::AudioChannelId> AudioEngine::getAudioChannelIds() const
@@ -426,6 +488,7 @@ void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, in
 
     juce::Logger::writeToLog ("Track " + juce::String (trackId) + " output -> "
                               + instrument->name + " ch " + juce::String (output.midiChannel));
+    emitTrackChanged (trackId, "outputs");
 }
 
 void AudioEngine::clearTrackOutputs (TrackId id)
@@ -436,6 +499,7 @@ void AudioEngine::clearTrackOutputs (TrackId id)
             graph.removeNode (output.routeNode);
 
         track->outputs.clear();
+        emitTrackChanged (id, "outputs");
     }
 }
 
@@ -456,6 +520,7 @@ void AudioEngine::setTrackMuted (TrackId id, bool muted)
     {
         track->muted = muted;
         applyMuteAndSolo();
+        emitTrackChanged (id, "muted");
     }
 }
 
@@ -471,6 +536,7 @@ void AudioEngine::setTrackSoloed (TrackId id, bool soloed)
     {
         track->soloed = soloed;
         applyMuteAndSolo();
+        emitTrackChanged (id, "soloed");
     }
 }
 
@@ -522,6 +588,7 @@ void AudioEngine::setTrackSequence (TrackId id, MidiSequence::Ptr sequence)
                                   + (sequence != nullptr ? ": sequence set (" + juce::String ((int) sequence->getNotes().size()) + " notes)"
                                                          : ": sequence cleared"));
         applySequence (*track, std::move (sequence));
+        emitClipChanged (id);
     }
 }
 
@@ -535,6 +602,7 @@ bool AudioEngine::undoTrackSequence (TrackId id)
     track->redoStack.push_back (track->sequence);
     applySequence (*track, track->undoStack.back());
     track->undoStack.pop_back();
+    emitClipChanged (id);
     return true;
 }
 
@@ -548,6 +616,7 @@ bool AudioEngine::redoTrackSequence (TrackId id)
     track->undoStack.push_back (track->sequence);
     applySequence (*track, track->redoStack.back());
     track->redoStack.pop_back();
+    emitClipChanged (id);
     return true;
 }
 
@@ -583,20 +652,36 @@ void AudioEngine::setTempoBpm (double bpm)
     masterTempoMap = masterTempoMap->withTempoChange (0, bpm);
     transport.setTempoMap (masterTempoMap);
     transport.locate (tick);
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("bpm", getTempoBpm());
+    emitEvent ("tempoChanged", data);
 }
 
 //==============================================================================
 void AudioEngine::addMarker (juce::int64 tick, const juce::String& name)
 {
     tick = juce::jmax ((juce::int64) 0, tick);
+    const auto resolvedName = name.isNotEmpty() ? name : juce::String ("Marker");
+
     removeMarker (tick);
-    markers.push_back ({ tick, name.isNotEmpty() ? name : "Marker" });
+    markers.push_back ({ tick, resolvedName });
     std::sort (markers.begin(), markers.end(), [] (const Marker& a, const Marker& b) { return a.tick < b.tick; });
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("tick", tick);
+    data->setProperty ("name", resolvedName);
+    emitEvent ("markerAdded", data);
 }
 
 void AudioEngine::removeMarker (juce::int64 tick)
 {
-    std::erase_if (markers, [tick] (const Marker& m) { return m.tick == tick; });
+    if (std::erase_if (markers, [tick] (const Marker& m) { return m.tick == tick; }) > 0)
+    {
+        auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+        data->setProperty ("tick", tick);
+        emitEvent ("markerRemoved", data);
+    }
 }
 
 //==============================================================================
@@ -608,6 +693,10 @@ bool AudioEngine::startRecording()
     recordingSawPlayback = false;
     recorder->start (armedTrack);
     juce::Logger::writeToLog ("Recording started on track " + juce::String (armedTrack));
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("trackId", armedTrack);
+    emitEvent ("recordingStarted", data);
 
     if (! transport.isPlaying())
         transport.play();
@@ -627,6 +716,12 @@ void AudioEngine::stopRecording()
                               + juce::String ((int) result.notes.size()) + " notes, "
                               + juce::String ((int) result.controls.size()) + " control events");
     mergeIntoTrack (trackId, result);
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("trackId", trackId);
+    data->setProperty ("notes", (int) result.notes.size());
+    data->setProperty ("controls", (int) result.controls.size());
+    emitEvent ("recordingFinished", data);
 }
 
 void AudioEngine::pollRecording()
@@ -755,6 +850,14 @@ bool AudioEngine::saveProject (const juce::File& file)
     const auto ok = root.writeTo (temp.getFile()) && temp.overwriteTargetFileWithTemporary();
 
     juce::Logger::writeToLog ((ok ? "Saved project: " : "FAILED to save project: ") + file.getFullPathName());
+
+    if (ok)
+    {
+        auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+        data->setProperty ("path", file.getFullPathName());
+        emitEvent ("projectSaved", data);
+    }
+
     return ok;
 }
 
@@ -793,6 +896,7 @@ void AudioEngine::clearProject()
     transport.setTempoMap (masterTempoMap);
 
     juce::Logger::writeToLog ("Project cleared");
+    emitEvent ("projectCleared");
 }
 
 void AudioEngine::loadProject (const juce::File& file, std::function<void (bool, juce::String)> done)
@@ -825,11 +929,13 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
         size_t next = 0;
         std::map<int, InstrumentId> idMap;
         juce::StringArray warnings;
+        juce::String path;
         std::function<void (bool, juce::String)> done;
     };
 
     auto state = std::make_shared<LoadState>();
     state->xml = std::move (xml);
+    state->path = file.getFullPathName();
     state->done = std::move (done);
 
     for (auto* e : state->xml->getChildWithTagNameIterator ("INSTRUMENT"))
@@ -843,6 +949,10 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
         if (state->next >= state->instrumentElements.size())
         {
             restoreProjectTracks (*state->xml, state->idMap, state->warnings);
+
+            auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+            data->setProperty ("path", state->path);
+            emitEvent ("projectLoaded", data);
 
             if (state->done)
                 state->done (true, state->warnings.joinIntoString ("\n"));
@@ -944,6 +1054,9 @@ void AudioEngine::setArmedTrack (TrackId id)
 {
     armedTrack = id;
     updateMidiRouting();
+
+    if (id != 0)
+        emitTrackChanged (id, "armed");
 }
 
 void AudioEngine::updateMidiRouting()

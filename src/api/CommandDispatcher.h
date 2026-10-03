@@ -21,6 +21,7 @@ public:
 
     // 'message' is one JSON object (see above). Must be called on the message thread.
     void dispatch (const juce::String& message, Respond);
+    void dispatchParsed (const juce::var& message, Respond);
 
     // In-process clients (the UI) call commands directly; the reply is returned for
     // synchronous commands (clip edits, transport...). Same code path as the socket.

@@ -139,6 +139,11 @@ public:
     void saveSettings();
     juce::PropertiesFile& getSettingsFile()   { return settings; }
 
+    //==============================================================================
+    // Observable state (DESIGN.md): every mutation emits an event here (message
+    // thread). The API server forwards them to subscribed connections.
+    std::function<void (const juce::var&)> eventSink;
+
 private:
     struct Instrument
     {
@@ -207,6 +212,9 @@ private:
                                juce::StringArray& warnings);
     void applySequence (Track&, MidiSequence::Ptr);   // pushes to the source node, no history
     void updateMidiRouting();                 // keeps midiIn -> route connections matching the armed track
+    void emitEvent (const juce::String& type, juce::DynamicObject::Ptr data = nullptr);
+    void emitTrackChanged (TrackId, const juce::String& change);
+    void emitClipChanged (TrackId);
     void applyMuteAndSolo();
     void mergeIntoTrack (TrackId, const MidiRecorder::Result&);
     void enableAllMidiInputsIfFirstRun (bool hadSavedState);
