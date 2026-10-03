@@ -69,6 +69,10 @@ public:
         auto* channel = engine.getAudioChannel (engine.getAudioChannelForInstrument (loadedInstrument));
         expect (channel != nullptr, "instrument has no audio channel");
 
+        // Keep the audible part of the test quiet; the meter is measured after this gain.
+        if (channel != nullptr)
+            channel->setGain (0.05f);
+
         while (juce::Time::getMillisecondCounter() < deadline)
         {
             pump (50);
