@@ -274,19 +274,8 @@ private:
 //==============================================================================
 TrackList::TrackList (AudioEngine& e) : engine (e)
 {
-    addButton.setWantsKeyboardFocus (false);
-    addButton.onClick = [this] { if (onAddTrack) onAddTrack(); };
-    addAndMakeVisible (addButton);
-
-    addFolderButton.setWantsKeyboardFocus (false);
-    addFolderButton.setTooltip ("Add a folder for grouping tracks (drag rows to move and re-order them)");
-    addFolderButton.onClick = [this]
-    {
-        engine.addFolder (true);
-        refresh();
-    };
-    addAndMakeVisible (addFolderButton);
-
+    // Adding tracks/folders lives in the right-click menus (ISSUES.md: header
+    // buttons removed)
     viewport.setViewedComponent (&rowContainer, false);
     viewport.setScrollBarsShown (true, false);
     addAndMakeVisible (viewport);
@@ -671,12 +660,7 @@ void TrackList::showFolderMenu (AudioEngine::FolderId folderId)
 
 void TrackList::resized()
 {
-    auto area = getLocalBounds();
-    auto header = area.removeFromTop (30).reduced (6, 3);
-    addFolderButton.setBounds (header.removeFromRight (62));
-    header.removeFromRight (4);
-    addButton.setBounds (header);
-    viewport.setBounds (area);
+    viewport.setBounds (getLocalBounds());
     layoutRows();
 }
 

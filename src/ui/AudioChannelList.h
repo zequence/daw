@@ -18,15 +18,7 @@ class AudioChannelList final : public juce::Component
 public:
     explicit AudioChannelList (AudioEngine& e) : engine (e)
     {
-        addFolderButton.setWantsKeyboardFocus (false);
-        addFolderButton.setTooltip ("Add a folder for grouping channels (drag rows to move and re-order them)");
-        addFolderButton.onClick = [this]
-        {
-            engine.addFolder (false);
-            refresh();
-        };
-        addAndMakeVisible (addFolderButton);
-
+        // Adding folders lives in the right-click menu (ISSUES.md: header button removed)
         viewport.setViewedComponent (&rowContainer, false);
         viewport.setScrollBarsShown (true, false);
         addAndMakeVisible (viewport);
@@ -58,9 +50,7 @@ public:
 
     void resized() override
     {
-        auto area = getLocalBounds();
-        addFolderButton.setBounds (area.removeFromTop (26).reduced (6, 2));
-        viewport.setBounds (area);
+        viewport.setBounds (getLocalBounds());
         layoutRows();
     }
 
@@ -645,7 +635,6 @@ private:
 
     //==========================================================================
     AudioEngine& engine;
-    juce::TextButton addFolderButton { "+ Folder" };
     juce::Viewport viewport;
     RowContainer rowContainer { *this };
 

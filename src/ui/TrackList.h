@@ -57,7 +57,6 @@ private:
     std::vector<AudioEngine::TrackId> selectionInVisualOrder() const;
 
     AudioEngine& engine;
-    juce::TextButton addButton { "+ Track" }, addFolderButton { "+ Folder" };
     juce::Viewport viewport;
     RowContainer rowContainer { *this };
 

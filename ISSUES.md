@@ -21,7 +21,14 @@ Claude is unsure of an issue they will pose a question.
 
 # Sidebar
 
-- [ ] Colored tracks (and regions). Selectable colors on top of the tracks in a dropdown for selected channels.
+- [x] Remove Add track/folder (not needed anymore)
+      (both sidebars' header buttons removed; right-click menus cover adding)
+- [ ] Colored tracks (and regions)
+  - Selectable colors in right-click menu
+  - The color is shown only as a left border
+  - Regions in arrange view get colored borders (all around)
+  - a slide control for opacity in settings/theming with visible examples next to it
+
 
 # Integrations
 
@@ -32,8 +39,23 @@ Claude is unsure of an issue they will pose a question.
 - [ ] New mode for record: punch in/out - needs fine-grained settings, not
       implemented yet; placeholder noted in DESIGN.md
 
-## Midi editor
+# Arrange view
 
+- [ ] Region height and Y-coordinate should follow channels.
+      (Milestone-sized as part of "Unified track area" in MILESTONES.md: the
+      sidebar and arrange view become one unit, which solves this, the
+      scroll sync and the folder spans by construction.)
+- [ ] Scrolling should sync with sidebar
+      (part of "Unified track area", see above)
+- [ ] Draw regions for folders that span the content inside them.
+      (part of "Unified track area", see above)
+- [ ] Double clicking a folder in the midi UI will load the editor and show the combined midi. This also selects all midi channels inside it.
+      (Milestone-sized: multi-channel editing; builds on the unified track
+      area. Pairs with the editor's channel dropdown below.)
+
+# Midi editor
+
+- [ ] A dropdown in the top editor bar to select which channel to edit. It will only show the selected midi channels.
 - [ ] CC and note velocity, aftertouch at the bottom. Velocity is default. More
       lanes can be added on top of each other. Requires controls below the piano
       keys. (Milestone-sized - also captured as "Stacked editor lanes" in

@@ -25,6 +25,28 @@ Remaining:
 
 Interop by observed format only - no VSL code (licensing note applies).
 
+## Unified track area (scoped 2026-10-03)
+
+The track sidebar and the arrange view become ONE unit (user decision; from
+ISSUES.md "Arrange view"): header rows on the left (today's track list -
+name, R/E/S/M/I, record mode), each row's lane continuing directly to the
+right at the same height and y; one shared vertical scroll; folder rows draw
+a spanning region across their content's lanes. The timeline bar stays above
+the whole area. Region height and position therefore follow the channels by
+construction.
+
+Implications:
+- The shared TimeAxis gutter becomes dynamic: the header column's width
+  (resizable) instead of the fixed 56 px. The piano roll keeps alignment by
+  drawing its keys in that same column (keys at the column's right edge).
+- TrackList rows and ArrangementView lanes merge into one component (or two
+  children of one scroll container); drag/multi-select/folders carry over.
+- The audio domain gets the same treatment later (channel list + audio
+  regions).
+
+Order: colors land first (ISSUES.md), so folder spans and region borders
+draw colored from day one.
+
 ## Tempo / meter editing in the timeline bar
 
 The timeline bar (done 2026-10-03) displays the tempo and time-signature
