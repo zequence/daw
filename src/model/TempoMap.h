@@ -88,6 +88,10 @@ public:
     Ptr withMeterChange (juce::int64 tick, int numerator, int denominator) const;  // snaps to the containing bar
     Ptr withoutMeterChange (juce::int64 tick) const;
 
+    //==============================================================================
+    std::unique_ptr<juce::XmlElement> toXml() const;
+    static Ptr fromXml (const juce::XmlElement&);   // tolerant: missing events fall back to defaults
+
 private:
     TempoMap() = default;
 

@@ -67,6 +67,56 @@ public:
     const std::vector<Control>& getControls() const noexcept { return controls; }
     juce::int64 getLengthTicks() const noexcept              { return lengthTicks; }
 
+    //==============================================================================
+    std::unique_ptr<juce::XmlElement> toXml() const
+    {
+        auto xml = std::make_unique<juce::XmlElement> ("SEQUENCE");
+
+        for (auto& n : notes)
+        {
+            auto* e = xml->createNewChildElement ("NOTE");
+            e->setAttribute ("start", juce::String (n.startTick));
+            e->setAttribute ("length", juce::String (n.lengthTicks));
+            e->setAttribute ("channel", n.channel);
+            e->setAttribute ("key", n.key);
+            e->setAttribute ("velocity", n.velocity);
+        }
+
+        for (auto& c : controls)
+        {
+            auto* e = xml->createNewChildElement ("CONTROL");
+            e->setAttribute ("tick", juce::String (c.tick));
+            e->setAttribute ("type", (int) c.type);
+            e->setAttribute ("channel", c.channel);
+            e->setAttribute ("number", c.number);
+            e->setAttribute ("value", c.value);
+        }
+
+        return xml;
+    }
+
+    static Ptr fromXml (const juce::XmlElement& xml)
+    {
+        std::vector<Note> notes;
+        std::vector<Control> controls;
+
+        for (auto* e : xml.getChildWithTagNameIterator ("NOTE"))
+            notes.push_back ({ e->getStringAttribute ("start").getLargeIntValue(),
+                               e->getStringAttribute ("length").getLargeIntValue(),
+                               e->getIntAttribute ("channel", 1),
+                               e->getIntAttribute ("key", 60),
+                               e->getIntAttribute ("velocity", 100) });
+
+        for (auto* e : xml.getChildWithTagNameIterator ("CONTROL"))
+            controls.push_back ({ e->getStringAttribute ("tick").getLargeIntValue(),
+                                  (ControlType) juce::jlimit (0, 2, e->getIntAttribute ("type")),
+                                  e->getIntAttribute ("channel", 1),
+                                  e->getIntAttribute ("number"),
+                                  e->getIntAttribute ("value") });
+
+        return create (std::move (notes), std::move (controls));
+    }
+
 private:
     MidiSequence() = default;
 

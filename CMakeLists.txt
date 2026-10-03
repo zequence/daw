@@ -80,6 +80,7 @@ target_sources(OrchestralDAWTests PRIVATE
     tests/GraphIntegrationTests.cpp
     tests/RecordingTests.cpp
     tests/RouteTests.cpp
+    tests/ProjectTests.cpp
     tests/EndToEndTests.cpp
     src/AudioEngine.cpp
     src/model/TempoMap.cpp

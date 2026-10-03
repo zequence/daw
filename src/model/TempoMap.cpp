@@ -167,6 +167,48 @@ TempoMap::Ptr TempoMap::withoutMeterChange (juce::int64 tick) const
 }
 
 //==============================================================================
+std::unique_ptr<juce::XmlElement> TempoMap::toXml() const
+{
+    auto xml = std::make_unique<juce::XmlElement> ("TEMPOMAP");
+
+    for (auto& tempo : tempos)
+    {
+        auto* e = xml->createNewChildElement ("TEMPO");
+        e->setAttribute ("tick", juce::String (tempo.tick));
+        e->setAttribute ("bpm", tempo.bpm);
+    }
+
+    for (auto& meter : meters)
+    {
+        auto* e = xml->createNewChildElement ("METER");
+        e->setAttribute ("tick", juce::String (meter.tick));
+        e->setAttribute ("numerator", meter.numerator);
+        e->setAttribute ("denominator", meter.denominator);
+    }
+
+    return xml;
+}
+
+TempoMap::Ptr TempoMap::fromXml (const juce::XmlElement& xml)
+{
+    auto map = std::shared_ptr<TempoMap> (new TempoMap());
+
+    for (auto* e : xml.getChildWithTagNameIterator ("TEMPO"))
+        map->tempos.push_back ({ e->getStringAttribute ("tick").getLargeIntValue(),
+                                 juce::jlimit (minBpm, maxBpm, e->getDoubleAttribute ("bpm", 120.0)), 0.0 });
+
+    for (auto* e : xml.getChildWithTagNameIterator ("METER"))
+        map->meters.push_back ({ e->getStringAttribute ("tick").getLargeIntValue(),
+                                 juce::jlimit (1, 99, e->getIntAttribute ("numerator", 4)),
+                                 isValidDenominator (e->getIntAttribute ("denominator", 4))
+                                     ? e->getIntAttribute ("denominator", 4) : 4,
+                                 0 });
+
+    map->rebuild();
+    return map;
+}
+
+//==============================================================================
 void TempoMap::rebuild()
 {
     // --- tempos: sort, keep the later addition where ticks collide, ensure an event at 0 ---

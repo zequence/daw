@@ -625,6 +625,241 @@ juce::int64 AudioEngine::getLoopEndTicks() const
 }
 
 //==============================================================================
+bool AudioEngine::saveProject (const juce::File& file)
+{
+    juce::XmlElement root ("ORCHESTRAL_DAW_PROJECT");
+    root.setAttribute ("version", 1);
+    root.addChildElement (masterTempoMap->toXml().release());
+
+    for (auto& [id, instrument] : instruments)
+    {
+        auto* e = root.createNewChildElement ("INSTRUMENT");
+        e->setAttribute ("id", id);
+        e->setAttribute ("name", instrument.name);
+
+        if (auto* plugin = getInstrumentPlugin (id))
+        {
+            e->addChildElement (plugin->getPluginDescription().createXml().release());
+
+            juce::MemoryBlock state;
+            plugin->getStateInformation (state);
+
+            if (state.getSize() > 0)
+                e->createNewChildElement ("STATE")->addTextElement (state.toBase64Encoding());
+        }
+
+        for (auto& [channel, channelName] : instrument.channelNames)
+        {
+            auto* c = e->createNewChildElement ("CHANNELNAME");
+            c->setAttribute ("channel", channel);
+            c->setAttribute ("name", channelName);
+        }
+
+        if (auto* audioChannel = getAudioChannel (instrument.audioChannel))
+        {
+            auto* a = e->createNewChildElement ("AUDIOCHANNEL");
+            a->setAttribute ("gain", audioChannel->getGain());
+            a->setAttribute ("muted", audioChannel->isMuted());
+        }
+    }
+
+    for (auto& [id, track] : tracks)
+    {
+        auto* e = root.createNewChildElement ("TRACK");
+        e->setAttribute ("name", track.name);
+        e->setAttribute ("muted", track.muted);
+        e->setAttribute ("soloed", track.soloed);
+        e->setAttribute ("armed", id == armedTrack);
+
+        for (auto& output : track.outputs)
+        {
+            auto* o = e->createNewChildElement ("OUTPUT");
+            o->setAttribute ("instrument", output.instrument);
+            o->setAttribute ("channel", output.midiChannel);
+        }
+
+        if (track.sequence != nullptr)
+            e->addChildElement (track.sequence->toXml().release());
+    }
+
+    juce::TemporaryFile temp (file);
+    const auto ok = root.writeTo (temp.getFile()) && temp.overwriteTargetFileWithTemporary();
+
+    juce::Logger::writeToLog ((ok ? "Saved project: " : "FAILED to save project: ") + file.getFullPathName());
+    return ok;
+}
+
+void AudioEngine::clearProject()
+{
+    if (isRecording())
+        recorder->finish (transport.getPositionTicks());   // discard the take
+
+    transport.stop();
+    transport.setLooping (false);
+    transport.returnToZero();
+
+    for (auto& [id, track] : tracks)
+    {
+        for (auto& output : track.outputs)
+            graph.removeNode (output.routeNode);
+
+        graph.removeNode (track.midiSourceNode);
+    }
+
+    tracks.clear();
+
+    for (auto& [id, instrument] : instruments)
+        graph.removeNode (instrument.pluginNode);
+
+    instruments.clear();
+
+    for (auto& [id, channel] : audioChannels)
+        graph.removeNode (channel.node);
+
+    audioChannels.clear();
+
+    armedTrack = 0;
+    masterTempoMap = TempoMap::create (120.0);
+    transport.setTempoMap (masterTempoMap);
+
+    juce::Logger::writeToLog ("Project cleared");
+}
+
+void AudioEngine::loadProject (const juce::File& file, std::function<void (bool, juce::String)> done)
+{
+    auto xml = juce::parseXML (file);
+
+    if (xml == nullptr || ! xml->hasTagName ("ORCHESTRAL_DAW_PROJECT"))
+    {
+        if (done)
+            done (false, file.getFileName() + " is not an Orchestral DAW project");
+        return;
+    }
+
+    juce::Logger::writeToLog ("Loading project: " + file.getFullPathName());
+    clearProject();
+
+    if (auto* tempoXml = xml->getChildByName ("TEMPOMAP"))
+    {
+        masterTempoMap = TempoMap::fromXml (*tempoXml);
+        transport.setTempoMap (masterTempoMap);
+    }
+
+    struct LoadState
+    {
+        std::unique_ptr<juce::XmlElement> xml;
+        std::vector<juce::XmlElement*> instrumentElements;
+        size_t next = 0;
+        std::map<int, InstrumentId> idMap;
+        juce::StringArray warnings;
+        std::function<void (bool, juce::String)> done;
+    };
+
+    auto state = std::make_shared<LoadState>();
+    state->xml = std::move (xml);
+    state->done = std::move (done);
+
+    for (auto* e : state->xml->getChildWithTagNameIterator ("INSTRUMENT"))
+        state->instrumentElements.push_back (e);
+
+    // Instruments instantiate asynchronously, one after another; then the tracks.
+    auto step = std::make_shared<std::function<void()>>();
+
+    *step = [this, state, step]
+    {
+        if (state->next >= state->instrumentElements.size())
+        {
+            restoreProjectTracks (*state->xml, state->idMap, state->warnings);
+
+            if (state->done)
+                state->done (true, state->warnings.joinIntoString ("\n"));
+
+            *step = nullptr;   // break the shared_ptr self-reference
+            return;
+        }
+
+        auto* element = state->instrumentElements[state->next++];
+        const auto savedName = element->getStringAttribute ("name", "instrument");
+
+        juce::PluginDescription description;
+        auto* pluginXml = element->getChildByName ("PLUGIN");
+
+        if (pluginXml == nullptr || ! description.loadFromXml (*pluginXml))
+        {
+            state->warnings.add (savedName + ": missing plugin description");
+            (*step)();
+            return;
+        }
+
+        addInstrument (description,
+            [this, state, step, element, savedName] (InstrumentId newId, const juce::String& error)
+            {
+                if (newId == 0)
+                {
+                    state->warnings.add (savedName + ": " + error);
+                    (*step)();
+                    return;
+                }
+
+                state->idMap[element->getIntAttribute ("id")] = newId;
+
+                if (auto* stateElement = element->getChildByName ("STATE"))
+                {
+                    juce::MemoryBlock block;
+
+                    if (block.fromBase64Encoding (stateElement->getAllSubText().trim()) && block.getSize() > 0)
+                        if (auto* plugin = getInstrumentPlugin (newId))
+                            plugin->setStateInformation (block.getData(), (int) block.getSize());
+                }
+
+                for (auto* c : element->getChildWithTagNameIterator ("CHANNELNAME"))
+                    setInstrumentChannelName (newId, c->getIntAttribute ("channel"), c->getStringAttribute ("name"));
+
+                if (auto* a = element->getChildByName ("AUDIOCHANNEL"))
+                {
+                    if (auto* audioChannel = getAudioChannel (getAudioChannelForInstrument (newId)))
+                    {
+                        audioChannel->setGain ((float) a->getDoubleAttribute ("gain", 1.0));
+                        audioChannel->setMuted (a->getBoolAttribute ("muted"));
+                    }
+                }
+
+                (*step)();
+            });
+    };
+
+    (*step)();
+}
+
+void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std::map<int, InstrumentId>& instrumentIds,
+                                        juce::StringArray& warnings)
+{
+    for (auto* e : root.getChildWithTagNameIterator ("TRACK"))
+    {
+        const auto trackId = addTrack();
+        setTrackName (trackId, e->getStringAttribute ("name"));
+        setTrackMuted (trackId, e->getBoolAttribute ("muted"));
+        setTrackSoloed (trackId, e->getBoolAttribute ("soloed"));
+
+        for (auto* o : e->getChildWithTagNameIterator ("OUTPUT"))
+        {
+            const auto savedInstrument = o->getIntAttribute ("instrument");
+
+            if (auto it = instrumentIds.find (savedInstrument); it != instrumentIds.end())
+                addTrackOutput (trackId, it->second, o->getIntAttribute ("channel", 1));
+            else
+                warnings.add (getTrackName (trackId) + ": output skipped (its instrument didn't load)");
+        }
+
+        if (auto* sequenceXml = e->getChildByName ("SEQUENCE"))
+            setTrackSequence (trackId, MidiSequence::fromXml (*sequenceXml));
+
+        if (e->getBoolAttribute ("armed"))
+            setArmedTrack (trackId);
+    }
+}
+
+//==============================================================================
 void AudioEngine::setArmedTrack (TrackId id)
 {
     armedTrack = id;

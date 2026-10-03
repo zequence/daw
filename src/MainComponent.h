@@ -43,6 +43,13 @@ private:
     void setDomain (Domain);
     void showContent (ContentView);
     void showMainMenu();
+    void confirmDiscard (const juce::String& action, std::function<void()> proceed);
+    void newProject();
+    void loadProjectDialog();
+    void saveProject (bool saveAs);
+    void applyLoadedProject (const juce::File&, bool ok, const juce::String& warnings);
+    void updateWindowTitle();
+    static juce::File getProjectsDirectory();
     void openSettings();
     void closeSettings();
     void updateViewVisibility();
@@ -115,6 +122,9 @@ private:
     //==============================================================================
     AudioEngine::TrackId selectedTrack = 0;
     std::map<AudioEngine::InstrumentId, std::unique_ptr<PluginWindow>> pluginWindows;
+
+    juce::File currentProjectFile;
+    std::unique_ptr<juce::FileChooser> fileChooser;
 
     std::unique_ptr<PluginScanProcess> pluginScan;
     juce::String scanStatus;

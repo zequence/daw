@@ -377,13 +377,158 @@ void MainComponent::showMainMenu()
     const auto safe = juce::Component::SafePointer<MainComponent> (this);
     juce::PopupMenu menu;
 
-    menu.addItem (1, "New project", false);
-    menu.addItem (2, "Load project...", false);
-    menu.addItem (3, "Save project", false);
+    menu.addItem ("New project", [safe] { if (safe != nullptr) safe->newProject(); });
+    menu.addItem ("Load project...", [safe] { if (safe != nullptr) safe->loadProjectDialog(); });
+    menu.addItem ("Save project", [safe] { if (safe != nullptr) safe->saveProject (false); });
+    menu.addItem ("Save project as...", [safe] { if (safe != nullptr) safe->saveProject (true); });
     menu.addSeparator();
     menu.addItem ("Settings...", [safe] { if (safe != nullptr) safe->openSettings(); });
 
     menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (menuButton));
+}
+
+//==============================================================================
+juce::File MainComponent::getProjectsDirectory()
+{
+    auto dir = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("OrchestralDAW Projects");
+    dir.createDirectory();
+    return dir;
+}
+
+void MainComponent::confirmDiscard (const juce::String& action, std::function<void()> proceed)
+{
+    if (engine.getTrackIds().empty() && engine.getInstruments().empty())
+    {
+        proceed();
+        return;
+    }
+
+    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon,
+                                        action, "The current project will be closed. Anything not saved is lost.",
+                                        action, "Cancel", this,
+                                        juce::ModalCallbackFunction::create (
+                                            [proceed = std::move (proceed)] (int result)
+                                            {
+                                                if (result == 1)
+                                                    proceed();
+                                            }));
+}
+
+void MainComponent::newProject()
+{
+    confirmDiscard ("New project", [safe = juce::Component::SafePointer<MainComponent> (this)]
+    {
+        if (safe == nullptr)
+            return;
+
+        safe->pluginWindows.clear();
+        safe->engine.clearProject();
+        safe->currentProjectFile = {};
+        safe->selectedTrack = 0;
+        safe->loopButton.setToggleState (false, juce::dontSendNotification);
+        safe->bpmLabel.setText (juce::String (safe->engine.getTempoBpm(), 1), juce::dontSendNotification);
+        safe->trackList.setSelectedTrack (0);
+        safe->setDomain (Domain::midi);
+        safe->updateWindowTitle();
+        safe->statusLabel.setText ("New project", juce::dontSendNotification);
+    });
+}
+
+void MainComponent::loadProjectDialog()
+{
+    confirmDiscard ("Load project", [safe = juce::Component::SafePointer<MainComponent> (this)]
+    {
+        if (safe == nullptr)
+            return;
+
+        safe->fileChooser = std::make_unique<juce::FileChooser> ("Load project",
+                                                                 getProjectsDirectory(), "*.odaw");
+
+        safe->fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+            [safe] (const juce::FileChooser& chooser)
+            {
+                if (safe == nullptr || chooser.getResult() == juce::File())
+                    return;
+
+                const auto file = chooser.getResult();
+                safe->pluginWindows.clear();
+                safe->statusLabel.setText ("Loading " + file.getFileName() + "...", juce::dontSendNotification);
+
+                safe->engine.loadProject (file, [safe, file] (bool ok, const juce::String& warnings)
+                {
+                    if (safe != nullptr)
+                        safe->applyLoadedProject (file, ok, warnings);
+                });
+            });
+    });
+}
+
+void MainComponent::applyLoadedProject (const juce::File& file, bool ok, const juce::String& warnings)
+{
+    currentProjectFile = ok ? file : juce::File();
+
+    loopButton.setToggleState (false, juce::dontSendNotification);
+    bpmLabel.setText (juce::String (engine.getTempoBpm(), 1), juce::dontSendNotification);
+
+    const auto trackIds = engine.getTrackIds();
+    selectTrack (trackIds.empty() ? 0 : trackIds.front(), false);
+    setDomain (Domain::midi);
+    updateWindowTitle();
+
+    if (! ok)
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Couldn't load project", warnings);
+        statusLabel.setText ("Load failed", juce::dontSendNotification);
+        return;
+    }
+
+    statusLabel.setText ("Loaded " + file.getFileName(), juce::dontSendNotification);
+
+    if (warnings.isNotEmpty())
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::InfoIcon,
+                                                "Project loaded with warnings", warnings);
+}
+
+void MainComponent::saveProject (bool saveAs)
+{
+    if (! saveAs && currentProjectFile != juce::File())
+    {
+        statusLabel.setText (engine.saveProject (currentProjectFile)
+                                 ? "Saved " + currentProjectFile.getFileName()
+                                 : "Save FAILED", juce::dontSendNotification);
+        return;
+    }
+
+    fileChooser = std::make_unique<juce::FileChooser> ("Save project",
+                                                       getProjectsDirectory().getChildFile ("Untitled.odaw"), "*.odaw");
+
+    fileChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
+        [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::FileChooser& chooser)
+        {
+            if (safe == nullptr || chooser.getResult() == juce::File())
+                return;
+
+            const auto file = chooser.getResult().withFileExtension ("odaw");
+
+            if (safe->engine.saveProject (file))
+            {
+                safe->currentProjectFile = file;
+                safe->updateWindowTitle();
+                safe->statusLabel.setText ("Saved " + file.getFileName(), juce::dontSendNotification);
+            }
+            else
+            {
+                safe->statusLabel.setText ("Save FAILED", juce::dontSendNotification);
+            }
+        });
+}
+
+void MainComponent::updateWindowTitle()
+{
+    if (auto* window = dynamic_cast<juce::DocumentWindow*> (getTopLevelComponent()))
+        window->setName (currentProjectFile != juce::File()
+                             ? "Orchestral DAW - " + currentProjectFile.getFileNameWithoutExtension()
+                             : juce::String ("Orchestral DAW"));
 }
 
 void MainComponent::openSettings()

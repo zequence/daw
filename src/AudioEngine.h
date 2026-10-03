@@ -111,6 +111,13 @@ public:
     bool isRecording() const      { return recorder != nullptr && recorder->isRecording(); }
     void pollRecording();         // call regularly from a UI timer while the app runs
 
+    //==============================================================================
+    // Projects. Loading is asynchronous (instruments instantiate one by one); 'done'
+    // reports success plus any warnings (e.g. a plugin that no longer exists).
+    bool saveProject (const juce::File&);
+    void loadProject (const juce::File&, std::function<void (bool ok, juce::String warnings)> done);
+    void clearProject();
+
     void saveSettings();
     juce::PropertiesFile& getSettingsFile()   { return settings; }
 
@@ -177,6 +184,8 @@ private:
     const Instrument* findInstrument (InstrumentId) const;
     MidiRouteProcessor* getRoute (const Output&) const;
 
+    void restoreProjectTracks (const juce::XmlElement& root, const std::map<int, InstrumentId>& instrumentIds,
+                               juce::StringArray& warnings);
     void updateMidiRouting();                 // keeps midiIn -> route connections matching the armed track
     void applyMuteAndSolo();
     void mergeIntoTrack (TrackId, const MidiRecorder::Result&);
