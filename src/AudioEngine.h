@@ -2,7 +2,11 @@
 
 #include <juce_audio_utils/juce_audio_utils.h>
 
+#include "engine/Transport.h"
+#include "model/MidiSequence.h"
+
 class TrackChannelProcessor;
+class MidiSourceProcessor;
 
 // Owns the audio device, the plugin catalogue and the processing graph.
 // Each track is: [instrument plugin] -> [TrackChannelProcessor] -> master output.
@@ -42,6 +46,18 @@ public:
     TrackChannelProcessor* getChannel (TrackId) const;
     int getNumLoadedInstruments() const;
 
+    //==============================================================================
+    Transport& getTransport()                       { return transport; }
+
+    void setTrackSequence (TrackId, MidiSequence::Ptr);
+    MidiSequence::Ptr getTrackSequence (TrackId) const;
+
+    double getTempoBpm() const;
+    void setTempoBpm (double bpm);
+
+    // End of the bar containing the last event of any track's sequence (used as the loop end).
+    juce::int64 getLoopEndTicks() const;
+
     void setArmedTrack (TrackId);
     TrackId getArmedTrack() const noexcept                { return armedTrack; }
 
@@ -50,8 +66,34 @@ public:
 private:
     struct Track
     {
-        NodeID instrumentNode, channelNode;
+        NodeID instrumentNode, channelNode, midiSourceNode;
+        MidiSequence::Ptr sequence;   // message-thread copy, for UI queries
         int loadGeneration = 0;
+    };
+
+    // Runs the transport once per device callback, before the graph renders the block.
+    struct IOCallback final : juce::AudioIODeviceCallback
+    {
+        explicit IOCallback (AudioEngine& e) : engine (e) {}
+
+        void audioDeviceAboutToStart (juce::AudioIODevice* device) override
+        {
+            engine.transport.prepare (device->getCurrentSampleRate());
+            engine.player.audioDeviceAboutToStart (device);
+        }
+
+        void audioDeviceStopped() override { engine.player.audioDeviceStopped(); }
+
+        void audioDeviceIOCallbackWithContext (const float* const* input, int numInputs,
+                                               float* const* output, int numOutputs, int numSamples,
+                                               const juce::AudioIODeviceCallbackContext& context) override
+        {
+            engine.transport.beginBlock (numSamples);
+            engine.player.audioDeviceIOCallbackWithContext (input, numInputs, output, numOutputs,
+                                                            numSamples, context);
+        }
+
+        AudioEngine& engine;
     };
 
     Track* findTrack (TrackId);
@@ -66,6 +108,9 @@ private:
     juce::KnownPluginList knownPlugins;
     juce::AudioProcessorGraph graph;
     juce::AudioProcessorPlayer player;
+    TempoMap::Ptr masterTempoMap;     // message-thread authority; transport gets snapshots
+    Transport transport;
+    IOCallback ioCallback { *this };
 
     NodeID audioOutNode, midiInNode;
     std::map<TrackId, Track> tracks;

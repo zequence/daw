@@ -1,5 +1,6 @@
 #include "MainComponent.h"
 #include "UserData.h"
+#include "model/DemoSequence.h"
 
 namespace
 {
@@ -41,6 +42,43 @@ MainComponent::MainComponent (AudioEngine& e)
     addChildComponent (perfPanel);
     setWantsKeyboardFocus (true);
 
+    rtzButton.setTooltip ("Return to start");
+    rtzButton.onClick = [this] { engine.getTransport().returnToZero(); };
+
+    playButton.setTooltip ("Play/Stop (space)");
+    playButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::darkgreen);
+    playButton.onClick = [this] { engine.getTransport().togglePlayStop(); };
+
+    loopButton.setTooltip ("Loop from the start to the end of the last clip");
+    loopButton.setClickingTogglesState (true);
+    loopButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::steelblue);
+    loopButton.onClick = [this]
+    {
+        auto& transport = engine.getTransport();
+        transport.setLoopRegion (0, engine.getLoopEndTicks());
+        transport.setLooping (loopButton.getToggleState());
+    };
+
+    bpmLabel.setTooltip ("Tempo (double-click to edit)");
+    bpmLabel.setEditable (false, true);
+    bpmLabel.setJustificationType (juce::Justification::centred);
+    bpmLabel.setColour (juce::Label::outlineColourId, juce::Colour (0xff43464d));
+    bpmLabel.setText (juce::String (engine.getTempoBpm(), 1), juce::dontSendNotification);
+    bpmLabel.onTextChange = [this]
+    {
+        engine.setTempoBpm (bpmLabel.getText().getDoubleValue());
+        bpmLabel.setText (juce::String (engine.getTempoBpm(), 1), juce::dontSendNotification);
+    };
+
+    positionLabel.setJustificationType (juce::Justification::centredLeft);
+    positionLabel.setColour (juce::Label::textColourId, juce::Colours::white);
+
+    // Keep keyboard focus on the main component so the space bar reaches the transport.
+    for (auto* b : std::initializer_list<juce::Component*> { &audioButton, &pluginsButton, &addTrackButton,
+                                                             &perfButton, &rtzButton, &playButton, &loopButton,
+                                                             &keyboard })
+        b->setWantsKeyboardFocus (false);
+
     statusLabel.setJustificationType (juce::Justification::centredRight);
     statusLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
 
@@ -52,7 +90,8 @@ MainComponent::MainComponent (AudioEngine& e)
     keyboardState.addListener (this);
 
     for (auto* c : std::initializer_list<juce::Component*> { &audioButton, &pluginsButton, &addTrackButton, &perfButton,
-                                                             &statusLabel, &trackViewport, &keyboard })
+                                                             &rtzButton, &playButton, &loopButton, &bpmLabel,
+                                                             &positionLabel, &statusLabel, &trackViewport, &keyboard })
         addAndMakeVisible (c);
 
     engine.getDeviceManager().addChangeListener (this);
@@ -87,6 +126,10 @@ void MainComponent::addTrack()
 
     auto row = std::make_unique<TrackRow> (engine, id, "Track " + juce::String (++trackCounter));
     row->onArmClicked    = [this] (auto trackId) { armTrack (trackId); };
+    row->onDemoToggled   = [this] (auto trackId, bool enabled)
+    {
+        engine.setTrackSequence (trackId, enabled ? makeDemoSequence() : nullptr);
+    };
     row->onRemoveClicked = [this] (auto trackId)
     {
         // Defer: the click came from a button inside the row we're about to delete.
@@ -250,6 +293,20 @@ void MainComponent::timerCallback()
     for (auto& row : trackRows)
         row->updateMeter();
 
+    auto& transport = engine.getTransport();
+    playButton.setToggleState (transport.isPlaying(), juce::dontSendNotification);
+    playButton.setButtonText (transport.isPlaying() ? "Stop" : "Play");
+
+    const auto map = transport.getTempoMap();
+    const auto position = map->ticksToBarsBeats (transport.getPositionTicks());
+    const auto seconds = transport.getPositionSeconds();
+    const auto minutes = (int) (seconds / 60.0);
+
+    positionLabel.setText (juce::String (position.bar) + "." + juce::String (position.beat)
+                             + "   " + juce::String (minutes)
+                             + ":" + juce::String (seconds - minutes * 60.0, 1).paddedLeft ('0', 4),
+                           juce::dontSendNotification);
+
     auto& dm = engine.getDeviceManager();
 
     if (scanStatus.isNotEmpty())
@@ -292,6 +349,18 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         return true;
     }
 
+    if (key == juce::KeyPress::spaceKey)
+    {
+        engine.getTransport().togglePlayStop();
+        return true;
+    }
+
+    if (key == juce::KeyPress::homeKey)
+    {
+        engine.getTransport().returnToZero();
+        return true;
+    }
+
     return false;
 }
 
@@ -308,11 +377,21 @@ void MainComponent::resized()
     auto area = getLocalBounds();
 
     auto toolbar = area.removeFromTop (toolbarHeight).reduced (8, 7);
-    audioButton.setBounds (toolbar.removeFromLeft (130));
+    audioButton.setBounds (toolbar.removeFromLeft (60));
     toolbar.removeFromLeft (6);
-    pluginsButton.setBounds (toolbar.removeFromLeft (90));
+    pluginsButton.setBounds (toolbar.removeFromLeft (70));
     toolbar.removeFromLeft (6);
-    addTrackButton.setBounds (toolbar.removeFromLeft (80));
+    addTrackButton.setBounds (toolbar.removeFromLeft (70));
+    toolbar.removeFromLeft (14);
+    rtzButton.setBounds (toolbar.removeFromLeft (34));
+    toolbar.removeFromLeft (4);
+    playButton.setBounds (toolbar.removeFromLeft (54));
+    toolbar.removeFromLeft (4);
+    loopButton.setBounds (toolbar.removeFromLeft (48));
+    toolbar.removeFromLeft (6);
+    bpmLabel.setBounds (toolbar.removeFromLeft (56));
+    toolbar.removeFromLeft (6);
+    positionLabel.setBounds (toolbar.removeFromLeft (150));
     toolbar.removeFromLeft (6);
     perfButton.setBounds (toolbar.removeFromRight (50));
     toolbar.removeFromRight (6);

@@ -36,8 +36,10 @@ private:
 
     AudioEngine& engine;
 
-    juce::TextButton audioButton { "Audio Settings..." }, pluginsButton { "Plugins..." }, addTrackButton { "+ Track" },
+    juce::TextButton audioButton { "Audio" }, pluginsButton { "Plugins" }, addTrackButton { "+ Track" },
                      perfButton { "Perf" };
+    juce::TextButton rtzButton { "|<" }, playButton { "Play" }, loopButton { "Loop" };
+    juce::Label bpmLabel, positionLabel;
 
     PerformanceTracker perfTracker { engine };
     PerformancePanel perfPanel { perfTracker };

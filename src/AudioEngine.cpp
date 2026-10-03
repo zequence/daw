@@ -1,6 +1,7 @@
 #include "AudioEngine.h"
 #include "TrackChannelProcessor.h"
 #include "UserData.h"
+#include "engine/MidiSourceProcessor.h"
 
 namespace
 {
@@ -14,6 +15,9 @@ AudioEngine::AudioEngine (juce::PropertiesFile& settingsToUse)
     juce::addDefaultFormatsToManager (formatManager);
     reloadPluginCache();
 
+    masterTempoMap = TempoMap::create (120.0);
+    transport.setTempoMap (masterTempoMap);
+
     auto savedAudio = settings.getXmlValue (audioStateKey);
     deviceManager.initialise (0, 2, savedAudio.get(), true);
     enableAllMidiInputsIfFirstRun (savedAudio != nullptr);
@@ -22,7 +26,7 @@ AudioEngine::AudioEngine (juce::PropertiesFile& settingsToUse)
     midiInNode   = graph.addNode (std::make_unique<IOProcessor> (IOProcessor::midiInputNode))->nodeID;
 
     player.setProcessor (&graph);
-    deviceManager.addAudioCallback (&player);
+    deviceManager.addAudioCallback (&ioCallback);
     deviceManager.addMidiInputDeviceCallback ({}, &player);
 }
 
@@ -31,7 +35,7 @@ AudioEngine::~AudioEngine()
     saveSettings();
 
     deviceManager.removeMidiInputDeviceCallback ({}, &player);
-    deviceManager.removeAudioCallback (&player);
+    deviceManager.removeAudioCallback (&ioCallback);
     player.setProcessor (nullptr);
     graph.clear();
 }
@@ -119,6 +123,7 @@ AudioEngine::TrackId AudioEngine::addTrack()
 
     Track track;
     track.channelNode = graph.addNode (std::make_unique<TrackChannelProcessor>())->nodeID;
+    track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport))->nodeID;
 
     for (int ch = 0; ch < 2; ++ch)
         graph.addConnection ({ { track.channelNode, ch }, { audioOutNode, ch } });
@@ -140,6 +145,7 @@ void AudioEngine::removeTrack (TrackId id)
 
     graph.removeNode (track->instrumentNode);
     graph.removeNode (track->channelNode);
+    graph.removeNode (track->midiSourceNode);
     tracks.erase (id);
 
     if (armedTrack == id)
@@ -212,6 +218,9 @@ void AudioEngine::connectInstrument (const Track& track)
     if (node == nullptr)
         return;
 
+    const auto midiChannel = juce::AudioProcessorGraph::midiChannelIndex;
+    graph.addConnection ({ { track.midiSourceNode, midiChannel }, { track.instrumentNode, midiChannel } });
+
     // Only the first stereo pair for now; multi-output routing comes later.
     const auto numOuts = node->getProcessor()->getTotalNumOutputChannels();
 
@@ -254,6 +263,57 @@ TrackChannelProcessor* AudioEngine::getChannel (TrackId id) const
             return dynamic_cast<TrackChannelProcessor*> (node->getProcessor());
 
     return nullptr;
+}
+
+//==============================================================================
+void AudioEngine::setTrackSequence (TrackId id, MidiSequence::Ptr sequence)
+{
+    if (auto* track = findTrack (id))
+    {
+        track->sequence = sequence;
+
+        if (auto* node = graph.getNodeForId (track->midiSourceNode))
+            if (auto* source = dynamic_cast<MidiSourceProcessor*> (node->getProcessor()))
+                source->setSequence (std::move (sequence));
+    }
+}
+
+MidiSequence::Ptr AudioEngine::getTrackSequence (TrackId id) const
+{
+    if (auto* track = findTrack (id))
+        return track->sequence;
+
+    return nullptr;
+}
+
+double AudioEngine::getTempoBpm() const
+{
+    return masterTempoMap->getTempoAt (0);
+}
+
+void AudioEngine::setTempoBpm (double bpm)
+{
+    const auto tick = transport.getPositionTicks();   // keep the playhead musically stable
+
+    masterTempoMap = masterTempoMap->withTempoChange (0, bpm);
+    transport.setTempoMap (masterTempoMap);
+    transport.locate (tick);
+}
+
+juce::int64 AudioEngine::getLoopEndTicks() const
+{
+    juce::int64 length = 0;
+
+    for (auto& [id, track] : tracks)
+        if (track.sequence != nullptr)
+            length = juce::jmax (length, track.sequence->getLengthTicks());
+
+    const auto& map = *masterTempoMap;
+
+    if (length <= 0)
+        return map.getTicksPerBar (0) * 2;
+
+    return map.getBarStart (length - 1) + map.getTicksPerBar (length - 1);
 }
 
 //==============================================================================

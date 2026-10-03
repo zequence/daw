@@ -16,6 +16,8 @@ target_sources(OrchestralDAW PRIVATE
     src/AudioEngine.cpp
     src/MainComponent.cpp
     src/TrackRow.cpp
+    src/model/TempoMap.cpp
+    src/engine/Transport.cpp
     src/diagnostics/PerformanceMonitor.cpp
     src/diagnostics/PerformancePanel.cpp)
 
@@ -74,7 +76,9 @@ juce_add_console_app(OrchestralDAWTests
 
 target_sources(OrchestralDAWTests PRIVATE
     tests/TempoMapTests.cpp
-    src/model/TempoMap.cpp)
+    tests/TransportTests.cpp
+    src/model/TempoMap.cpp
+    src/engine/Transport.cpp)
 
 target_compile_definitions(OrchestralDAWTests PRIVATE
     JUCE_WEB_BROWSER=0
@@ -82,7 +86,7 @@ target_compile_definitions(OrchestralDAWTests PRIVATE
 
 target_link_libraries(OrchestralDAWTests
     PRIVATE
-        juce::juce_core
+        juce::juce_audio_processors
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
