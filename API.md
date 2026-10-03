@@ -40,6 +40,7 @@ Quick test from a terminal while the app is running:
 | tracks | `track.list`, `track.create`, `track.remove`, `track.rename`, `track.setMuted`, `track.setSoloed`, `track.arm`, `track.setOutput`, `track.addOutput`, `track.clearOutputs` |
 | clips | `clip.get`, `clip.addNotes`, `clip.set`, `clip.clear` |
 | instruments | `plugins.list`, `instrument.list`, `instrument.add`, `instrument.setChannelName` |
+| plugin introspection | `instrument.describe` (version, buses, latency, programs), `instrument.listParameters` (paged live values), `instrument.getStateStrings` (readable strings from the state blob), `instrument.getState`/`instrument.setState` (base64 snapshots - a stored state reconnects network plugins like VE Pro, so it doubles as a connection template) |
 | audio | `channel.list`, `channel.setGain`, `channel.setMuted` |
 | folders | `folder.list`, `folder.create`, `folder.rename`, `folder.remove`, `folder.setParent`, `folder.setCollapsed`, `track.setFolder`, `channel.setFolder`, `sidebar.move` (sidebar grouping and ordering; `domain` is `midi` or `audio`, folders nest; `sidebar.move` re-orders folders/members as one group - the drag operation) |
 | recording | `record.start`, `record.stop` |

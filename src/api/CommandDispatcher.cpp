@@ -997,6 +997,248 @@ void CommandDispatcher::registerCommands()
              respond (ok());
          });
 
+    // Runtime plugin introspection: everything the loaded instance exposes.
+    add ("instrument.describe",
+         "What the loaded plugin reports at runtime: version, format, buses, latency, programs, parameter count",
+         "instrumentId:int",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const int id = (int) params.getProperty ("instrumentId", 0);
+             auto* plugin = engine.getInstrumentPlugin (id);
+
+             if (plugin == nullptr)
+                 return respond (fail ("no instrument with id " + juce::String (id) + " (see instrument.list)"));
+
+             const auto description = plugin->getPluginDescription();
+
+             auto o = object();
+             o->setProperty ("name", description.name);
+             o->setProperty ("manufacturer", description.manufacturerName);
+             o->setProperty ("version", description.version);
+             o->setProperty ("format", description.pluginFormatName);
+             o->setProperty ("category", description.category);
+             o->setProperty ("file", description.fileOrIdentifier);
+             o->setProperty ("acceptsMidi", plugin->acceptsMidi());
+             o->setProperty ("producesMidi", plugin->producesMidi());
+             o->setProperty ("latencySamples", plugin->getLatencySamples());
+             o->setProperty ("tailLengthSeconds", plugin->getTailLengthSeconds());
+             o->setProperty ("parameterCount", plugin->getParameters().size());
+
+             // Audio buses (VE Pro exposes many outputs; disabled ones report 0 channels)
+             for (auto isInput : { true, false })
+             {
+                 juce::Array<juce::var> buses;
+
+                 for (int i = 0; i < plugin->getBusCount (isInput); ++i)
+                 {
+                     if (auto* bus = plugin->getBus (isInput, i))
+                     {
+                         auto b = object();
+                         b->setProperty ("name", bus->getName());
+                         b->setProperty ("channels", bus->getNumberOfChannels());
+                         b->setProperty ("enabled", bus->isEnabled());
+                         buses.add (juce::var (b.get()));
+                     }
+                 }
+
+                 o->setProperty (isInput ? "inputBuses" : "outputBuses", buses);
+             }
+
+             // Programs (capped: some samplers report hundreds)
+             const auto numPrograms = plugin->getNumPrograms();
+             o->setProperty ("programCount", numPrograms);
+             o->setProperty ("currentProgram", plugin->getCurrentProgram());
+
+             juce::Array<juce::var> programs;
+
+             for (int i = 0; i < juce::jmin (numPrograms, 64); ++i)
+                 programs.add (plugin->getProgramName (i));
+
+             o->setProperty ("programs", programs);
+
+             juce::MemoryBlock state;
+             plugin->getStateInformation (state);
+             o->setProperty ("stateBytes", (juce::int64) state.getSize());
+
+             respond (ok (juce::var (o.get())));
+         });
+
+    add ("instrument.listParameters",
+         "The plugin's parameters with live values (paged: some plugins expose thousands)",
+         "instrumentId:int start:int? count:int(<=200)?",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const int id = (int) params.getProperty ("instrumentId", 0);
+             auto* plugin = engine.getInstrumentPlugin (id);
+
+             if (plugin == nullptr)
+                 return respond (fail ("no instrument with id " + juce::String (id) + " (see instrument.list)"));
+
+             const auto& parameters = plugin->getParameters();
+             const auto start = juce::jmax (0, (int) params.getProperty ("start", 0));
+             const auto count = juce::jlimit (1, 200, (int) params.getProperty ("count", 50));
+
+             juce::Array<juce::var> list;
+
+             for (int i = start; i < juce::jmin (parameters.size(), start + count); ++i)
+             {
+                 auto* parameter = parameters[i];
+                 auto p = object();
+                 p->setProperty ("index", i);
+                 p->setProperty ("name", parameter->getName (128));
+                 p->setProperty ("value", parameter->getValue());           // normalized 0..1
+                 p->setProperty ("text", parameter->getCurrentValueAsText());
+                 p->setProperty ("label", parameter->getLabel());
+                 p->setProperty ("default", parameter->getDefaultValue());
+                 p->setProperty ("automatable", parameter->isAutomatable());
+                 list.add (juce::var (p.get()));
+             }
+
+             auto o = object();
+             o->setProperty ("total", parameters.size());
+             o->setProperty ("start", start);
+             o->setProperty ("parameters", list);
+             respond (ok (juce::var (o.get())));
+         });
+
+    add ("instrument.getStateStrings",
+         "Readable strings fished out of the plugin's opaque state blob (ASCII and UTF-16 runs). "
+         "Useful for e.g. seeing which server/instance a Vienna Ensemble Pro plugin is connected to",
+         "instrumentId:int minLength:int(default 4)",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const int id = (int) params.getProperty ("instrumentId", 0);
+             auto* plugin = engine.getInstrumentPlugin (id);
+
+             if (plugin == nullptr)
+                 return respond (fail ("no instrument with id " + juce::String (id) + " (see instrument.list)"));
+
+             juce::MemoryBlock state;
+             plugin->getStateInformation (state);
+
+             const auto minLength = juce::jlimit (3, 64, (int) params.getProperty ("minLength", 4));
+             juce::StringArray found;
+
+             const auto scanBlock = [&found, minLength] (const juce::uint8* data, int size)
+             {
+                 const auto isPrintable = [] (juce::uint8 c) { return c >= 0x20 && c < 0x7f; };
+
+                 // ASCII runs
+                 for (int i = 0; i < size && found.size() < 400;)
+                 {
+                     int j = i;
+                     while (j < size && isPrintable (data[j]))
+                         ++j;
+
+                     if (j - i >= minLength)
+                         found.add (juce::String::fromUTF8 ((const char*) data + i, j - i));
+
+                     i = juce::jmax (j, i + 1);
+                 }
+
+                 // UTF-16LE runs (printable ASCII char followed by a zero byte)
+                 for (int i = 0; i + 1 < size && found.size() < 400;)
+                 {
+                     int j = i;
+                     while (j + 1 < size && isPrintable (data[j]) && data[j + 1] == 0)
+                         j += 2;
+
+                     if ((j - i) / 2 >= minLength)
+                     {
+                         juce::String text;
+                         for (int k = i; k < j; k += 2)
+                             text += juce::String::charToString ((juce::juce_wchar) data[k]);
+
+                         found.add (text);
+                     }
+
+                     i = juce::jmax (j, i + 2);
+                 }
+             };
+
+             scanBlock (static_cast<const juce::uint8*> (state.getData()), (int) state.getSize());
+
+             // JUCE wraps VST3 states as <VST3PluginState><IComponent>juce-base64...</IComponent>...;
+             // the readable content lives inside, so decode the inner blobs and scan those too.
+             {
+                 juce::MemoryInputStream stream (state, false);
+                 const auto text = stream.readEntireStreamAsString();
+                 const auto xmlStart = text.indexOf ("<VST3PluginState>");
+
+                 if (xmlStart >= 0)
+                 {
+                     if (auto xml = juce::parseXML (text.substring (xmlStart)))
+                     {
+                         for (auto* child : xml->getChildIterator())
+                         {
+                             juce::MemoryBlock inner;
+
+                             if (inner.fromBase64Encoding (child->getAllSubText().trim()) && inner.getSize() > 0)
+                                 scanBlock (static_cast<const juce::uint8*> (inner.getData()), (int) inner.getSize());
+                         }
+                     }
+                 }
+             }
+
+             // The base64 payloads themselves aren't useful output
+             for (int i = found.size(); --i >= 0;)
+                 if (found[i].length() > 300)
+                     found.remove (i);
+
+             found.removeDuplicates (false);
+
+             juce::Array<juce::var> list;
+             for (auto& text : found)
+                 list.add (text);
+
+             auto o = object();
+             o->setProperty ("stateBytes", (juce::int64) state.getSize());
+             o->setProperty ("strings", list);
+             respond (ok (juce::var (o.get())));
+         });
+
+    add ("instrument.getState",
+         "The plugin's full state as base64. Stored states reconnect network plugins "
+         "(e.g. Vienna Ensemble Pro) when set back, so this doubles as a connection template",
+         "instrumentId:int",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const int id = (int) params.getProperty ("instrumentId", 0);
+             auto* plugin = engine.getInstrumentPlugin (id);
+
+             if (plugin == nullptr)
+                 return respond (fail ("no instrument with id " + juce::String (id) + " (see instrument.list)"));
+
+             juce::MemoryBlock state;
+             plugin->getStateInformation (state);
+
+             auto o = object();
+             o->setProperty ("bytes", (juce::int64) state.getSize());
+             o->setProperty ("stateBase64", juce::Base64::toBase64 (state.getData(), state.getSize()));
+             respond (ok (juce::var (o.get())));
+         });
+
+    add ("instrument.setState",
+         "Apply a previously captured base64 state to the plugin (same plugin type!)",
+         "instrumentId:int stateBase64:string",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const int id = (int) params.getProperty ("instrumentId", 0);
+             auto* plugin = engine.getInstrumentPlugin (id);
+
+             if (plugin == nullptr)
+                 return respond (fail ("no instrument with id " + juce::String (id) + " (see instrument.list)"));
+
+             juce::MemoryOutputStream decoded;
+
+             if (! juce::Base64::convertFromBase64 (decoded, params.getProperty ("stateBase64", {}).toString())
+                  || decoded.getDataSize() == 0)
+                 return respond (fail ("'stateBase64' is not valid base64"));
+
+             plugin->setStateInformation (decoded.getData(), (int) decoded.getDataSize());
+             respond (ok());
+         });
+
     //==========================================================================
     add ("channel.list", "Audio channels with levels", "",
          [this] (const juce::var&, Respond respond)
