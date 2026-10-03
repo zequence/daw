@@ -617,8 +617,14 @@ void PianoRollView::timerCallback()
     undoButton.setEnabled (engine.canUndoClip (trackId));
     redoButton.setEnabled (engine.canRedoClip (trackId));
 
-    if (engine.getTransport().isPlaying() && isShowing())
+    // Follow the playhead whenever it moves - during playback or a locate while stopped.
+    const auto playhead = engine.getTransport().getPositionTicks();
+
+    if (playhead != lastPlayheadTick && isShowing())
+    {
+        lastPlayheadTick = playhead;
         repaint();
+    }
 }
 
 //==============================================================================

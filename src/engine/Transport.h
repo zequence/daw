@@ -27,7 +27,15 @@ public:
     void play()                             { command.store (cmdPlay); }
     void stop()                             { command.store (cmdStop); }
     void togglePlayStop()                   { isPlaying() ? stop() : play(); }
-    void locate (juce::int64 tick)          { locateTarget.store (juce::jmax ((juce::int64) 0, tick)); }
+    void locate (juce::int64 tick)
+    {
+        tick = juce::jmax ((juce::int64) 0, tick);
+        locateTarget.store (tick);
+
+        // Reflect the move in the UI-visible position right away; the audio thread
+        // applies the same value authoritatively in its next block.
+        positionShared.store (map.load()->ticksToSamples (tick, rateShared.load()));
+    }
     void returnToZero()                     { locate (0); }
 
     void setLoopRegion (juce::int64 startTick, juce::int64 endTick)

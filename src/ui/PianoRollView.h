@@ -78,6 +78,7 @@ private:
 
     // View state
     double ticksPerPixel = 16000.0;        // ~60 px per quarter note initially
+    juce::int64 lastPlayheadTick = -1;
     juce::int64 scrollTick = 0;
     int keyHeight = 12;
     int topKey = 84;                       // highest visible key (C6)
