@@ -8,7 +8,16 @@ for its command surface (`describe`) and generates **one tool per command**
 automatically. A raw `daw_command` passthrough is always available, including when
 the app isn't running yet.
 
-## Register with Claude Code
+## Recommended: let the app run it
+
+Enable **Settings > Agents (MCP)** in the app. The server then starts and stops with
+the app (HTTP on port 53218). Register once:
+
+```
+claude mcp add --transport http orchestral-daw http://127.0.0.1:53218/mcp
+```
+
+## Alternative: client-spawned (stdio)
 
 ```
 claude mcp add orchestral-daw -- python C:\Users\kajai\Tie\loitsut\orchestral-daw\tools\mcp\orchestral_daw_mcp.py
