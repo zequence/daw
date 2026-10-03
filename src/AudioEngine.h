@@ -55,9 +55,26 @@ public:
     std::vector<std::pair<InstrumentId, juce::String>> getInstruments() const;
     juce::AudioPluginInstance* getInstrumentPlugin (InstrumentId) const;
     juce::String getInstrumentName (InstrumentId) const;
-    void setInstrumentChannelName (InstrumentId, int midiChannel, const juce::String&);
-    juce::String getInstrumentChannelName (InstrumentId, int midiChannel) const;
+    void setInstrumentName (InstrumentId, const juce::String&);   // renames its audio channel too (if unchanged)
     int getNumLoadedInstruments() const;
+
+    // An instrument's MIDI channels live on (port, channel). Port 1 is the plugin's
+    // own MIDI input; further ports exist for multiport instruments (VE Pro via
+    // Event Input plugins - routing for ports >= 2 lands with that support).
+    // 'synced' entries are inherited from a VE Pro server instance: their name and
+    // binding are immutable and refresh on sync; manual entries stay editable.
+    struct MidiChannelInfo
+    {
+        int midiPort = 1;
+        int midiChannel = 1;
+        juce::String name;
+        bool synced = false;
+    };
+
+    bool setInstrumentChannelName (InstrumentId, int midiChannel, const juce::String&, int midiPort = 1);
+    juce::String getInstrumentChannelName (InstrumentId, int midiChannel, int midiPort = 1) const;
+    std::vector<MidiChannelInfo> getInstrumentMidiChannels (InstrumentId) const;
+    void setSyncedInstrumentChannels (InstrumentId, std::vector<MidiChannelInfo>);   // replaces the synced set
 
     //==============================================================================
     // Audio channels (one per instrument for now; device inputs and summing later)
@@ -79,9 +96,10 @@ public:
     {
         InstrumentId instrument = 0;
         int midiChannel = 1;
+        int midiPort = 1;      // port 1 = the plugin's own MIDI input
     };
 
-    void addTrackOutput (TrackId, InstrumentId, int midiChannel);
+    void addTrackOutput (TrackId, InstrumentId, int midiChannel, int midiPort = 1);
     void clearTrackOutputs (TrackId);
     std::vector<TrackOutput> getTrackOutputs (TrackId) const;
 
@@ -263,10 +281,11 @@ public:
 private:
     struct Instrument
     {
-        NodeID pluginNode;
+        NodeID pluginNode;                          // the plugin = MIDI port 1
         juce::String name;
         AudioChannelId audioChannel = 0;
-        std::map<int, juce::String> channelNames;   // 1..16; absent = unnamed
+        std::vector<MidiChannelInfo> midiChannels;  // named channels (manual + synced)
+        std::map<int, NodeID> portNodes;            // ports >= 2 (VE Pro Event Input, later)
     };
 
     struct AudioChannel
@@ -291,6 +310,7 @@ private:
     {
         InstrumentId instrument = 0;
         int midiChannel = 1;
+        int midiPort = 1;
         NodeID routeNode;
     };
 

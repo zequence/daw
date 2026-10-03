@@ -1,5 +1,6 @@
 #include "CommandDispatcher.h"
 #include "../integrations/VeproState.h"
+#include "../integrations/VeproServer.h"
 #include "../engine/AudioChannelProcessor.h"
 #include "../engine/HistoryManager.h"
 
@@ -245,6 +246,7 @@ void CommandDispatcher::registerCommands()
                      o->setProperty ("instrument", output.instrument);
                      o->setProperty ("instrumentName", engine.getInstrumentName (output.instrument));
                      o->setProperty ("channel", output.midiChannel);
+                     o->setProperty ("port", output.midiPort);
                      outputs.add (juce::var (o.get()));
                  }
 
@@ -354,7 +356,8 @@ void CommandDispatcher::registerCommands()
              respond (ok());
          });
 
-    add ("track.setOutput", "Replace a track's outputs with one (instrument, channel)", "trackId:int instrumentId:int channel:int(1-16)",
+    add ("track.setOutput", "Replace a track's outputs with one (instrument, channel; port for multiport instruments)",
+         "trackId:int instrumentId:int channel:int(1-16) [port:int=1]",
          [this, requireTrack] (const juce::var& params, Respond respond)
          {
              int id = 0;
@@ -366,11 +369,13 @@ void CommandDispatcher::registerCommands()
                  return respond (fail ("no instrument with id " + juce::String (instrumentId)));
 
              engine.clearTrackOutputs (id);
-             engine.addTrackOutput (id, instrumentId, (int) params.getProperty ("channel", 1));
+             engine.addTrackOutput (id, instrumentId, (int) params.getProperty ("channel", 1),
+                                    (int) params.getProperty ("port", 1));
              respond (ok());
          });
 
-    add ("track.addOutput", "Add an output to a track (keeps existing ones)", "trackId:int instrumentId:int channel:int(1-16)",
+    add ("track.addOutput", "Add an output to a track (keeps existing ones)",
+         "trackId:int instrumentId:int channel:int(1-16) [port:int=1]",
          [this, requireTrack] (const juce::var& params, Respond respond)
          {
              int id = 0;
@@ -381,7 +386,8 @@ void CommandDispatcher::registerCommands()
              if (engine.getInstrumentName (instrumentId).isEmpty())
                  return respond (fail ("no instrument with id " + juce::String (instrumentId)));
 
-             engine.addTrackOutput (id, instrumentId, (int) params.getProperty ("channel", 1));
+             engine.addTrackOutput (id, instrumentId, (int) params.getProperty ("channel", 1),
+                                    (int) params.getProperty ("port", 1));
              respond (ok());
          });
 
@@ -927,13 +933,19 @@ void CommandDispatcher::registerCommands()
                  o->setProperty ("name", name);
                  o->setProperty ("audioChannelId", engine.getAudioChannelForInstrument (id));
 
-                 auto channels = object();
+                 juce::Array<juce::var> channels;
 
-                 for (int ch = 1; ch <= 16; ++ch)
-                     if (auto channelName = engine.getInstrumentChannelName (id, ch); channelName.isNotEmpty())
-                         channels->setProperty (juce::Identifier (juce::String (ch)), channelName);
+                 for (auto& channel : engine.getInstrumentMidiChannels (id))
+                 {
+                     auto c = object();
+                     c->setProperty ("port", channel.midiPort);
+                     c->setProperty ("channel", channel.midiChannel);
+                     c->setProperty ("name", channel.name);
+                     c->setProperty ("synced", channel.synced);
+                     channels.add (juce::var (c.get()));
+                 }
 
-                 o->setProperty ("channelNames", juce::var (channels.get()));
+                 o->setProperty ("midiChannels", channels);
                  list.add (juce::var (o.get()));
              }
 
@@ -985,7 +997,8 @@ void CommandDispatcher::registerCommands()
                  });
          });
 
-    add ("instrument.setChannelName", "Name one of an instrument's MIDI channels", "instrumentId:int channel:int(1-16) name:string",
+    add ("instrument.setChannelName", "Name one of an instrument's MIDI channels (synced channels are immutable)",
+         "instrumentId:int channel:int(1-16) name:string [port:int=1]",
          [this] (const juce::var& params, Respond respond)
          {
              const int id = (int) params.getProperty ("instrumentId", 0);
@@ -993,8 +1006,11 @@ void CommandDispatcher::registerCommands()
              if (engine.getInstrumentName (id).isEmpty())
                  return respond (fail ("no instrument with id " + juce::String (id)));
 
-             engine.setInstrumentChannelName (id, (int) params.getProperty ("channel", 1),
-                                              params.getProperty ("name", {}).toString());
+             if (! engine.setInstrumentChannelName (id, (int) params.getProperty ("channel", 1),
+                                                    params.getProperty ("name", {}).toString(),
+                                                    (int) params.getProperty ("port", 1)))
+                 return respond (fail ("that channel is synced from the VE Pro server and its name is immutable"));
+
              respond (ok());
          });
 
@@ -1288,6 +1304,45 @@ void CommandDispatcher::registerCommands()
              o->setProperty ("version", version);
              o->setProperty ("instance", instance);
              respond (ok (juce::var (o.get())));
+         });
+
+    add ("vepro.sync",
+         "Sync to the VE Pro Server: one connected VE Pro instrument per server instance (named after "
+         "it), synced per-player MIDI channels (immutable names), and one track per player. Idempotent; "
+         "never deletes tracks - players gone from the server are reported in 'notes'. Server address "
+         "and CLI path come from Settings > Integrations unless overridden",
+         "[host:string] [port:int] [cliPath:string]",
+         [this] (const juce::var& params, Respond respond)
+         {
+             auto& settings = engine.getSettingsFile();
+             const auto host = params.getProperty ("host",
+                                   settings.getValue (vepro::serverHostKey, vepro::defaultServerHost())).toString();
+             const auto port = (int) params.getProperty ("port",
+                                   settings.getIntValue (vepro::serverPortKey, vepro::defaultServerPort));
+             const auto cli = juce::File (params.getProperty ("cliPath",
+                                   settings.getValue (vepro::cliPathKey,
+                                                      vepro::defaultCliPath().getFullPathName())).toString());
+             const auto version = settings.getValue (vepro::versionSettingsKey, vepro::defaultVersion());
+
+             // Server queries block -> background thread; everything else -> message thread
+             juce::Thread::launch ([weak = juce::WeakReference<CommandDispatcher> (this),
+                                    host, port, cli, version, respond]
+             {
+                 juce::String fetchError;
+                 auto fetched = vepro::fetchInstances (cli, host, port, fetchError);
+
+                 juce::MessageManager::callAsync ([weak, host, version, respond,
+                                                   fetchError, instances = std::move (fetched)]
+                 {
+                     if (weak == nullptr)
+                         return;
+
+                     if (fetchError.isNotEmpty())
+                         return respond (fail ("VE Pro server: " + fetchError));
+
+                     weak->applyVeproSync (instances, host, version, respond);
+                 });
+             });
          });
 
     //==========================================================================
@@ -1651,4 +1706,188 @@ void CommandDispatcher::registerCommands()
 
              respond (ok());
          });
+}
+
+//==============================================================================
+// vepro.sync, message-thread half. Instances are processed sequentially because
+// loading a plugin is asynchronous; each step reuses an instrument named after
+// the instance or creates one, (re)connects it, replaces its synced channels and
+// creates a track per player that doesn't have one yet.
+void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& instances,
+                                        const juce::String& host, const juce::String& version, Respond respond)
+{
+    struct SyncState
+    {
+        std::vector<vepro::SyncInstance> instances;
+        size_t next = 0;
+        juce::String host, version;
+        juce::StringArray notes;
+        int instrumentsCreated = 0, tracksCreated = 0, channelsSynced = 0;
+        Respond respond;
+    };
+
+    auto state = std::make_shared<SyncState>();
+    state->instances = instances;
+    state->host = host;
+    state->version = version;
+    state->respond = std::move (respond);
+
+    auto step = std::make_shared<std::function<void()>>();
+
+    auto finishInstance = [this, state, step] (size_t index, AudioEngine::InstrumentId instrumentId)
+    {
+        const auto& instance = state->instances[index];
+
+        engine.setInstrumentName (instrumentId, instance.name);
+
+        // (Re)connect when the latency fingerprint says we're not connected
+        if (auto* plugin = engine.getInstrumentPlugin (instrumentId))
+        {
+            if (plugin->getLatencySamples() == 0)
+            {
+                vepro::ConnectTarget target;
+                target.instanceName = instance.name;
+                target.hostAddress = state->host;
+                target.hostName = state->host;
+
+                const auto blob = vepro::buildConnectionState (state->version, target);
+
+                if (blob.getSize() > 0)
+                    plugin->setStateInformation (blob.getData(), (int) blob.getSize());
+                else
+                    state->notes.add (instance.name + ": unsupported state-format version '"
+                                      + state->version + "' - not connected");
+            }
+        }
+
+        // Synced channels: names inherited from the players, immutable
+        std::vector<AudioEngine::MidiChannelInfo> channels;
+
+        for (auto& player : instance.players)
+            channels.push_back ({ player.midiPort, player.midiChannel, player.name, true });
+
+        engine.setSyncedInstrumentChannels (instrumentId, channels);
+        state->channelsSynced += (int) channels.size();
+
+        // One track per player (idempotent: skip players that already have one);
+        // report tracks pointing at players that no longer exist - never delete.
+        const auto trackIds = engine.getTrackIds();
+
+        for (auto& player : instance.players)
+        {
+            bool exists = false;
+
+            for (auto trackId : trackIds)
+                for (auto& output : engine.getTrackOutputs (trackId))
+                    if (output.instrument == instrumentId && output.midiPort == player.midiPort
+                         && output.midiChannel == player.midiChannel)
+                        exists = true;
+
+            if (! exists)
+            {
+                const auto trackId = engine.addTrack (player.name);
+                engine.addTrackOutput (trackId, instrumentId, player.midiChannel, player.midiPort);
+                ++state->tracksCreated;
+
+                if (player.midiPort > 1)
+                    state->notes.add (player.name + ": port " + juce::String (player.midiPort)
+                                      + " routes silently until Event Input support lands");
+            }
+        }
+
+        for (auto trackId : trackIds)
+            for (auto& output : engine.getTrackOutputs (trackId))
+                if (output.instrument == instrumentId
+                     && std::none_of (instance.players.begin(), instance.players.end(),
+                                      [&output] (const vepro::SyncPlayer& p)
+                                      { return p.midiPort == output.midiPort && p.midiChannel == output.midiChannel; }))
+                    state->notes.add ("Track '" + engine.getTrackName (trackId) + "' targets "
+                                      + instance.name + " port " + juce::String (output.midiPort)
+                                      + " ch " + juce::String (output.midiChannel)
+                                      + ", which has no player on the server (kept)");
+
+        (*step)();
+    };
+
+    *step = [this, state, step, finishInstance]
+    {
+        if (state->next >= state->instances.size())
+        {
+            auto o = juce::DynamicObject::Ptr (new juce::DynamicObject());
+            o->setProperty ("instances", (int) state->instances.size());
+            o->setProperty ("instrumentsCreated", state->instrumentsCreated);
+            o->setProperty ("tracksCreated", state->tracksCreated);
+            o->setProperty ("channelsSynced", state->channelsSynced);
+
+            juce::Array<juce::var> notes;
+            for (auto& note : state->notes)
+                notes.add (note);
+
+            o->setProperty ("notes", notes);
+
+            auto reply = juce::DynamicObject::Ptr (new juce::DynamicObject());
+            reply->setProperty ("ok", true);
+            reply->setProperty ("result", juce::var (o.get()));
+            state->respond (juce::var (reply.get()));
+
+            *step = nullptr;   // break the shared_ptr self-reference
+            return;
+        }
+
+        const auto index = state->next++;
+        const auto& instance = state->instances[index];
+
+        // Reuse the instrument named after the instance, if it's a VE Pro plugin
+        for (auto& [instrumentId, name] : engine.getInstruments())
+        {
+            if (name == instance.name)
+            {
+                if (auto* plugin = engine.getInstrumentPlugin (instrumentId))
+                {
+                    if (plugin->getPluginDescription().name.containsIgnoreCase ("Vienna Ensemble"))
+                    {
+                        finishInstance (index, instrumentId);
+                        return;
+                    }
+                }
+            }
+        }
+
+        // Otherwise load a fresh VE Pro plugin
+        juce::PluginDescription description;
+        bool found = false;
+
+        for (auto& type : engine.getInstrumentTypes())
+        {
+            if (type.name == "Vienna Ensemble Pro")
+            {
+                description = type;
+                found = true;
+                break;
+            }
+        }
+
+        if (! found)
+        {
+            state->notes.add (instance.name + ": 'Vienna Ensemble Pro' is not in the plugin cache - skipped");
+            (*step)();
+            return;
+        }
+
+        engine.addInstrument (description,
+            [state, step, finishInstance, index] (AudioEngine::InstrumentId newId, const juce::String& error)
+            {
+                if (newId == 0)
+                {
+                    state->notes.add (state->instances[index].name + ": plugin failed to load: " + error);
+                    (*step)();
+                    return;
+                }
+
+                ++state->instrumentsCreated;
+                finishInstance (index, newId);
+            });
+    };
+
+    (*step)();
 }

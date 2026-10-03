@@ -3,42 +3,25 @@
 Things we want to implement but aren't about to do yet. When one starts, it moves
 out of here (into work, with any open questions going through ISSUES.md).
 
-## Vienna Ensemble Pro integration (reworked 2026-10-03)
+## Vienna Ensemble Pro integration - remaining parts
 
-Goals:
-- **"Sync to VE Pro Server"** button in the instruments UI: query the server
-  for its instances and create one connected VE Pro VST instrument per
-  available instance (named after the instance). Connecting is solved:
-  instrument.connectVepro synthesizes the versioned state
-  (src/integrations/VeproState.h; version selector in Settings >
-  Integrations).
-- **Named MIDI channels per player**: for each player/instrument-plugin
-  inside an instance, create a MIDI channel on our instrument wired to the
-  correct (port, channel) of that player, with the name inherited from the
-  instance - like a regular MIDI channel, but the inherited parts
-  (name/port/channel binding) are immutable; re-sync refreshes them.
+Delivered 2026-10-03: "Sync to VE Pro Server" (instruments view + vepro.sync)
+creates one connected VE Pro instrument per server instance, synced immutable
+per-player MIDI channels and one track per player; idempotent, never deletes
+tracks. Track outputs carry (instrument, port, channel); server queries go
+through VSL's own CLI (address in Settings > Integrations); connection states
+are versioned per Pro Server release (src/integrations/VeproState.h).
 
-What it requires:
-- The app talks to the VE Pro server HTTP API itself (instance list +
-  channel summaries with title/midiPort/midiChannel); server address joins
-  Settings > Integrations next to the version selector.
-- **MIDI channels grow a port dimension**: track outputs become (instrument,
-  port, channel) instead of (instrument, channel). Port 1 is the main VE Pro
-  plugin; further ports mean managing "Vienna Ensemble Pro Event Input"
-  plugin instances bound to the same server instance, routed as part of the
-  same rack instrument.
-- Instrument channel metadata becomes structured: {port, channel, name,
-  synced/immutable flag} instead of today's name-per-channel map; synced
-  entries refresh from the server, manual ones stay editable.
-- Sync is idempotent: re-running updates names and adds new players; health
-  check via the latencySamples fingerprint.
-
-Decisions (2026-10-03):
-- Sync also creates one MIDI track per player channel (Cubase-template
-  style), named after the player, so everything is playable right away.
-- When a synced channel's player was deleted on the server, re-sync ASKS
-  per case (there may be MIDI on tracks the user wants to keep): remove the
-  channel, or keep it orphaned/marked.
+Remaining:
+- **Ports >= 2 routing**: players beyond MIDI port 1 need "Vienna Ensemble
+  Pro Event Input" plugin instances managed as part of the rack instrument
+  (the model and sync already record the port; such outputs are silent and
+  reported in the sync notes until then).
+- **Re-sync stale dialog**: today tracks whose player vanished from the
+  server are kept and reported in the sync notes; the decided UX is to ASK
+  per case (remove the channel vs keep it marked) from the UI.
+- Reconnect health checks (periodic latencySamples fingerprint, re-apply
+  connection state when a server came back).
 
 Interop by observed format only - no VSL code (licensing note applies).
 

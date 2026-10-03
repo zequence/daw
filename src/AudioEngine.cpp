@@ -356,24 +356,98 @@ juce::String AudioEngine::getInstrumentName (InstrumentId id) const
     return {};
 }
 
-void AudioEngine::setInstrumentChannelName (InstrumentId id, int midiChannel, const juce::String& name)
+void AudioEngine::setInstrumentName (InstrumentId id, const juce::String& name)
 {
-    if (auto* instrument = findInstrument (id))
-    {
-        if (name.isEmpty())
-            instrument->channelNames.erase (midiChannel);
-        else
-            instrument->channelNames[midiChannel] = name;
-    }
+    auto* instrument = findInstrument (id);
+
+    if (instrument == nullptr || name.isEmpty() || instrument->name == name)
+        return;
+
+    // An audio channel that still carries the instrument's default name follows it
+    if (auto it = audioChannels.find (instrument->audioChannel); it != audioChannels.end())
+        if (it->second.name == instrument->name)
+            it->second.name = name;
+
+    instrument->name = name;
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    data->setProperty ("name", name);
+    data->setProperty ("change", "renamed");
+    emitEvent ("instrumentChanged", data);
 }
 
-juce::String AudioEngine::getInstrumentChannelName (InstrumentId id, int midiChannel) const
+bool AudioEngine::setInstrumentChannelName (InstrumentId id, int midiChannel, const juce::String& name, int midiPort)
+{
+    auto* instrument = findInstrument (id);
+
+    if (instrument == nullptr)
+        return false;
+
+    for (auto it = instrument->midiChannels.begin(); it != instrument->midiChannels.end(); ++it)
+    {
+        if (it->midiPort == midiPort && it->midiChannel == midiChannel)
+        {
+            if (it->synced)
+                return false;   // inherited from the VE Pro server: immutable
+
+            if (name.isEmpty())
+                instrument->midiChannels.erase (it);
+            else
+                it->name = name;
+
+            return true;
+        }
+    }
+
+    if (name.isNotEmpty())
+        instrument->midiChannels.push_back ({ midiPort, midiChannel, name, false });
+
+    return true;
+}
+
+juce::String AudioEngine::getInstrumentChannelName (InstrumentId id, int midiChannel, int midiPort) const
 {
     if (auto* instrument = findInstrument (id))
-        if (auto it = instrument->channelNames.find (midiChannel); it != instrument->channelNames.end())
-            return it->second;
+        for (auto& channel : instrument->midiChannels)
+            if (channel.midiPort == midiPort && channel.midiChannel == midiChannel)
+                return channel.name;
 
     return {};
+}
+
+std::vector<AudioEngine::MidiChannelInfo> AudioEngine::getInstrumentMidiChannels (InstrumentId id) const
+{
+    if (auto* instrument = findInstrument (id))
+        return instrument->midiChannels;
+
+    return {};
+}
+
+void AudioEngine::setSyncedInstrumentChannels (InstrumentId id, std::vector<MidiChannelInfo> channels)
+{
+    auto* instrument = findInstrument (id);
+
+    if (instrument == nullptr)
+        return;
+
+    // Replace the synced set wholesale; manual entries survive
+    std::erase_if (instrument->midiChannels, [] (const MidiChannelInfo& c) { return c.synced; });
+
+    for (auto& channel : channels)
+    {
+        channel.synced = true;
+        instrument->midiChannels.push_back (channel);
+    }
+
+    std::sort (instrument->midiChannels.begin(), instrument->midiChannels.end(),
+               [] (const MidiChannelInfo& a, const MidiChannelInfo& b)
+               { return a.midiPort != b.midiPort ? a.midiPort < b.midiPort : a.midiChannel < b.midiChannel; });
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    data->setProperty ("change", "channels");
+    emitEvent ("instrumentChanged", data);
 }
 
 int AudioEngine::getNumLoadedInstruments() const
@@ -500,7 +574,7 @@ AudioEngine::InstrumentId AudioEngine::getAudioChannelInput (AudioChannelId id) 
     return 0;
 }
 
-void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, int midiChannel)
+void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, int midiChannel, int midiPort)
 {
     auto* track = findTrack (trackId);
     auto* instrument = findInstrument (instrumentId);
@@ -511,10 +585,20 @@ void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, in
     Output output;
     output.instrument = instrumentId;
     output.midiChannel = juce::jlimit (1, 16, midiChannel);
+    output.midiPort = juce::jmax (1, midiPort);
     output.routeNode = graph.addNode (std::make_unique<MidiRouteProcessor> (output.midiChannel))->nodeID;
 
     graph.addConnection ({ { track->midiSourceNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } });
-    graph.addConnection ({ { output.routeNode, midiChannelIndex }, { instrument->pluginNode, midiChannelIndex } });
+
+    // Port 1 is the plugin itself; further ports route to their Event Input node
+    // once multiport support lands (until then the output exists but is silent).
+    if (output.midiPort == 1)
+        graph.addConnection ({ { output.routeNode, midiChannelIndex }, { instrument->pluginNode, midiChannelIndex } });
+    else if (auto it = instrument->portNodes.find (output.midiPort); it != instrument->portNodes.end())
+        graph.addConnection ({ { output.routeNode, midiChannelIndex }, { it->second, midiChannelIndex } });
+    else
+        juce::Logger::writeToLog ("Track " + juce::String (trackId) + ": port " + juce::String (output.midiPort)
+                                  + " of " + instrument->name + " has no Event Input node yet (silent)");
 
     if (trackId == armedTrack)
         graph.addConnection ({ { midiInNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } });
@@ -522,8 +606,9 @@ void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, in
     track->outputs.push_back (output);
     applyMuteAndSolo();
 
-    juce::Logger::writeToLog ("Track " + juce::String (trackId) + " output -> "
-                              + instrument->name + " ch " + juce::String (output.midiChannel));
+    juce::Logger::writeToLog ("Track " + juce::String (trackId) + " output -> " + instrument->name
+                              + " port " + juce::String (output.midiPort)
+                              + " ch " + juce::String (output.midiChannel));
     emitTrackChanged (trackId, "outputs");
 }
 
@@ -545,7 +630,7 @@ std::vector<AudioEngine::TrackOutput> AudioEngine::getTrackOutputs (TrackId id) 
 
     if (auto* track = findTrack (id))
         for (auto& output : track->outputs)
-            result.push_back ({ output.instrument, output.midiChannel });
+            result.push_back ({ output.instrument, output.midiChannel, output.midiPort });
 
     return result;
 }
@@ -778,7 +863,7 @@ void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
 
         clearTrackOutputs (state.id);
         for (auto& output : state.outputs)
-            addTrackOutput (state.id, output.instrument, output.midiChannel);   // gone instruments: no-op
+            addTrackOutput (state.id, output.instrument, output.midiChannel, output.midiPort);   // gone instruments: no-op
 
         applySequence (*track, state.sequence);
     }
@@ -1409,11 +1494,13 @@ bool AudioEngine::saveProject (const juce::File& file)
                 e->createNewChildElement ("STATE")->addTextElement (state.toBase64Encoding());
         }
 
-        for (auto& [channel, channelName] : instrument.channelNames)
+        for (auto& channel : instrument.midiChannels)
         {
-            auto* c = e->createNewChildElement ("CHANNELNAME");
-            c->setAttribute ("channel", channel);
-            c->setAttribute ("name", channelName);
+            auto* c = e->createNewChildElement ("MIDICHANNEL");
+            c->setAttribute ("port", channel.midiPort);
+            c->setAttribute ("channel", channel.midiChannel);
+            c->setAttribute ("name", channel.name);
+            c->setAttribute ("synced", channel.synced);
         }
 
         if (auto* audioChannel = getAudioChannel (instrument.audioChannel))
@@ -1444,6 +1531,7 @@ bool AudioEngine::saveProject (const juce::File& file)
             auto* o = e->createNewChildElement ("OUTPUT");
             o->setAttribute ("instrument", output.instrument);
             o->setAttribute ("channel", output.midiChannel);
+            o->setAttribute ("port", output.midiPort);
         }
 
         if (track.sequence != nullptr)
@@ -1625,8 +1713,16 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
                             plugin->setStateInformation (block.getData(), (int) block.getSize());
                 }
 
+                // Legacy projects stored CHANNELNAME (port 1, manual)
                 for (auto* c : element->getChildWithTagNameIterator ("CHANNELNAME"))
                     setInstrumentChannelName (newId, c->getIntAttribute ("channel"), c->getStringAttribute ("name"));
+
+                if (auto* loadedInstrument = findInstrument (newId))
+                    for (auto* c : element->getChildWithTagNameIterator ("MIDICHANNEL"))
+                        loadedInstrument->midiChannels.push_back ({ c->getIntAttribute ("port", 1),
+                                                                    c->getIntAttribute ("channel", 1),
+                                                                    c->getStringAttribute ("name"),
+                                                                    c->getBoolAttribute ("synced") });
 
                 if (auto* a = element->getChildByName ("AUDIOCHANNEL"))
                 {
@@ -1676,7 +1772,7 @@ void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std:
             const auto savedInstrument = o->getIntAttribute ("instrument");
 
             if (auto it = instrumentIds.find (savedInstrument); it != instrumentIds.end())
-                addTrackOutput (trackId, it->second, o->getIntAttribute ("channel", 1));
+                addTrackOutput (trackId, it->second, o->getIntAttribute ("channel", 1), o->getIntAttribute ("port", 1));
             else
                 warnings.add (getTrackName (trackId) + ": output skipped (its instrument didn't load)");
         }

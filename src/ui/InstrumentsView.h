@@ -9,13 +9,20 @@ class InstrumentsView final : public juce::Component
 public:
     explicit InstrumentsView (AudioEngine& e) : engine (e)
     {
+        syncButton.setWantsKeyboardFocus (false);
+        syncButton.setTooltip ("Create a connected VE Pro instrument, named MIDI channels and a track "
+                               "per player for every instance on the Vienna Ensemble Pro server "
+                               "(server address in Settings > Integrations)");
+        syncButton.onClick = [this] { if (onVeproSync) onVeproSync(); };
+        addAndMakeVisible (syncButton);
+
         viewport.setViewedComponent (&rowContainer, false);
         viewport.setScrollBarsShown (true, false);
         addAndMakeVisible (viewport);
     }
 
     std::function<void (AudioEngine::InstrumentId)> onOpenPluginGui, onEditInstrument;
-    std::function<void()> onAddInstrument;
+    std::function<void()> onAddInstrument, onVeproSync;
 
     // Instruments fed by this track float to the top and get a highlight.
     void focusTrack (AudioEngine::TrackId trackId)
@@ -46,7 +53,11 @@ public:
 
     void resized() override
     {
-        viewport.setBounds (getLocalBounds().reduced (12));
+        auto area = getLocalBounds().reduced (12);
+        auto header = area.removeFromTop (30);
+        syncButton.setBounds (header.removeFromLeft (170).reduced (0, 2));
+        area.removeFromTop (6);
+        viewport.setBounds (area);
         layoutRows();
     }
 
@@ -111,7 +122,10 @@ private:
                 for (auto& output : owner.engine.getTrackOutputs (trackId))
                     if (output.instrument == instrumentId)
                         feeders.addIfNotAlreadyThere (owner.engine.getTrackName (trackId)
-                                                      + " (ch " + juce::String (output.midiChannel) + ")");
+                                                      + (output.midiPort > 1
+                                                             ? " (p" + juce::String (output.midiPort) + "."
+                                                                 + juce::String (output.midiChannel) + ")"
+                                                             : " (ch " + juce::String (output.midiChannel) + ")"));
 
             g.setColour (juce::Colours::grey);
             g.setFont (juce::FontOptions (12.0f));
@@ -171,6 +185,7 @@ private:
     }
 
     AudioEngine& engine;
+    juce::TextButton syncButton { "Sync to VE Pro Server" };
     juce::Viewport viewport;
     juce::Component rowContainer;
     std::vector<std::unique_ptr<Row>> rows;

@@ -198,6 +198,41 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         showContent (ContentView::midiEditor);
     };
 
+    instrumentsView.onVeproSync = [this]
+    {
+        scanStatus = "Syncing to the VE Pro server...";
+
+        auto message = juce::DynamicObject::Ptr (new juce::DynamicObject());
+        message->setProperty ("id", 1);
+        message->setProperty ("cmd", "vepro.sync");
+
+        commandDispatcher.dispatchParsed (juce::var (message.get()),
+            [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::var& reply)
+            {
+                if (safe == nullptr)
+                    return;
+
+                if (! reply.getProperty ("ok", false))
+                {
+                    safe->scanStatus = "VE Pro sync failed: " + reply.getProperty ("error", {}).toString();
+                }
+                else
+                {
+                    const auto result = reply.getProperty ("result", {});
+                    safe->scanStatus = "VE Pro sync: " + result.getProperty ("instances", 0).toString()
+                                         + " instances, " + result.getProperty ("tracksCreated", 0).toString()
+                                         + " new tracks, " + result.getProperty ("channelsSynced", 0).toString()
+                                         + " channels";
+
+                    if (auto* notes = result.getProperty ("notes", {}).getArray())
+                        for (auto& note : *notes)
+                            juce::Logger::writeToLog ("VE Pro sync: " + note.toString());
+                }
+
+                juce::Timer::callAfterDelay (10000, [safe] { if (safe != nullptr) safe->scanStatus.clear(); });
+            });
+    };
+
     instrumentsView.onOpenPluginGui = [this] (auto id) { openPluginWindow (id); };
     instrumentsView.onEditInstrument = [this] (auto id)
     {
@@ -504,7 +539,8 @@ void MainComponent::chooseTrackOutput (AudioEngine::TrackId trackId)
         {
             const auto current = ! outputs.empty()
                                    && outputs.front().instrument == instrumentId
-                                   && outputs.front().midiChannel == ch;
+                                   && outputs.front().midiChannel == ch
+                                   && outputs.front().midiPort == 1;
             const auto channelName = engine.getInstrumentChannelName (instrumentId, ch);
 
             channels.addItem ("Channel " + juce::String (ch) + (channelName.isNotEmpty() ? "  (" + channelName + ")" : ""),
@@ -515,6 +551,39 @@ void MainComponent::chooseTrackOutput (AudioEngine::TrackId trackId)
                                   {
                                       safe->engine.clearTrackOutputs (trackId);
                                       safe->engine.addTrackOutput (trackId, id, ch);
+                                      safe->autoNameTrackForOutput (trackId, id);
+                                  }
+                              });
+        }
+
+        // Named channels on further ports (multiport instruments like VE Pro)
+        bool addedPortSeparator = false;
+
+        for (auto& info : engine.getInstrumentMidiChannels (instrumentId))
+        {
+            if (info.midiPort <= 1)
+                continue;
+
+            if (! addedPortSeparator)
+            {
+                channels.addSeparator();
+                addedPortSeparator = true;
+            }
+
+            const auto current = ! outputs.empty()
+                                   && outputs.front().instrument == instrumentId
+                                   && outputs.front().midiChannel == info.midiChannel
+                                   && outputs.front().midiPort == info.midiPort;
+
+            channels.addItem ("Port " + juce::String (info.midiPort) + " ch " + juce::String (info.midiChannel)
+                                + (info.name.isNotEmpty() ? "  (" + info.name + ")" : ""),
+                              true, current,
+                              [safe, trackId, id = instrumentId, ch = info.midiChannel, port = info.midiPort]
+                              {
+                                  if (safe != nullptr)
+                                  {
+                                      safe->engine.clearTrackOutputs (trackId);
+                                      safe->engine.addTrackOutput (trackId, id, ch, port);
                                       safe->autoNameTrackForOutput (trackId, id);
                                   }
                               });

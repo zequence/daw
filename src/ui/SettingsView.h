@@ -2,6 +2,7 @@
 
 #include "../AudioEngine.h"
 #include "../integrations/VeproState.h"
+#include "../integrations/VeproServer.h"
 
 // Full-window settings page (replaces the whole UI; close with X or ESC).
 // Tab system (ISSUES.md "Settings Window"): a category column on the left
@@ -119,6 +120,34 @@ public:
         };
         page.addAndMakeVisible (veproVersionBox);
 
+        veproServerLabel.setText ("VE Pro Server address", juce::dontSendNotification);
+        veproServerLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
+        page.addAndMakeVisible (veproServerLabel);
+
+        veproHostEditor.setText (settings.getValue (vepro::serverHostKey, vepro::defaultServerHost()));
+        veproHostEditor.onTextChange = [this]
+        {
+            engine.getSettingsFile().setValue (vepro::serverHostKey, veproHostEditor.getText().trim());
+            engine.getSettingsFile().saveIfNeeded();
+        };
+        page.addAndMakeVisible (veproHostEditor);
+
+        veproPortEditor.setInputRestrictions (5, "0123456789");
+        veproPortEditor.setText (juce::String (settings.getIntValue (vepro::serverPortKey, vepro::defaultServerPort)));
+        veproPortEditor.onTextChange = [this]
+        {
+            engine.getSettingsFile().setValue (vepro::serverPortKey, veproPortEditor.getText().getIntValue());
+            engine.getSettingsFile().saveIfNeeded();
+        };
+        page.addAndMakeVisible (veproPortEditor);
+
+        veproServerHint.setText ("Used by \"Sync to VE Pro Server\" (instruments view) and vepro.sync. "
+                                 "Talks through VSL's CLI shipped with VE Pro 8.1+.",
+                                 juce::dontSendNotification);
+        veproServerHint.setColour (juce::Label::textColourId, juce::Colours::grey);
+        veproServerHint.setFont (juce::FontOptions (12.0f));
+        page.addAndMakeVisible (veproServerHint);
+
         for (auto* c : std::initializer_list<juce::Component*> { &scanButton, &retryButton, &rescanButton,
                                                                  &onTopToggle, &autoRecordToggle, &mcpToggle })
         {
@@ -191,7 +220,9 @@ private:
         for (auto* c : std::initializer_list<juce::Component*> { &mcpToggle, &mcpStatus, &mcpRegisterHint })
             c->setVisible (category == agents);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &veproVersionLabel, &veproVersionBox, &veproVersionHint })
+        for (auto* c : std::initializer_list<juce::Component*> { &veproVersionLabel, &veproVersionBox, &veproVersionHint,
+                                                                 &veproServerLabel, &veproHostEditor, &veproPortEditor,
+                                                                 &veproServerHint })
             c->setVisible (category == integrations);
 
         switch (category)
@@ -231,6 +262,12 @@ private:
                 veproVersionBox.setBounds (288, y, 120, 24);
                 y += 30;
                 veproVersionHint.setBounds (4, y, width - 8, 18);
+                y += 28;
+                veproServerLabel.setBounds (4, y, 280, 22);
+                veproHostEditor.setBounds (288, y, 160, 24);
+                veproPortEditor.setBounds (452, y, 60, 24);
+                y += 30;
+                veproServerHint.setBounds (4, y, width - 8, 18);
                 y += 26;
                 break;
 
@@ -329,8 +366,9 @@ private:
     juce::ToggleButton mcpToggle { "Run the MCP server for AI agents (starts with the app)" };
     juce::Label mcpStatus;
     juce::TextEditor mcpRegisterHint;
-    juce::Label veproVersionLabel, veproVersionHint;
+    juce::Label veproVersionLabel, veproVersionHint, veproServerLabel, veproServerHint;
     juce::ComboBox veproVersionBox;
+    juce::TextEditor veproHostEditor, veproPortEditor;
 
     juce::Rectangle<int> keyCommandsBounds;
 

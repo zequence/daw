@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../AudioEngine.h"
+#include "../integrations/VeproServer.h"
 
 class HistoryManager;
 
@@ -45,6 +46,10 @@ private:
     void add (const juce::String& name, const juce::String& description,
               const juce::String& params, std::function<void (const juce::var&, Respond)> run);
     void registerCommands();
+
+    // vepro.sync's message-thread half: instruments/channels/tracks per server instance
+    void applyVeproSync (const std::vector<vepro::SyncInstance>&, const juce::String& host,
+                         const juce::String& version, Respond);
 
     AudioEngine& engine;
     HistoryManager* history = nullptr;
