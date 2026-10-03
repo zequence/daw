@@ -15,7 +15,6 @@ Claude is unsure of an issue they will pose a question.
 
 # Settings Window
 
-- [ ] Use a tab system for displaying the different options. On the left, a column with all the categories (Audio, Midi, etc), on the right, the actual settings
 - [ ] New category: Theming. Selectable themes. Colors for certain areas, buttons, etc. Ability to save custom themes.
 
 # Timeline bar

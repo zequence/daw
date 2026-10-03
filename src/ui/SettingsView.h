@@ -3,7 +3,9 @@
 #include "../AudioEngine.h"
 
 // Full-window settings page (replaces the whole UI; close with X or ESC).
-// Sections: Audio & MIDI (device selector), Plugins, Tracks, Key commands.
+// Tab system (ISSUES.md "Settings Window"): a category column on the left
+// (Audio & MIDI, Plugins, Tracks, Agents, Key commands), the selected
+// category's actual settings on the right. The selection persists.
 class SettingsView final : public juce::Component
 {
 public:
@@ -11,6 +13,7 @@ public:
     static constexpr auto pluginWindowsOnTopKey = "pluginWindowsOnTop";
     static constexpr auto mcpEnabledKey = "mcpEnabled";
     static constexpr auto mcpPortKey = "mcpPort";
+    static constexpr auto categoryKey = "settingsCategory";
 
     explicit SettingsView (AudioEngine& e) : engine (e)
     {
@@ -22,6 +25,10 @@ public:
         closeButton.setTooltip ("Close (Esc)");
         closeButton.onClick = [this] { if (onClose) onClose(); };
         addAndMakeVisible (closeButton);
+
+        categories.names = { "Audio & MIDI", "Plugins", "Tracks", "Agents (MCP)", "Key commands" };
+        categories.onSelect = [this] (int index) { setCategory (index); };
+        addAndMakeVisible (categories);
 
         viewport.setViewedComponent (&page, false);
         viewport.setScrollBarsShown (true, false);
@@ -90,6 +97,9 @@ public:
             c->setWantsKeyboardFocus (false);
             page.addAndMakeVisible (c);
         }
+
+        categories.selected = juce::jlimit (0, categories.names.size() - 1,
+                                            settings.getIntValue (categoryKey, 0));
     }
 
     std::function<void()> onClose;
@@ -110,56 +120,12 @@ public:
         closeButton.setBounds (header.removeFromRight (30).reduced (0, 3));
         titleLabel.setBounds (header);
 
-        area.removeFromTop (4);
+        area.removeFromTop (8);
+        categories.setBounds (area.removeFromLeft (180));
+        area.removeFromLeft (14);
         viewport.setBounds (area);
 
-        // Lay out the page content
-        const auto width = juce::jmax (300, viewport.getMaximumVisibleWidth() - 4);
-        int y = 0;
-
-        sectionBounds.clear();
-
-        // Audio & MIDI
-        sectionBounds.push_back ({ "Audio & MIDI", { 0, y, width, sectionHeaderHeight } });
-        y += sectionHeaderHeight;
-        deviceSelector->setBounds (12, y, juce::jmin (width - 24, 560), 420);
-        y += 430;
-
-        // Plugins
-        sectionBounds.push_back ({ "Plugins", { 0, y, width, sectionHeaderHeight } });
-        y += sectionHeaderHeight;
-        scanButton.setBounds (12, y, 150, 26);
-        retryButton.setBounds (168, y, 150, 26);
-        rescanButton.setBounds (324, y, 150, 26);
-        y += 34;
-        onTopToggle.setBounds (12, y, 320, 24);
-        y += 30;
-        pluginList->setBounds (12, y, width - 24, 300);
-        y += 310;
-
-        // Tracks
-        sectionBounds.push_back ({ "Tracks", { 0, y, width, sectionHeaderHeight } });
-        y += sectionHeaderHeight;
-        autoRecordToggle.setBounds (12, y, 320, 24);
-        y += 32;
-
-        // Agents (MCP)
-        sectionBounds.push_back ({ "Agents (MCP)", { 0, y, width, sectionHeaderHeight } });
-        y += sectionHeaderHeight;
-        mcpToggle.setBounds (12, y, 420, 24);
-        y += 28;
-        mcpStatus.setBounds (12, y, width - 24, 18);
-        y += 22;
-        mcpRegisterHint.setBounds (12, y, juce::jmin (620, width - 24), 24);
-        y += 32;
-
-        // Key commands
-        sectionBounds.push_back ({ "Key commands", { 0, y, width, sectionHeaderHeight } });
-        y += sectionHeaderHeight;
-        keyCommandsBounds = { 12, y, width - 24, 90 };
-        y += 96;
-
-        page.setSize (width, y);
+        layoutPage();
     }
 
     void paint (juce::Graphics& g) override
@@ -168,31 +134,140 @@ public:
     }
 
 private:
-    static constexpr int sectionHeaderHeight = 40;
+    enum Category { audioMidi = 0, plugins, tracks, agents, keyCommands };
 
+    void setCategory (int index)
+    {
+        engine.getSettingsFile().setValue (categoryKey, index);
+        engine.getSettingsFile().saveIfNeeded();
+        viewport.setViewPosition (0, 0);
+        layoutPage();
+    }
+
+    // Lays out (and shows/hides) the controls of the selected category only.
+    void layoutPage()
+    {
+        const auto category = categories.selected;
+        const auto width = juce::jmax (320, viewport.getMaximumVisibleWidth() - 4);
+        const auto visibleHeight = juce::jmax (200, viewport.getMaximumVisibleHeight());
+        int y = 8;
+
+        deviceSelector->setVisible (category == audioMidi);
+        pluginList->setVisible (category == plugins);
+
+        for (auto* c : std::initializer_list<juce::Component*> { &scanButton, &retryButton, &rescanButton, &onTopToggle })
+            c->setVisible (category == plugins);
+
+        autoRecordToggle.setVisible (category == tracks);
+
+        for (auto* c : std::initializer_list<juce::Component*> { &mcpToggle, &mcpStatus, &mcpRegisterHint })
+            c->setVisible (category == agents);
+
+        switch (category)
+        {
+            case audioMidi:
+                deviceSelector->setBounds (4, y, juce::jmin (width - 8, 560), 460);
+                y += 470;
+                break;
+
+            case plugins:
+                scanButton.setBounds (4, y, 150, 26);
+                retryButton.setBounds (160, y, 150, 26);
+                rescanButton.setBounds (316, y, 150, 26);
+                y += 34;
+                onTopToggle.setBounds (4, y, 320, 24);
+                y += 30;
+                pluginList->setBounds (4, y, width - 8, juce::jmax (260, visibleHeight - y - 10));
+                y += pluginList->getHeight() + 10;
+                break;
+
+            case tracks:
+                autoRecordToggle.setBounds (4, y, 360, 24);
+                y += 32;
+                break;
+
+            case agents:
+                mcpToggle.setBounds (4, y, 460, 24);
+                y += 28;
+                mcpStatus.setBounds (4, y, width - 8, 18);
+                y += 22;
+                mcpRegisterHint.setBounds (4, y, juce::jmin (620, width - 8), 24);
+                y += 32;
+                break;
+
+            case keyCommands:
+                keyCommandsBounds = { 4, y, width - 8, 120 };
+                y += 126;
+                break;
+        }
+
+        page.setSize (width, juce::jmax (y, visibleHeight));
+        page.repaint();
+    }
+
+    //==========================================================================
+    // The left category column
+    struct CategoryList final : juce::Component
+    {
+        void paint (juce::Graphics& g) override
+        {
+            g.fillAll (juce::Colour (0xff232529));
+
+            for (int i = 0; i < names.size(); ++i)
+            {
+                const auto row = juce::Rectangle<int> (0, i * rowHeight, getWidth(), rowHeight);
+
+                if (i == selected)
+                {
+                    g.setColour (juce::Colour (0xff39404d));
+                    g.fillRoundedRectangle (row.toFloat().reduced (3.0f, 2.0f), 4.0f);
+                }
+
+                g.setColour (i == selected ? juce::Colours::white : juce::Colours::white.withAlpha (0.6f));
+                g.setFont (juce::FontOptions (14.0f, i == selected ? juce::Font::bold : juce::Font::plain));
+                g.drawText (names[i], row.reduced (12, 0), juce::Justification::centredLeft);
+            }
+        }
+
+        void mouseDown (const juce::MouseEvent& event) override
+        {
+            const auto index = event.y / rowHeight;
+
+            if (index >= 0 && index < names.size() && index != selected)
+            {
+                selected = index;
+                repaint();
+
+                if (onSelect)
+                    onSelect (index);
+            }
+        }
+
+        static constexpr int rowHeight = 36;
+        juce::StringArray names;
+        int selected = 0;
+        std::function<void (int)> onSelect;
+    };
+
+    //==========================================================================
     struct Page final : juce::Component
     {
         explicit Page (SettingsView& ownerToUse) : owner (ownerToUse) {}
 
         void paint (juce::Graphics& g) override
         {
-            for (auto& [name, bounds] : owner.sectionBounds)
-            {
-                g.setColour (juce::Colours::white.withAlpha (0.85f));
-                g.setFont (juce::FontOptions (17.0f, juce::Font::bold));
-                g.drawText (name, bounds.withTrimmedTop (10), juce::Justification::bottomLeft);
-
-                g.setColour (juce::Colour (0xff3a3d44));
-                g.drawHorizontalLine (bounds.getBottom() - 1, (float) bounds.getX(), (float) bounds.getRight());
-            }
+            if (owner.categories.selected != keyCommands)
+                return;
 
             g.setColour (juce::Colours::lightgrey);
             g.setFont (juce::FontOptions (13.0f));
             g.drawFittedText ("Space: start/stop playback\n"
                               "Home: back to the beginning\n"
                               "F12: performance monitor\n"
-                              "Esc: close this page / go back",
-                              owner.keyCommandsBounds, juce::Justification::topLeft, 6);
+                              "Esc: close this page / go back\n"
+                              "Editor - S/D: select/draw mode, Ctrl+Z/Y: undo/redo,\n"
+                              "arrows: nudge selected notes",
+                              owner.keyCommandsBounds, juce::Justification::topLeft, 8);
         }
 
         SettingsView& owner;
@@ -202,6 +277,7 @@ private:
 
     juce::Label titleLabel;
     juce::TextButton closeButton { "X" };
+    CategoryList categories;
     juce::Viewport viewport;
     Page page { *this };
 
@@ -215,7 +291,6 @@ private:
     juce::Label mcpStatus;
     juce::TextEditor mcpRegisterHint;
 
-    std::vector<std::pair<juce::String, juce::Rectangle<int>>> sectionBounds;
     juce::Rectangle<int> keyCommandsBounds;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SettingsView)

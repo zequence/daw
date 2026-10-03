@@ -1086,6 +1086,13 @@ void MainComponent::paint (juce::Graphics& g)
     g.setColour (juce::Colour (0xff43464d));
     g.drawRoundedRectangle (transportPanel.toFloat(), 6.0f, 1.0f);
 
+    // Separators between the topbar's groups (hamburger | view buttons | ... | Perf)
+    g.setColour (juce::Colour (0xff43464d));
+
+    for (auto x : topbarSeparators)
+        if (x > 0)
+            g.fillRect (x, 10, 1, topbarHeight - 20);
+
     g.setColour (juce::Colour (0xff17191c));
     auto bottom = getLocalBounds().removeFromBottom (statusHeight + keyboardHeight);
     g.fillRect (bottom.removeFromBottom (statusHeight));
@@ -1096,9 +1103,12 @@ void MainComponent::resized()
     auto area = getLocalBounds();
 
     // Topbar
+    // Topbar: four distinct groups (ISSUES.md) - hamburger | view buttons |
+    // transport unit | right-side buttons - with separators painted between them.
     auto toolbar = area.removeFromTop (topbarHeight).reduced (8, 7);
     menuButton.setBounds (toolbar.removeFromLeft (36));
-    toolbar.removeFromLeft (10);
+    topbarSeparators[0] = toolbar.getX() + 7;
+    toolbar.removeFromLeft (14);
     midiDomainButton.setBounds (toolbar.removeFromLeft (52));
     toolbar.removeFromLeft (4);
     audioDomainButton.setBounds (toolbar.removeFromLeft (56));
@@ -1109,6 +1119,7 @@ void MainComponent::resized()
     toolbar.removeFromLeft (14);
 
     perfButton.setBounds (getWidth() - 8 - 50, toolbar.getY(), 50, toolbar.getHeight());
+    topbarSeparators[1] = perfButton.getX() - 8;
 
     // The transport unit: buttons + position readout + tempo, PERFECTLY centered
     // in the window. If it would collide, it shifts right of the view buttons and
@@ -1120,7 +1131,7 @@ void MainComponent::resized()
     if (unit.getX() < toolbar.getX())
         unit.setX (toolbar.getX());
 
-    const auto perfVisible = unit.getRight() + 16 <= perfButton.getX();
+    const auto perfVisible = unit.getRight() + 12 <= perfButton.getX();
     perfButton.setVisible (perfVisible);
 
     const auto rightEdge = perfVisible ? perfButton.getX() - 8 : getWidth() - 8;

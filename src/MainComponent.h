@@ -88,6 +88,7 @@ private:
                      perfButton { "Perf" };
     juce::Label bpmLabel, positionLabel, timeLabel;
     juce::Rectangle<int> transportPanel;   // painted behind the unit
+    int topbarSeparators[2] = { 0, 0 };    // lines between the topbar's groups
 
     // Sidebar
     juce::TextButton collapseButton { "<<" };

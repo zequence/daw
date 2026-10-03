@@ -37,6 +37,23 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Top bar
 
+- [x] Resizing to smallest possible width makes the Perf button disappear.
+      (the hide threshold had almost no slack at the minimum width; the
+      minimum is now 890 with margin, so Perf stays at the smallest size and
+      hiding remains only a last-resort fallback)
+- [x] Make the top bar have four distinct groups: hamburger on the very left,
+      window buttons aligned left, transport section, right side buttons.
+      (separator lines now divide hamburger | view buttons | transport unit |
+      Perf; the transport keeps its centered panel)
+
+# Settings Window
+
+- [x] Use a tab system for displaying the different options. On the left, a column with all the categories (Audio, Midi, etc), on the right, the actual settings
+      (category column on the left - Audio & MIDI, Plugins, Tracks,
+      Agents (MCP), Key commands - with the selected category's settings on
+      the right; no more one long scroll page; the selected category
+      persists across sessions)
+
 - [x] Make the transport controls its own unit in the top bar. Colorize the buttons. Add the current point in time there and remove it from the right side.
       (rounded panel perfectly centered in the window; shrinking the window
       keeps it centered until it meets the view buttons, and the minimum
