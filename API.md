@@ -46,7 +46,8 @@ Quick test from a terminal while the app is running:
 
 ## Agents
 
-There is no separate "agent API": agents use this same surface. An MCP server can wrap
-it with one tool per command (or a single `daw` tool whose input is the command name +
-params), discovering the surface via `describe`. The design keeps replies compact and
-errors self-describing for exactly that use.
+There is no separate "agent API": agents use this same surface. The MCP adapter in
+`tools/mcp/` does exactly that - it discovers the surface via `describe` and exposes
+one MCP tool per command, plus a raw `daw_command` passthrough. See `tools/mcp/README.md`
+for registering it with Claude Code or Claude Desktop. The design keeps replies compact
+and errors self-describing for exactly that use.
