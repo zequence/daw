@@ -3,8 +3,9 @@
 Lightweight tracker. Claude checks this file at every prompt: small unambiguous
 items get fixed and marked `- [x]` with a note; ambiguous ones get a question;
 big ones become milestones (tracked in MILESTONES.md). Add new items as `- [ ]`
-under a heading. Unsolved items go at the top of each chapter; solved ones sink
-below. If Claude is unsure of an issue they will pose a question.
+under a heading. Unsolved items go at the top of each chapter; solved ones are
+moved to file "ISSUES_CLOSED.md", but headers in ISSUES.md always stay. If
+Claude is unsure of an issue they will pose a question.
 
 # Test builds
 
@@ -15,6 +16,8 @@ below. If Claude is unsure of an issue they will pose a question.
 
 # Global
 
+- [ ] Help text when hovering over buttons for a certain time. Key commands,
+      what the thing does, how it can be controlled.
 - [x] All gui elements that affect other gui elements need an update mechanism.
       (systematic now: every engine mutation bumps a state revision counter
       via emitEvent - the same channel that feeds the API stream, history and
@@ -35,14 +38,22 @@ below. If Claude is unsure of an issue they will pose a question.
 
 # Top bar
 
+- [ ] Make the transport controls its own unit in the top bar. Colorize the buttons. Add the current point in time there and remove it from the right side.
 - [x] Make the Main menu a hamburger menu
       (the Menu button shows the hamburger glyph, tooltip "Main menu")
 - [x] Clicking on UI buttons toggles that UI between the UI and arrange mode.
       (Instruments and History toggle back to the current domain's arrange view
       when clicked while open; Escape still works too)
 
+# Settings Window
+
+- [ ] Use a tab system for displaying the different options. On the left, a column with all the categories (Audio, Midi, etc), on the right, the actual settings
+- [ ] New category: Theming. Selectable themes. Colors for certain areas, buttons, etc. Ability to save custom themes.
+
 # Timeline bar
 
+- [ ] Right-click menu for enabling, disabling the different rows. At the bottom of the menu, add "Preferences", which opens a sub-UI for the global "Settings".
+- [ ] Move bar to the top by default.
 - [x] Update UI when edited. Time is not updated when editing tempo.
       (fixed by the global state-revision mechanism: tempo edits now redraw
       the time row, and tempo set over the API updates the topbar bpm label)
@@ -60,14 +71,19 @@ below. If Claude is unsure of an issue they will pose a question.
 
 # Sidebar
 
-- [ ] Drag channels to re-order them. Select multiple channels by holding Shift or Ctrl (the usual functionality) and drag those together. Multiple will be put in order (as one group) once moved out of the current position. Moving only happens when mouse moves outside of the channel being dragged, and move is complete only after dropping.
-      (Milestone-sized - scoped as "Channel re-ordering by drag" in
-      MILESTONES.md: needs an explicit ordering model in the engine first;
-      will be built together with drag-into-folder below. Say the word if it
-      should come sooner.)
-- [ ] Drag tracks/channels/folders onto a folder row to move them into it
-      (folders landed 2026-10-03 with context-menu moving; drag is the missing
-      gesture)
+- [ ] right menu everywhere in the right panel. Contextualize.
+  - [ ] Option to add a channel anywhere. If right-clicking on a channel, add the new channel after. If clicking on a folder, add it inside the folder.
+- [x] Drag channels to re-order them. Select multiple channels by holding Shift or Ctrl (the usual functionality) and drag those together. Multiple will be put in order (as one group) once moved out of the current position. Moving only happens when mouse moves outside of the channel being dragged, and move is complete only after dropping.
+      (both sidebars: explicit ordering model in the engine; Ctrl toggles,
+      Shift range-selects; dragging any selected row moves the group in
+      visual order; the drag arms only once the mouse leaves the pressed row
+      and commits on drop - a gold line shows the insertion point. One drop
+      = one history entry; order persists in the project and the arrangement
+      lanes follow it. sidebar.move command for agents.)
+- [x] Drag tracks/channels/folders onto a folder row to move them into it
+      (drop on a folder row's middle - the row highlights - to drop inside;
+      the row's top/bottom edges insert before/after the folder instead.
+      Folders can be dragged too; into-own-subtree is rejected.)
 - [x] Folders for grouping channels, like in Cubase; nested; half channel
       height; indented area on the left shows membership
       (both sidebars: "+ Folder" button, collapse/expand on click, right-click

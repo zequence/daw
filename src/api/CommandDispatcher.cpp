@@ -213,12 +213,19 @@ void CommandDispatcher::registerCommands()
          });
 
     //==========================================================================
-    add ("track.list", "All MIDI tracks with routing and clip summary", "",
+    add ("track.list", "All MIDI tracks with routing and clip summary, in sidebar display order", "",
          [this] (const juce::var&, Respond respond)
          {
              juce::Array<juce::var> list;
 
-             for (auto id : engine.getTrackIds())
+             // Display order (the folder tree), collapsed folders included
+             std::vector<AudioEngine::TrackId> ordered;
+
+             for (auto& item : engine.getSidebarItems (true, false))
+                 if (item.member != 0)
+                     ordered.push_back (item.member);
+
+             for (auto id : ordered)
              {
                  auto t = object();
                  t->setProperty ("id", id);
@@ -996,7 +1003,14 @@ void CommandDispatcher::registerCommands()
          {
              juce::Array<juce::var> list;
 
-             for (auto id : engine.getAudioChannelIds())
+             // Display order (the folder tree), collapsed folders included
+             std::vector<AudioEngine::AudioChannelId> ordered;
+
+             for (auto& item : engine.getSidebarItems (false, false))
+                 if (item.member != 0)
+                     ordered.push_back (item.member);
+
+             for (auto id : ordered)
              {
                  auto o = object();
                  o->setProperty ("id", id);
@@ -1150,6 +1164,34 @@ void CommandDispatcher::registerCommands()
              int id = 0;
              if (! requireFolder (params, respond, id)) return;
              engine.setFolderCollapsed (id, params.getProperty ("collapsed", true));
+             respond (ok());
+         });
+
+    add ("sidebar.move", "Move folders and/or members (tracks for midi, channels for audio) into a parent at a child index, as one ordered group - the drag operation",
+         "domain:'midi'|'audio' folders:[int]? members:[int]? parent:int index:int",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const auto domain = params.getProperty ("domain", "midi").toString();
+
+             if (domain != "midi" && domain != "audio")
+                 return respond (fail ("'domain' must be 'midi' or 'audio'"));
+
+             std::vector<AudioEngine::FolderId> folderIds;
+             std::vector<int> memberIds;
+
+             if (auto* array = params.getProperty ("folders", {}).getArray())
+                 for (auto& value : *array)
+                     folderIds.push_back ((int) value);
+
+             if (auto* array = params.getProperty ("members", {}).getArray())
+                 for (auto& value : *array)
+                     memberIds.push_back ((int) value);
+
+             if (! engine.moveSidebarItems (domain == "midi", folderIds, memberIds,
+                                            (int) params.getProperty ("parent", 0),
+                                            (int) params.getProperty ("index", 0)))
+                 return respond (fail ("couldn't move (unknown ids, a domain mismatch, or a folder into its own subtree)"));
+
              respond (ok());
          });
 

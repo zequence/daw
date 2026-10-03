@@ -141,6 +141,7 @@ private:
         if (type == "trackAdded" || type == "trackRemoved"
              || type == "instrumentAdded" || type == "instrumentRemoved") return 80;
         if (type == "folderAdded" || type == "folderRemoved") return 75;
+        if (type == "sidebarMoved") return 45;
         if (type == "markerAdded" || type == "markerRemoved") return 70;
         if (type == "tempoChanged") return 60;
         if (type == "clipChanged") return 50;
@@ -187,6 +188,10 @@ private:
         if (type == "channelChanged")
             return "Channel " + event.getProperty ("channelId", {}).toString() + ": "
                    + event.getProperty ("change", {}).toString();
+
+        if (type == "sidebarMoved")
+            return "Re-order " + event.getProperty ("domain", {}).toString() + " sidebar ("
+                   + event.getProperty ("count", 0).toString() + " moved)";
 
         if (type == "recordingFinished")
             return "Record " + event.getProperty ("notes", 0).toString() + " notes on '"

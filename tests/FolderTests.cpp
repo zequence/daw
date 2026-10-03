@@ -79,6 +79,83 @@ public:
             engine.clearProject();
         }
 
+        beginTest ("explicit ordering and group moves (the drag operation)");
+        {
+            const auto t1 = engine.addTrack ("A");
+            const auto t2 = engine.addTrack ("B");
+            const auto t3 = engine.addTrack ("C");
+            const auto t4 = engine.addTrack ("D");
+
+            // Creation order first
+            expect (engine.getArrangeTrackOrder() == std::vector<AudioEngine::TrackId> { t1, t2, t3, t4 });
+
+            // Move D to the front
+            expect (engine.moveSidebarItems (true, {}, { t4 }, 0, 0));
+            expect (engine.getArrangeTrackOrder() == std::vector<AudioEngine::TrackId> { t4, t1, t2, t3 });
+
+            // Group move: A and C (visual order) land together before B
+            expect (engine.moveSidebarItems (true, {}, { t1, t3 }, 0, 1));
+            expect (engine.getArrangeTrackOrder() == std::vector<AudioEngine::TrackId> { t4, t1, t3, t2 });
+
+            // Into a folder at the end; the folder itself re-orders among siblings
+            const auto f = engine.addFolder (true, "F");
+            expect (engine.moveSidebarItems (true, {}, { t4, t2 }, f, 0));
+            expect (engine.getTrackFolder (t4) == f && engine.getTrackFolder (t2) == f);
+            expect (engine.moveSidebarItems (true, { f }, {}, 0, 0));
+
+            const auto items = engine.getSidebarItems (true, true);
+            expect (items[0].folder == f);
+            expect (items[1].member == t4 && items[2].member == t2);
+            expect (items[3].member == t1 && items[4].member == t3);
+
+            // A folder can't move into its own subtree
+            const auto inner = engine.addFolder (true, "Inner", f);
+            expect (! engine.moveSidebarItems (true, { f }, {}, inner, 0));
+
+            // Order survives a save/load round-trip
+            const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                  .getChildFile ("order-roundtrip.odaw");
+            expect (engine.saveProject (file));
+
+            std::vector<juce::String> namesBefore, namesAfter;
+            for (auto id : engine.getArrangeTrackOrder()) namesBefore.push_back (engine.getTrackName (id));
+
+            bool loaded = false;
+            engine.loadProject (file, [&loaded] (bool ok, const juce::String&) { loaded = ok; });
+            expect (loaded);
+
+            for (auto id : engine.getArrangeTrackOrder()) namesAfter.push_back (engine.getTrackName (id));
+            expect (namesBefore == namesAfter);   // ids change on load, the order doesn't
+
+            // ...and a history snapshot restores it
+            const auto before = engine.captureHistorySnapshot();
+            const auto order = engine.getArrangeTrackOrder();
+            expect (engine.moveSidebarItems (true, {}, { order.back() }, 0, 0));
+            expect (engine.getArrangeTrackOrder() != order);
+            engine.applyHistorySnapshot (before);
+            expect (engine.getArrangeTrackOrder() == order);
+
+            file.deleteFile();
+            engine.clearProject();
+        }
+
+        beginTest ("sidebar.move command");
+        {
+            const auto a = (int) sendFolderCmd (dispatcher, "track.create", R"({"name":"One"})")["result"]["id"];
+            const auto b = (int) sendFolderCmd (dispatcher, "track.create", R"({"name":"Two"})")["result"]["id"];
+
+            expect (sendFolderCmd (dispatcher, "sidebar.move",
+                                   R"({"domain":"midi","members":[)" + juce::String (b) + R"(],"parent":0,"index":0})")
+                        .getProperty ("ok", false));
+            expect (engine.getArrangeTrackOrder() == std::vector<AudioEngine::TrackId> { b, a });
+
+            expect (! sendFolderCmd (dispatcher, "sidebar.move",
+                                     R"({"domain":"midi","members":[9999],"parent":0,"index":0})")
+                        .getProperty ("ok", false));
+
+            engine.clearProject();
+        }
+
         beginTest ("folder commands");
         {
             const auto created = sendFolderCmd (dispatcher, "folder.create", R"({"domain":"midi","name":"Brass"})");

@@ -3,19 +3,6 @@
 Things we want to implement but aren't about to do yet. When one starts, it moves
 out of here (into work, with any open questions going through ISSUES.md).
 
-## Channel re-ordering by drag (scoped 2026-10-03)
-
-From ISSUES.md "Sidebar": drag channels to re-order them; Shift/Ctrl
-multi-select and drag the selection together (it lands as one group in
-order); the move only starts once the mouse leaves the dragged channel, and
-only completes on drop.
-
-Needs an explicit ordering model first: tracks/channels currently render in
-creation order within their folder. Plan: a position index per sibling list
-in the engine, persisted, driven by commands (track.move / channel.move /
-folder.move) so agents can re-order too; sidebar and arrangement share it.
-Build the drag system together with drag-into-folder (also in ISSUES.md).
-
 ## Tempo / meter editing in the timeline bar
 
 The timeline bar (done 2026-10-03) displays the tempo and time-signature

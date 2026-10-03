@@ -102,8 +102,19 @@ public:
             return;
         }
 
-        if (owner.onSelect)
-            owner.onSelect (trackId);
+        owner.rowMouseDown (this, false, trackId, event);
+    }
+
+    void mouseDrag (const juce::MouseEvent& event) override
+    {
+        if (! event.mods.isPopupMenu())
+            owner.rowMouseDrag (this, false, trackId, event);
+    }
+
+    void mouseUp (const juce::MouseEvent& event) override
+    {
+        if (! event.mods.isPopupMenu())
+            owner.finishRowDrag (trackId);
     }
 
     void mouseDoubleClick (const juce::MouseEvent& event) override
@@ -197,8 +208,24 @@ public:
             return;
         }
 
-        engine.setFolderCollapsed (folderId, ! engine.isFolderCollapsed (folderId));
-        owner.refresh();
+        owner.rowMouseDown (this, true, folderId, event);
+    }
+
+    void mouseDrag (const juce::MouseEvent& event) override
+    {
+        if (! event.mods.isPopupMenu())
+            owner.rowMouseDrag (this, true, folderId, event);
+    }
+
+    void mouseUp (const juce::MouseEvent& event) override
+    {
+        if (event.mods.isPopupMenu())
+            return;
+
+        // A click (no drag happened) toggles collapse
+        if (! owner.finishRowDrag (folderId))
+            engine.setFolderCollapsed (folderId, ! engine.isFolderCollapsed (folderId));
+            // finishRowDrag already scheduled the refresh (deferred: it deletes this row)
     }
 
     void mouseDoubleClick (const juce::MouseEvent& event) override
@@ -252,7 +279,7 @@ TrackList::TrackList (AudioEngine& e) : engine (e)
     addAndMakeVisible (addButton);
 
     addFolderButton.setWantsKeyboardFocus (false);
-    addFolderButton.setTooltip ("Add a folder for grouping tracks (right-click tracks and folders to move them)");
+    addFolderButton.setTooltip ("Add a folder for grouping tracks (drag rows to move and re-order them)");
     addFolderButton.onClick = [this]
     {
         engine.addFolder (true);
@@ -283,14 +310,25 @@ void TrackList::refresh()
         rebuildRows();
     }
 
+    // Drop selections that no longer exist
+    const auto trackIds = engine.getTrackIds();
+    std::erase_if (multiSelection, [&trackIds] (auto id)
+                   { return std::find (trackIds.begin(), trackIds.end(), id) == trackIds.end(); });
+
     for (size_t i = 0; i < rowComponents.size(); ++i)
     {
         if (auto* trackRow = dynamic_cast<Row*> (rowComponents[i].get()))
-            trackRow->refresh (trackRow->getTrackId() == selectedTrack,
+            trackRow->refresh (trackRow->getTrackId() == selectedTrack
+                                 || multiSelection.count (trackRow->getTrackId()) > 0,
                                trackRow->getTrackId() == engine.getArmedTrack());
         else if (auto* folderRow = dynamic_cast<FolderRow*> (rowComponents[i].get()))
             folderRow->refresh();
     }
+}
+
+int TrackList::heightOfItem (const AudioEngine::SidebarItem& item)
+{
+    return item.folder != 0 ? folderRowHeight : rowHeight;
 }
 
 void TrackList::rebuildRows()
@@ -320,14 +358,234 @@ void TrackList::layoutRows()
 
     for (size_t i = 0; i < rowComponents.size(); ++i)
     {
-        const auto height = items[i].folder != 0 ? folderRowHeight : rowHeight;
-        rowComponents[i]->setBounds (0, y, width, height);
-        y += height;
+        rowComponents[i]->setBounds (0, y, width, heightOfItem (items[i]));
+        y += heightOfItem (items[i]);
     }
 
     rowContainer.setSize (width, juce::jmax (1, y));
 }
 
+//==============================================================================
+// Selection + drag
+
+void TrackList::rowMouseDown (juce::Component*, bool isFolder, int id, const juce::MouseEvent& event)
+{
+    drag = {};
+    clearSelectionOnMouseUp = false;
+
+    if (isFolder)
+        return;   // folders don't join the multi-selection; a plain drag moves just the folder
+
+    const auto trackId = (AudioEngine::TrackId) id;
+
+    if (event.mods.isCtrlDown())
+    {
+        if (multiSelection.count (trackId))
+            multiSelection.erase (trackId);
+        else
+            multiSelection.insert (trackId);
+
+        shiftAnchor = trackId;
+    }
+    else if (event.mods.isShiftDown() && shiftAnchor != 0)
+    {
+        // Range over the visual order of track rows, from the anchor to the click
+        multiSelection.clear();
+        bool inRange = false;
+
+        for (auto& item : items)
+        {
+            if (item.member == 0)
+                continue;
+
+            const auto isEdge = item.member == shiftAnchor || item.member == trackId;
+
+            if (isEdge || inRange)
+                multiSelection.insert (item.member);
+
+            if (isEdge)
+            {
+                if (inRange || shiftAnchor == trackId)
+                    break;          // closing edge (or a one-row range)
+
+                inRange = true;     // opening edge
+            }
+        }
+    }
+    else
+    {
+        if (multiSelection.count (trackId))
+            clearSelectionOnMouseUp = true;   // keep the group for a possible drag
+        else
+            multiSelection.clear();
+
+        shiftAnchor = trackId;
+
+        if (onSelect)
+            onSelect (trackId);
+    }
+
+    refresh();
+}
+
+void TrackList::rowMouseDrag (juce::Component* row, bool isFolder, int id, const juce::MouseEvent& event)
+{
+    // "Moving only happens when the mouse moves outside of the channel being dragged"
+    if (! drag.active && row->getLocalBounds().contains (event.getPosition()))
+        return;
+
+    if (! drag.active)
+    {
+        drag.active = true;
+        drag.sourceIsFolder = isFolder;
+        drag.sourceId = id;
+
+        if (! isFolder)
+            drag.draggedTracks = multiSelection.count (id) ? selectionInVisualOrder()
+                                                           : std::vector<AudioEngine::TrackId> { id };
+    }
+
+    computeDropTarget (event.getEventRelativeTo (&rowContainer).getPosition().y);
+    rowContainer.repaint();
+}
+
+void TrackList::computeDropTarget (int y)
+{
+    drag.valid = false;
+    drag.intoFolder = false;
+    drag.indicatorY = -1;
+    drag.folderHighlight = {};
+
+    const auto isDragged = [this] (const AudioEngine::SidebarItem& item)
+    {
+        if (drag.sourceIsFolder)
+            return item.folder == drag.sourceId;
+
+        return item.member != 0 && std::find (drag.draggedTracks.begin(), drag.draggedTracks.end(),
+                                              item.member) != drag.draggedTracks.end();
+    };
+
+    // Count the siblings of 'parent' that appear before item index i (dragged ones
+    // don't count: the engine removes them from the list before inserting).
+    const auto childIndexAt = [&] (AudioEngine::FolderId parent, size_t i)
+    {
+        int index = 0;
+
+        for (size_t j = 0; j < i; ++j)
+            if (items[j].parent == parent && ! isDragged (items[j]))
+                ++index;
+
+        return index;
+    };
+
+    int rowY = 0;
+    size_t i = 0;
+
+    for (; i < items.size(); ++i)
+    {
+        const auto height = heightOfItem (items[i]);
+
+        if (y < rowY + height)
+            break;
+
+        rowY += height;
+    }
+
+    if (i >= items.size())
+    {
+        // Below every row: append at the top level
+        drag.valid = true;
+        drag.parent = 0;
+        drag.index = childIndexAt (0, items.size());
+        drag.indicatorY = rowY;
+        return;
+    }
+
+    const auto& item = items[i];
+    const auto height = heightOfItem (item);
+
+    // A folder row's middle drops INTO the folder (its edges insert around it)
+    if (item.folder != 0 && y >= rowY + height / 4 && y <= rowY + 3 * height / 4)
+    {
+        if (drag.sourceIsFolder && item.folder == drag.sourceId)
+            return;   // not into itself (subtrees are rejected by the engine on drop)
+
+        drag.valid = true;
+        drag.intoFolder = true;
+        drag.parent = item.folder;
+        drag.index = std::numeric_limits<int>::max();   // append
+        drag.folderHighlight = rowComponents[i]->getBounds();
+        return;
+    }
+
+    const auto before = y < rowY + height / 2;
+    drag.valid = true;
+    drag.parent = item.parent;
+    drag.index = childIndexAt (item.parent, i) + (before ? 0 : 1);
+    drag.indicatorY = before ? rowY : rowY + height;
+}
+
+bool TrackList::finishRowDrag (int)
+{
+    const auto wasDragging = drag.active;
+
+    if (drag.active && drag.valid)
+    {
+        std::vector<AudioEngine::FolderId> folderIds;
+        std::vector<int> memberIds;
+
+        if (drag.sourceIsFolder)
+            folderIds.push_back (drag.sourceId);
+        else
+            memberIds.assign (drag.draggedTracks.begin(), drag.draggedTracks.end());
+
+        engine.moveSidebarItems (true, folderIds, memberIds, drag.parent, drag.index);
+    }
+    else if (! wasDragging && clearSelectionOnMouseUp)
+    {
+        multiSelection.clear();
+    }
+
+    clearSelectionOnMouseUp = false;
+    drag = {};
+    rowContainer.repaint();
+    refreshSoon();   // rebuilding rows would delete the row we're called from
+    return wasDragging;
+}
+
+void TrackList::refreshSoon()
+{
+    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<TrackList> (this)]
+                                     { if (safe != nullptr) safe->refresh(); });
+}
+
+std::vector<AudioEngine::TrackId> TrackList::selectionInVisualOrder() const
+{
+    std::vector<AudioEngine::TrackId> ordered;
+
+    for (auto& item : items)
+        if (item.member != 0 && multiSelection.count (item.member))
+            ordered.push_back (item.member);
+
+    return ordered;
+}
+
+void TrackList::RowContainer::paintOverChildren (juce::Graphics& g)
+{
+    auto& dragState = owner.drag;
+
+    if (! dragState.active || ! dragState.valid)
+        return;
+
+    g.setColour (juce::Colours::gold.withAlpha (0.9f));
+
+    if (dragState.intoFolder)
+        g.drawRoundedRectangle (dragState.folderHighlight.toFloat().reduced (2.0f, 1.5f), 4.0f, 2.0f);
+    else if (dragState.indicatorY >= 0)
+        g.fillRect (0, juce::jlimit (0, juce::jmax (0, getHeight() - 2), dragState.indicatorY - 1), getWidth(), 2);
+}
+
+//==============================================================================
 void TrackList::showFolderMenu (AudioEngine::FolderId folderId)
 {
     const auto safe = juce::Component::SafePointer<TrackList> (this);

@@ -132,22 +132,33 @@ public:
     FolderId getAudioChannelFolder (AudioChannelId) const;
 
     // The sidebar/arrangement display order: a depth-first walk of one domain's
-    // tree. Each item is either a folder or a member (track/channel id in 'member').
-    // With skipCollapsed, a collapsed folder still appears but its contents don't.
+    // tree. Each item is either a folder or a member (track/channel id in 'member');
+    // siblings - folders and members in one sequence - follow their explicit
+    // position (set by moveSidebarItems, i.e. dragging). With skipCollapsed, a
+    // collapsed folder still appears but its contents don't.
     struct SidebarItem
     {
         FolderId folder = 0;
         int member = 0;
         int depth = 0;
+        FolderId parent = 0;
 
         bool operator== (const SidebarItem& other) const noexcept
         {
-            return folder == other.folder && member == other.member && depth == other.depth;
+            return folder == other.folder && member == other.member
+                    && depth == other.depth && parent == other.parent;
         }
     };
 
     std::vector<SidebarItem> getSidebarItems (bool midiDomain, bool skipCollapsed) const;
     std::vector<TrackId> getArrangeTrackOrder() const;   // visible tracks, tree order
+
+    // Move folders and/or members (tracks for midi, channels for audio) into
+    // 'parent' at child index 'index', keeping the given order as one group.
+    // One call = one event = one history entry. False: unknown ids, a domain
+    // mismatch, or a folder moved into itself/its own subtree.
+    bool moveSidebarItems (bool midiDomain, const std::vector<FolderId>& folderIds,
+                           const std::vector<int>& memberIds, FolderId parent, int index);
 
     //==============================================================================
     Transport& getTransport()                 { return transport; }
@@ -216,6 +227,7 @@ public:
             std::vector<TrackOutput> outputs;
             MidiSequence::Ptr sequence;
             FolderId folder = 0;
+            int position = 0;
         };
 
         struct ChannelState
@@ -224,6 +236,7 @@ public:
             float gain = 1.0f;
             bool muted = false;
             FolderId folder = 0;
+            int position = 0;
         };
 
         struct FolderState
@@ -233,6 +246,7 @@ public:
             bool midiDomain = true;
             FolderId parent = 0;
             bool collapsed = false;
+            int position = 0;
         };
 
         std::vector<TrackState> tracks;
@@ -261,6 +275,7 @@ private:
         InstrumentId input = 0;                     // 0 = none (device inputs later)
         juce::String name;
         FolderId folder = 0;                        // 0 = root
+        int position = 0;                           // order among siblings
     };
 
     struct Folder
@@ -269,6 +284,7 @@ private:
         bool midiDomain = true;                     // which sidebar tree it belongs to
         FolderId parent = 0;                        // 0 = root; always the same domain
         bool collapsed = false;
+        int position = 0;                           // order among siblings
     };
 
     struct Output
@@ -288,6 +304,7 @@ private:
         bool muted = false, soloed = false;
         bool recordReplace = false;                 // false = add, true = replace on first input
         FolderId folder = 0;                        // 0 = root
+        int position = 0;                           // order among siblings
     };
 
     // Runs the transport once per device callback, before the graph renders the block.
@@ -314,6 +331,18 @@ private:
 
         AudioEngine& engine;
     };
+
+    // Sibling ordering (folders and members share one position sequence per parent)
+    struct ChildRef
+    {
+        bool isFolder = false;
+        int id = 0;
+        int position = 0;
+    };
+
+    std::vector<ChildRef> getChildrenOf (bool midiDomain, FolderId parent) const;   // sorted
+    int nextChildPosition (bool midiDomain, FolderId parent) const;
+    void setChildPosition (bool midiDomain, const ChildRef&, int position);
 
     Track* findTrack (TrackId);
     const Track* findTrack (TrackId) const;
