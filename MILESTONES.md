@@ -3,6 +3,18 @@
 Things we want to implement but aren't about to do yet. When one starts, it moves
 out of here (into work, with any open questions going through ISSUES.md).
 
+## Vienna Ensemble Pro integration (groundwork proven 2026-10-03)
+
+Connect VE Pro VSTs to server instances fully programmatically. Proven end to
+end: the plugin's VST3 state is JSON (hostAddress/hostName/instanceName/
+decoupled + a zstd serverData payload), and a synthesized minimal state set
+via instrument.setState makes the plugin connect - tools/vep-connect.py does
+it today (server-side instance management via the user's vepro-api MCP).
+App-side later: an instance browser (VSL server HTTP API), "connect to
+instance..." on the instrument, auto-reconnect health checks via the
+latencySamples fingerprint. Interop by observed format only - no VSL code
+(licensing note applies).
+
 ## Tempo / meter editing in the timeline bar
 
 The timeline bar (done 2026-10-03) displays the tempo and time-signature
