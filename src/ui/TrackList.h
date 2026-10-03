@@ -2,7 +2,7 @@
 
 #include "../AudioEngine.h"
 
-// The MIDI-domain sidebar: compact track rows with R/E/S/M/I buttons (see GUI_DESIGN.md).
+// The MIDI-domain sidebar: compact track rows with R/E/S/M/I buttons.
 // Rows are rebuilt when the engine's track set changes; call refresh() from a UI timer.
 class TrackList final : public juce::Component
 {

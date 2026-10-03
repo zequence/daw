@@ -3,7 +3,7 @@
 #include "../AudioEngine.h"
 
 // Content view: one instrument's 16 MIDI channels - editable names plus which tracks
-// are assigned to each (see GUI_DESIGN.md). Back button or ESC returns to the rack.
+// are assigned to each. Back button or ESC returns to the rack.
 class InstrumentEditorView final : public juce::Component
 {
 public:

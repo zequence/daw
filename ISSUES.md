@@ -2,32 +2,20 @@
 
 Lightweight tracker. Claude checks this file at every prompt: small unambiguous
 items get fixed and marked `- [x]` with a note; ambiguous ones get a question;
-big ones become milestones. Add new items as `- [ ]` under a heading.
-Unsolved items go at the top of each chapter; solved ones sink below.
-If Claude is unsure of an issue they will pose a question.
+big ones become milestones (tracked in MILESTONES.md). Add new items as `- [ ]`
+under a heading. Unsolved items go at the top of each chapter; solved ones sink
+below. If Claude is unsure of an issue they will pose a question.
 
 # Global
 
-- [ ] history UI. Button for it at the top bar. Show all actions there. Ability to time-travel backwards to an earlier edit.
-      (MILESTONE, scoped 2026-10-03: global history showing all actions, with a
-      filter to switch between scopes - all / clip edits per track / categories.
-      Requires global undo built on the command layer.)
+- [ ] history UI. Button for it at the top bar. Show all actions there. Ability
+      to time-travel backwards to an earlier edit.
+      (MILESTONE, scoped 2026-10-03, next up: global history showing all
+      actions, with a filter to switch between scopes - all / clip edits per
+      track / categories. Requires global undo built on the command layer.)
 - [x] Closing the app should ask if wanting to save first
       (asks only when there are unsaved changes: Save / Discard / Cancel; the
       untouched startup state doesn't count as unsaved)
-
-# Timeline bar
-
-- [ ] Create timeline bar that sits under the menu, on top of the different
-      non-full-window gui modes. Has:
-      - time (hours:min:sec:ms) (hours only when non-zero)
-      - Tempo track
-      - time signature
-      - markers
-      - bars (already implemented)
-      (MILESTONE, scoped 2026-10-03: one shared time axis - the bar owns
-      scroll/zoom, arrangement and piano roll align to it and lose their own
-      rulers; markers/tempo/signature displayed and later edited here.)
 
 # Midi record
 
@@ -40,6 +28,14 @@ If Claude is unsure of an issue they will pose a question.
 
 ## Midi editing
 
+- [ ] CC and note velocity, aftertouch at the bottom. Velocity is default. More
+      lanes can be added on top of each other. Requires controls below the piano
+      keys. (Milestone-sized - also captured as "Stacked editor lanes" in
+      MILESTONES.md; say the word if it should come sooner.)
+- [x] Drawing notes when snap is larger than note-length should not resize the
+      note before the mouse moves to the next snap point
+      (draw keeps the dropdown length until the mouse crosses the next grid
+      point, then grows in whole grid steps)
 - [x] Drawing notes and "re-sizing" should not create two separate events in
       history; the event ends when lifting the mouse button
       (Draw mode now previews the note locally and commits once on mouse up)

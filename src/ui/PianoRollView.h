@@ -4,7 +4,7 @@
 
 class CommandDispatcher;
 
-// The MIDI editor (GUI_DESIGN.md): piano keys on the left, notes as draggable
+// The MIDI editor: piano keys on the left, notes as draggable
 // rectangles on a bar/beat grid, an editable lane below (velocity, any CC, or pitch
 // bend), playhead on top.
 //

@@ -3,7 +3,7 @@
 #include "../AudioEngine.h"
 
 // Content view: the instrument rack. Instruments used by the focused track sort to the
-// top of the list (see GUI_DESIGN.md). Call refresh() from a UI timer.
+// top of the list. Call refresh() from a UI timer.
 class InstrumentsView final : public juce::Component
 {
 public:

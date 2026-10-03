@@ -83,7 +83,7 @@ private:
             setResizeLimits (900, 500, 10000, 10000);
             centreWithSize (getWidth(), getHeight());
             setVisible (true);
-            setFullScreen (true);   // maximized by default (see GUI_DESIGN.md)
+            setFullScreen (true);   // maximized by default (user requirement)
         }
 
         void closeButtonPressed() override

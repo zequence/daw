@@ -645,11 +645,16 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
     }
     else if (drag == Drag::draw)
     {
+        // Keep the dropdown length until the mouse actually crosses the next snap
+        // point; from there, size in whole grid steps (or freely with snap off).
         const auto raw = xToTick (position.x) - pendingNote.startTick;
         const auto grid = snapTicksOrZero();
-        const auto minimum = grid > 0 ? grid : laneDrawQuantum;
-        pendingNote.lengthTicks = juce::jmax (minimum,
-                                              grid > 0 ? ((raw + grid / 2) / grid) * grid : raw);
+
+        if (grid > 0)
+            pendingNote.lengthTicks = raw < grid ? newNoteTicks() : (raw / grid) * grid;
+        else
+            pendingNote.lengthTicks = raw < laneDrawQuantum ? newNoteTicks() : raw;
+
         dragChangedSomething = true;
         repaint();
     }

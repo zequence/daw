@@ -12,7 +12,7 @@ class MidiRouteProcessor;
 
 // Owns the audio device, the plugin catalogue and the processing graph.
 //
-// Signal flow (see GUI_DESIGN.md):
+// Signal flow (see DESIGN.md):
 //   MIDI tracks --MIDI--> instruments (rack) --audio--> audio channels --> master out
 //
 // A track owns clips and sends MIDI through any number of outputs, each targeting one

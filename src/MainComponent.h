@@ -13,7 +13,7 @@
 #include "ui/PianoRollView.h"
 #include "ui/ArrangementView.h"
 
-// The single-window shell (see GUI_DESIGN.md):
+// The single-window shell:
 //   topbar (menu, domain buttons, transport) / sidebar + content container / status + keyboard.
 // Settings overlays the whole UI; everything else swaps inside the content container.
 class CommandDispatcher;

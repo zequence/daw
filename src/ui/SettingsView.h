@@ -3,7 +3,7 @@
 #include "../AudioEngine.h"
 
 // Full-window settings page (replaces the whole UI; close with X or ESC).
-// Sections per GUI_DESIGN.md: Audio & MIDI (device selector), Plugins, Tracks, Key commands.
+// Sections: Audio & MIDI (device selector), Plugins, Tracks, Key commands.
 class SettingsView final : public juce::Component
 {
 public:
