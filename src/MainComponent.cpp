@@ -126,6 +126,13 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher)
     trackList.onShowContextMenu = [this] (auto id) { showTrackContextMenu (id); };
 
     // --- Content views ---
+    arrangementView.onSelectTrack = [this] (auto id) { selectTrack (id, false); };
+    arrangementView.onOpenEditor = [this] (auto id)
+    {
+        selectTrack (id, false);
+        showContent (ContentView::midiEditor);
+    };
+
     instrumentsView.onOpenPluginGui = [this] (auto id) { openPluginWindow (id); };
     instrumentsView.onEditInstrument = [this] (auto id)
     {
@@ -157,7 +164,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher)
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &positionLabel, &perfButton,
              &collapseButton, &trackList, &channelList, &sidebarResizer,
-             &midiRegionsView, &audioRegionsView, &pianoRollView,
+             &arrangementView, &audioRegionsView, &pianoRollView,
              &instrumentsView, &instrumentEditorView, &settingsView,
              &statusLabel, &keyboard })
         addAndMakeVisible (c);
@@ -581,7 +588,7 @@ void MainComponent::closeSettings()
 
 void MainComponent::updateViewVisibility()
 {
-    midiRegionsView.setVisible (contentView == ContentView::midiRegions);
+    arrangementView.setVisible (contentView == ContentView::midiRegions);
     pianoRollView.setVisible (contentView == ContentView::midiEditor);
     audioRegionsView.setVisible (contentView == ContentView::audioRegions);
     instrumentsView.setVisible (contentView == ContentView::instruments);
@@ -603,14 +610,6 @@ void MainComponent::updateViewVisibility()
 
 void MainComponent::updatePlaceholders()
 {
-    const auto trackCount = (int) engine.getTrackIds().size();
-
-    midiRegionsView.setDetails ({ juce::String (trackCount) + (trackCount == 1 ? " track" : " tracks"),
-                                  "",
-                                  "This area will show clips on a timeline.",
-                                  "Right-click a track for its clip and output options.",
-                                  "Press E on a track to open the MIDI editor." });
-
     const auto channelCount = (int) engine.getAudioChannelIds().size();
     audioRegionsView.setDetails ({ juce::String (channelCount) + (channelCount == 1 ? " audio channel" : " audio channels")
                                      + " - strips are in the sidebar.",
@@ -727,7 +726,7 @@ void MainComponent::timerCallback()
     if (instrumentEditorView.isShowing())
         instrumentEditorView.refresh();
 
-    if (midiRegionsView.isShowing() || audioRegionsView.isShowing())
+    if (audioRegionsView.isShowing())
         updatePlaceholders();
 
     // Status line
@@ -868,7 +867,7 @@ void MainComponent::resized()
     sidebarResizer.setVisible (! sidebarCollapsed);
 
     // Content container
-    for (auto* view : std::initializer_list<juce::Component*> { &midiRegionsView, &pianoRollView, &audioRegionsView,
+    for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView, &audioRegionsView,
                                                                 &instrumentsView, &instrumentEditorView })
         view->setBounds (area);
 

@@ -108,6 +108,17 @@ public:
     double getTempoBpm() const;
     void setTempoBpm (double bpm);
 
+    // Markers: named positions dividing the project into parts (DESIGN.md).
+    struct Marker
+    {
+        juce::int64 tick = 0;
+        juce::String name;
+    };
+
+    const std::vector<Marker>& getMarkers() const    { return markers; }
+    void addMarker (juce::int64 tick, const juce::String& name);   // same tick = rename
+    void removeMarker (juce::int64 tick);
+
     // End of the bar containing the last event of any track's sequence (used as the loop end).
     juce::int64 getLoopEndTicks() const;
 
@@ -216,6 +227,7 @@ private:
 
     std::map<TrackId, Track> tracks;
     std::map<InstrumentId, Instrument> instruments;
+    std::vector<Marker> markers;
     std::map<AudioChannelId, AudioChannel> audioChannels;
     TrackId nextTrackId = 1;
     InstrumentId nextInstrumentId = 1;

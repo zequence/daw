@@ -46,6 +46,8 @@ public:
 
     void setLooping (bool shouldLoop)       { looping.store (shouldLoop); }
     bool isLooping() const                  { return looping.load(); }
+    juce::int64 getLoopStart() const        { return loopStartTick.load(); }
+    juce::int64 getLoopEnd() const          { return loopEndTick.load(); }
 
     bool isPlaying() const                  { return playingShared.load(); }
 

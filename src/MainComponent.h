@@ -11,6 +11,7 @@
 #include "ui/SettingsView.h"
 #include "ui/PlaceholderView.h"
 #include "ui/PianoRollView.h"
+#include "ui/ArrangementView.h"
 
 // The single-window shell (see GUI_DESIGN.md):
 //   topbar (menu, domain buttons, transport) / sidebar + content container / status + keyboard.
@@ -106,7 +107,8 @@ private:
     } sidebarResizer { *this };
 
     // Content views
-    PlaceholderView midiRegionsView { "Arrangement" }, audioRegionsView { "Audio regions" };
+    PlaceholderView audioRegionsView { "Audio regions" };
+    ArrangementView arrangementView { engine, commandDispatcher };
     PianoRollView pianoRollView { engine, commandDispatcher };
     InstrumentsView instrumentsView { engine };
     InstrumentEditorView instrumentEditorView { engine };

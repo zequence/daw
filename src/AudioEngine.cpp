@@ -586,6 +586,20 @@ void AudioEngine::setTempoBpm (double bpm)
 }
 
 //==============================================================================
+void AudioEngine::addMarker (juce::int64 tick, const juce::String& name)
+{
+    tick = juce::jmax ((juce::int64) 0, tick);
+    removeMarker (tick);
+    markers.push_back ({ tick, name.isNotEmpty() ? name : "Marker" });
+    std::sort (markers.begin(), markers.end(), [] (const Marker& a, const Marker& b) { return a.tick < b.tick; });
+}
+
+void AudioEngine::removeMarker (juce::int64 tick)
+{
+    std::erase_if (markers, [tick] (const Marker& m) { return m.tick == tick; });
+}
+
+//==============================================================================
 bool AudioEngine::startRecording()
 {
     if (findTrack (armedTrack) == nullptr || isRecording())
@@ -679,6 +693,13 @@ bool AudioEngine::saveProject (const juce::File& file)
     root.setAttribute ("version", 1);
     root.addChildElement (masterTempoMap->toXml().release());
 
+    for (auto& marker : markers)
+    {
+        auto* m = root.createNewChildElement ("MARKER");
+        m->setAttribute ("tick", juce::String (marker.tick));
+        m->setAttribute ("name", marker.name);
+    }
+
     for (auto& [id, instrument] : instruments)
     {
         auto* e = root.createNewChildElement ("INSTRUMENT");
@@ -767,6 +788,7 @@ void AudioEngine::clearProject()
     audioChannels.clear();
 
     armedTrack = 0;
+    markers.clear();
     masterTempoMap = TempoMap::create (120.0);
     transport.setTempoMap (masterTempoMap);
 
@@ -792,6 +814,9 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
         masterTempoMap = TempoMap::fromXml (*tempoXml);
         transport.setTempoMap (masterTempoMap);
     }
+
+    for (auto* m : xml->getChildWithTagNameIterator ("MARKER"))
+        addMarker (m->getStringAttribute ("tick").getLargeIntValue(), m->getStringAttribute ("name"));
 
     struct LoadState
     {

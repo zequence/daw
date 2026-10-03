@@ -151,6 +151,8 @@ void CommandDispatcher::registerCommands()
              result->setProperty ("playing", transport.isPlaying());
              result->setProperty ("recording", engine.isRecording());
              result->setProperty ("looping", transport.isLooping());
+             result->setProperty ("loopStartTick", transport.getLoopStart());
+             result->setProperty ("loopEndTick", transport.getLoopEnd());
              result->setProperty ("positionTicks", ticks);
              result->setProperty ("bar", position.bar);
              result->setProperty ("beat", position.beat);
@@ -767,6 +769,44 @@ void CommandDispatcher::registerCommands()
              if (! engine.redoTrackSequence (id))
                  return respond (fail ("nothing to redo on track " + juce::String (id)));
 
+             respond (ok());
+         });
+
+    //==========================================================================
+    add ("marker.list", "Project markers (named positions dividing the song into parts)", "",
+         [this] (const juce::var&, Respond respond)
+         {
+             const auto map = engine.getTransport().getTempoMap();
+             juce::Array<juce::var> list;
+
+             for (auto& marker : engine.getMarkers())
+             {
+                 auto o = object();
+                 o->setProperty ("tick", marker.tick);
+                 o->setProperty ("bar", map->ticksToBarsBeats (marker.tick).bar);
+                 o->setProperty ("name", marker.name);
+                 list.add (juce::var (o.get()));
+             }
+
+             respond (ok (list));
+         });
+
+    add ("marker.add", "Add (or rename) a marker", "name:string, tick:int64 | bar:int",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const auto map = engine.getTransport().getTempoMap();
+             const auto tick = params.hasProperty ("bar")
+                                   ? map->barsBeatsToTicks ({ (int) params["bar"], 1, 0 })
+                                   : tickParam (params, "tick");
+
+             engine.addMarker (tick, params.getProperty ("name", {}).toString());
+             respond (ok());
+         });
+
+    add ("marker.remove", "Remove the marker at a tick", "tick:int64",
+         [this] (const juce::var& params, Respond respond)
+         {
+             engine.removeMarker (tickParam (params, "tick"));
              respond (ok());
          });
 
