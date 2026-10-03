@@ -82,7 +82,10 @@ untouched until the first played event; from that moment sounding notes are
 truncated and existing events are erased until recording stops.
 
 **Audio is different**: audio takes cannot merge into a stream, so the Audio domain
-will have real regions, with the mute/volume/fade handling that implies. The
+will have real regions, with the mute/volume/fade handling that implies. Audio
+channels get their default name from their input - but only when that input is an
+instrument; device inputs and unrouted channels are named by the user. As with MIDI
+tracks, a manual rename is never overwritten. The
 Midi/Audio domain split in GUI_DESIGN.md keeps the two paradigms from leaking into
 each other.
 

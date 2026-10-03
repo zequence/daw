@@ -38,10 +38,12 @@ private:
 
     //==============================================================================
     void addTrack();
+    void createDefaultTrack();
     void removeTrack (AudioEngine::TrackId);
     void selectTrack (AudioEngine::TrackId, bool forceArm);
     void showTrackContextMenu (AudioEngine::TrackId);
     void chooseTrackOutput (AudioEngine::TrackId);
+    void autoNameTrackForOutput (AudioEngine::TrackId, AudioEngine::InstrumentId);
     void chooseNewInstrumentFor (AudioEngine::TrackId);
     void openPluginWindow (AudioEngine::InstrumentId);
 

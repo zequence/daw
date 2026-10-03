@@ -203,6 +203,66 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     updateViewVisibility();
     setSize (1100, 700);
     startTimerHz (30);
+
+    // A fresh, empty start gets one playable track with the default instrument.
+    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this)]
+                                     { if (safe != nullptr) safe->createDefaultTrack(); });
+}
+
+void MainComponent::createDefaultTrack()
+{
+    if (! engine.getTrackIds().empty() || ! engine.getInstruments().empty())
+        return;
+
+    const auto wanted = engine.getSettingsFile().getValue ("defaultInstrument", "FabFilter Twin");
+
+    if (wanted.isEmpty())   // empty setting disables the default track's instrument
+        return;
+    const auto track = engine.addTrack();
+    selectTrack (track, false);
+
+    juce::PluginDescription description;
+    bool found = false;
+
+    for (auto& type : engine.getInstrumentTypes())
+    {
+        // Plugins often report their name without the maker ("Twin 3" by "FabFilter"),
+        // so match against the combined label as well.
+        if (type.name.containsIgnoreCase (wanted)
+             || (type.manufacturerName + " " + type.name).containsIgnoreCase (wanted))
+        {
+            description = type;
+            found = true;
+            break;
+        }
+    }
+
+    if (! found)
+    {
+        juce::Logger::writeToLog ("Default instrument '" + wanted + "' not in the plugin cache; track left unrouted");
+        return;
+    }
+
+    statusLabel.setText ("Loading " + description.name + "...", juce::dontSendNotification);
+
+    engine.addInstrument (description,
+        [safe = juce::Component::SafePointer<MainComponent> (this), track, name = description.name]
+        (auto instrumentId, const juce::String& error)
+        {
+            if (safe == nullptr)
+                return;
+
+            safe->statusLabel.setText ("", juce::dontSendNotification);
+
+            if (instrumentId == 0)
+            {
+                juce::Logger::writeToLog ("Default instrument failed to load: " + error);
+                return;
+            }
+
+            safe->engine.addTrackOutput (track, instrumentId, 1);
+            safe->autoNameTrackForOutput (track, instrumentId);
+        });
 }
 
 MainComponent::~MainComponent()
@@ -291,6 +351,27 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     menu.showMenuAsync (juce::PopupMenu::Options());
 }
 
+// Tracks that still carry an automatic name ("Track 3", or a previous output's name)
+// follow their output; manually renamed tracks are left alone.
+void MainComponent::autoNameTrackForOutput (AudioEngine::TrackId trackId, AudioEngine::InstrumentId instrumentId)
+{
+    const auto current = engine.getTrackName (trackId);
+
+    bool isAutomatic = current.startsWith ("Track ")
+                         && current.fromFirstOccurrenceOf ("Track ", false, false).containsOnly ("0123456789");
+
+    if (! isAutomatic)
+        for (auto& [id, name] : engine.getInstruments())
+            if (current == name)
+            {
+                isAutomatic = true;
+                break;
+            }
+
+    if (isAutomatic)
+        engine.setTrackName (trackId, engine.getInstrumentName (instrumentId));
+}
+
 void MainComponent::chooseTrackOutput (AudioEngine::TrackId trackId)
 {
     const auto outputs = engine.getTrackOutputs (trackId);
@@ -317,6 +398,7 @@ void MainComponent::chooseTrackOutput (AudioEngine::TrackId trackId)
                                   {
                                       safe->engine.clearTrackOutputs (trackId);
                                       safe->engine.addTrackOutput (trackId, id, ch);
+                                      safe->autoNameTrackForOutput (trackId, id);
                                   }
                               });
         }
@@ -377,6 +459,7 @@ void MainComponent::chooseNewInstrumentFor (AudioEngine::TrackId trackId)
 
                                     safe->engine.clearTrackOutputs (trackId);
                                     safe->engine.addTrackOutput (trackId, instrumentId, 1);
+                                    safe->autoNameTrackForOutput (trackId, instrumentId);
                                     safe->openPluginWindow (instrumentId);
                                 });
                         });
