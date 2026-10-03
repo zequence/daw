@@ -43,6 +43,7 @@ Quick test from a terminal while the app is running:
 | audio | `channel.list`, `channel.setGain`, `channel.setMuted` |
 | recording | `record.start`, `record.stop` |
 | projects | `project.save`, `project.load`, `project.new` |
+| history | `history.list` (filter by category/trackId), `history.travel` (time-travel to an entry) |
 
 ## Events (subscribe)
 

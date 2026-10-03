@@ -12,6 +12,7 @@
 #include "ui/PlaceholderView.h"
 #include "ui/PianoRollView.h"
 #include "ui/ArrangementView.h"
+#include "ui/HistoryView.h"
 
 // The single-window shell:
 //   topbar (menu, domain buttons, transport) / sidebar + content container / status + keyboard.
@@ -36,7 +37,7 @@ public:
     void confirmQuit();
 
 private:
-    enum class ContentView { midiRegions, midiEditor, audioRegions, instruments, instrumentEditor };
+    enum class ContentView { midiRegions, midiEditor, audioRegions, instruments, instrumentEditor, history };
     enum class Domain { midi, audio };
 
     //==============================================================================
@@ -79,7 +80,7 @@ private:
 
     // Topbar
     juce::TextButton menuButton { "Menu" }, midiDomainButton { "Midi" }, audioDomainButton { "Audio" },
-                     instrumentsButton { "Instruments" };
+                     instrumentsButton { "Instruments" }, historyButton { "History" };
     juce::TextButton rtzButton { "|<" }, playButton { "Play" }, recordButton { "Rec" }, loopButton { "Loop" },
                      perfButton { "Perf" };
     juce::Label bpmLabel, positionLabel;
@@ -119,6 +120,7 @@ private:
     PianoRollView pianoRollView { engine, commandDispatcher };
     InstrumentsView instrumentsView { engine };
     InstrumentEditorView instrumentEditorView { engine };
+    HistoryView historyView { commandDispatcher };
     SettingsView settingsView { engine };
 
     ContentView contentView = ContentView::midiRegions;

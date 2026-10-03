@@ -6,13 +6,23 @@ big ones become milestones (tracked in MILESTONES.md). Add new items as `- [ ]`
 under a heading. Unsolved items go at the top of each chapter; solved ones sink
 below. If Claude is unsure of an issue they will pose a question.
 
+# Test builds
+
+- [x] Only test the things that were edited. Do not play audio if no audio
+      related code was changed
+      (test runner has --quiet which skips the audible tests; Claude runs the
+      full audible suite only when audio-path code changed)
+
 # Global
 
-- [ ] history UI. Button for it at the top bar. Show all actions there. Ability
+- [x] history UI. Button for it at the top bar. Show all actions there. Ability
       to time-travel backwards to an earlier edit.
-      (MILESTONE, scoped 2026-10-03, next up: global history showing all
-      actions, with a filter to switch between scopes - all / clip edits per
-      track / categories. Requires global undo built on the command layer.)
+      (History button in the topbar opens the view: every action as an entry
+      with time/description/category, filter by category or selected track,
+      click an entry to time-travel back and forward; also history.list and
+      history.travel commands for agents. One gesture = one entry. Limits: the
+      plugin rack itself is not rewound, and project load/new reset the
+      timeline.)
 - [x] Closing the app should ask if wanting to save first
       (asks only when there are unsaved changes: Save / Discard / Cancel; the
       untouched startup state doesn't count as unsaved)

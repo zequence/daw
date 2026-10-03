@@ -1,5 +1,6 @@
 #include "CommandDispatcher.h"
 #include "../engine/AudioChannelProcessor.h"
+#include "../engine/HistoryManager.h"
 
 namespace
 {
@@ -258,10 +259,7 @@ void CommandDispatcher::registerCommands()
     add ("track.create", "Create a MIDI track", "[name:string]",
          [this] (const juce::var& params, Respond respond)
          {
-             const auto id = engine.addTrack();
-
-             if (params.hasProperty ("name"))
-                 engine.setTrackName (id, params["name"].toString());
+             const auto id = engine.addTrack (params.getProperty ("name", {}).toString());
 
              auto result = object();
              result->setProperty ("id", id);
@@ -1105,6 +1103,53 @@ void CommandDispatcher::registerCommands()
 
                  respond (ok (juce::var (result.get())));
              });
+         });
+
+    add ("history.list", "The global action history (every change, newest last)",
+         "[category:string(track|clip|instrument|marker|tempo|recording|project)] [trackId:int]",
+         [this] (const juce::var& params, Respond respond)
+         {
+             if (history == nullptr)
+                 return respond (fail ("history is not available"));
+
+             const auto category = params.getProperty ("category", {}).toString();
+             const auto trackFilter = (int) params.getProperty ("trackId", 0);
+             const auto currentId = history->getCurrentEntryId();
+             juce::Array<juce::var> list;
+
+             for (auto& entry : history->getEntries())
+             {
+                 if (category.isNotEmpty() && entry.category != category)
+                     continue;
+
+                 if (trackFilter != 0 && entry.trackId != trackFilter)
+                     continue;
+
+                 auto o = object();
+                 o->setProperty ("id", entry.id);
+                 o->setProperty ("time", entry.time.formatted ("%H:%M:%S"));
+                 o->setProperty ("description", entry.description);
+                 o->setProperty ("category", entry.category);
+                 o->setProperty ("trackId", entry.trackId);
+                 o->setProperty ("current", entry.id == currentId);
+                 list.add (juce::var (o.get()));
+             }
+
+             respond (ok (list));
+         });
+
+    add ("history.travel", "Time-travel the project to right after the given history entry", "id:int",
+         [this] (const juce::var& params, Respond respond)
+         {
+             if (history == nullptr)
+                 return respond (fail ("history is not available"));
+
+             const auto id = (int) params.getProperty ("id", -1);
+
+             if (! history->travelTo (id))
+                 return respond (fail ("no history entry with id " + juce::String (id) + " (see history.list)"));
+
+             respond (ok());
          });
 
     add ("project.new", "Close the current project and start empty", "",

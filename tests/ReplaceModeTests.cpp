@@ -1,4 +1,5 @@
 #include "../src/AudioEngine.h"
+#include "TestFlags.h"
 
 // Replace-on-first-input recording, end to end with a real device: existing material
 // before the first played note survives, material under the take is erased, material
@@ -24,6 +25,12 @@ public:
         enginePtr = &engine;
 
         beginTest ("replace erases from first input to stop, no further");
+
+        if (skipAudibleTests)
+        {
+            logMessage ("!!! --quiet: skipping audible test");
+            return;
+        }
 
         if (engine.getDeviceManager().getCurrentAudioDevice() == nullptr)
         {

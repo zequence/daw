@@ -1,6 +1,7 @@
 #include "../src/AudioEngine.h"
 #include "../src/engine/AudioChannelProcessor.h"
 #include "../src/model/DemoSequence.h"
+#include "TestFlags.h"
 
 // Full-stack check: real audio device, real VST3 instrument, demo sequence, measured at
 // the track meter. Needs a working output device and TAL-NoiseMaker in the plugin cache;
@@ -13,6 +14,12 @@ public:
     void runTest() override
     {
         beginTest ("demo sequence produces audio through a real instrument");
+
+        if (skipAudibleTests)
+        {
+            logMessage ("!!! --quiet: skipping audible test");
+            return;
+        }
 
         juce::PropertiesFile::Options options;
         options.storageFormat = juce::PropertiesFile::storeAsXML;

@@ -118,7 +118,7 @@ void AudioEngine::emitEvent (const juce::String& type, juce::DynamicObject::Ptr 
 {
     projectDirty = true;   // every emitted mutation dirties the project
 
-    if (eventSink == nullptr)
+    if (eventSink == nullptr || historySuppress)
         return;
 
     auto object = data != nullptr ? data : juce::DynamicObject::Ptr (new juce::DynamicObject());
@@ -398,12 +398,12 @@ AudioEngine::AudioChannelId AudioEngine::getAudioChannelForInstrument (Instrumen
 }
 
 //==============================================================================
-AudioEngine::TrackId AudioEngine::addTrack()
+AudioEngine::TrackId AudioEngine::addTrack (const juce::String& name)
 {
     const auto id = nextTrackId++;
 
     Track track;
-    track.name = "Track " + juce::String (id);
+    track.name = name.isNotEmpty() ? name : "Track " + juce::String (id);
     track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport))->nodeID;
     tracks[id] = track;
 
@@ -704,6 +704,85 @@ void AudioEngine::setTempoBpm (double bpm)
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
     data->setProperty ("bpm", getTempoBpm());
     emitEvent ("tempoChanged", data);
+}
+
+//==============================================================================
+AudioEngine::HistorySnapshot AudioEngine::captureHistorySnapshot() const
+{
+    HistorySnapshot snapshot;
+
+    for (auto& [id, track] : tracks)
+        snapshot.tracks.push_back ({ id, track.name, track.muted, track.soloed, track.recordReplace,
+                                     getTrackOutputs (id), track.sequence });
+
+    snapshot.armedTrack = armedTrack;
+    snapshot.tempoMap = masterTempoMap;
+    snapshot.markers = markers;
+
+    for (auto& [id, channel] : audioChannels)
+        if (auto* processor = getAudioChannel (id))
+            snapshot.channels.push_back ({ id, processor->getGain(), processor->isMuted() });
+
+    return snapshot;
+}
+
+void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
+{
+    historySuppress = true;
+
+    // Tracks that don't exist in the snapshot disappear
+    {
+        std::vector<TrackId> existing = getTrackIds();
+
+        for (auto id : existing)
+            if (std::none_of (snapshot.tracks.begin(), snapshot.tracks.end(),
+                              [id] (const auto& t) { return t.id == id; }))
+                removeTrack (id);
+    }
+
+    for (auto& state : snapshot.tracks)
+    {
+        if (findTrack (state.id) == nullptr)   // recreate with the same id
+        {
+            Track track;
+            track.name = state.name;
+            track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport))->nodeID;
+            tracks[state.id] = std::move (track);
+            nextTrackId = juce::jmax (nextTrackId, state.id + 1);
+        }
+
+        auto* track = findTrack (state.id);
+        track->name = state.name;
+        track->recordReplace = state.recordReplace;
+        setTrackMuted (state.id, state.muted);
+        setTrackSoloed (state.id, state.soloed);
+
+        clearTrackOutputs (state.id);
+        for (auto& output : state.outputs)
+            addTrackOutput (state.id, output.instrument, output.midiChannel);   // gone instruments: no-op
+
+        applySequence (*track, state.sequence);
+    }
+
+    setArmedTrack (findTrack (snapshot.armedTrack) != nullptr ? snapshot.armedTrack
+                                                              : (tracks.empty() ? 0 : tracks.begin()->first));
+
+    masterTempoMap = snapshot.tempoMap != nullptr ? snapshot.tempoMap : TempoMap::create (120.0);
+    transport.setTempoMap (masterTempoMap);
+    markers = snapshot.markers;
+
+    for (auto& channel : snapshot.channels)
+    {
+        if (auto* processor = getAudioChannel (channel.id))
+        {
+            processor->setGain (channel.gain);
+            processor->setMuted (channel.muted);
+        }
+    }
+
+    historySuppress = false;
+    juce::Logger::writeToLog ("History: travelled (" + juce::String ((int) snapshot.tracks.size()) + " tracks)");
+    emitEvent ("historyTravelled");
 }
 
 //==============================================================================

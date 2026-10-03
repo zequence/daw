@@ -68,7 +68,7 @@ public:
 
     //==============================================================================
     // MIDI tracks
-    TrackId addTrack();
+    TrackId addTrack (const juce::String& name = {});   // empty = "Track N"
     void removeTrack (TrackId);
     std::vector<TrackId> getTrackIds() const;
     juce::String getTrackName (TrackId) const;
@@ -154,6 +154,39 @@ public:
     // Observable state (DESIGN.md): every mutation emits an event here (message
     // thread). The API server forwards them to subscribed connections.
     std::function<void (const juce::var&)> eventSink;
+
+    //==============================================================================
+    // History snapshots (the history UI's time-travel). Light by design: structure
+    // plus shared immutable pointers - no plugin state. The instrument rack is NOT
+    // rewound (instances stay loaded); routing, clips, tempo, markers and channel
+    // levels are.
+    struct HistorySnapshot
+    {
+        struct TrackState
+        {
+            TrackId id = 0;
+            juce::String name;
+            bool muted = false, soloed = false, recordReplace = false;
+            std::vector<TrackOutput> outputs;
+            MidiSequence::Ptr sequence;
+        };
+
+        struct ChannelState
+        {
+            AudioChannelId id = 0;
+            float gain = 1.0f;
+            bool muted = false;
+        };
+
+        std::vector<TrackState> tracks;
+        TrackId armedTrack = 0;
+        TempoMap::Ptr tempoMap;
+        std::vector<Marker> markers;
+        std::vector<ChannelState> channels;
+    };
+
+    HistorySnapshot captureHistorySnapshot() const;
+    void applyHistorySnapshot (const HistorySnapshot&);   // emits one "historyTravelled" event
 
 private:
     struct Instrument
@@ -253,6 +286,7 @@ private:
     juce::int64 replaceFromTick = -1;
 
     bool projectDirty = false;
+    bool historySuppress = false;   // mute event emission while applying a snapshot
 
     std::map<TrackId, Track> tracks;
     std::map<InstrumentId, Instrument> instruments;

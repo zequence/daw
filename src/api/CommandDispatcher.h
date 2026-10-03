@@ -2,6 +2,8 @@
 
 #include "../AudioEngine.h"
 
+class HistoryManager;
+
 // The application's command surface: JSON in, JSON out (see API.md).
 //
 // Every command runs on the message thread. Protocol:
@@ -31,6 +33,8 @@ public:
     std::function<void()> onBeforeProjectChange;                 // e.g. close plugin editor windows
     std::function<void (const juce::File&)> onAfterProjectChange;   // e.g. refresh labels/title ({} = new project)
 
+    void setHistoryManager (HistoryManager* h)   { history = h; }
+
 private:
     struct Command
     {
@@ -43,6 +47,7 @@ private:
     void registerCommands();
 
     AudioEngine& engine;
+    HistoryManager* history = nullptr;
     std::map<juce::String, Command> commands;
 
     JUCE_DECLARE_WEAK_REFERENCEABLE (CommandDispatcher)

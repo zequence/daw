@@ -49,6 +49,8 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         showContent (ContentView::instruments);
     };
 
+    historyButton.onClick = [this] { showContent (ContentView::history); };
+
     rtzButton.setTooltip ("Return to start (Home)");
     rtzButton.onClick = [this] { engine.getTransport().returnToZero(); };
 
@@ -180,17 +182,17 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     keyboardState.addListener (this);
 
     for (auto* c : std::initializer_list<juce::Component*> {
-             &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton,
+             &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &positionLabel, &perfButton,
              &collapseButton, &trackList, &channelList, &sidebarResizer,
              &arrangementView, &audioRegionsView, &pianoRollView,
-             &instrumentsView, &instrumentEditorView, &settingsView,
+             &instrumentsView, &instrumentEditorView, &historyView, &settingsView,
              &statusLabel, &keyboard })
         addAndMakeVisible (c);
 
     for (auto* b : std::initializer_list<juce::Component*> { &menuButton, &midiDomainButton, &audioDomainButton,
-                                                             &instrumentsButton, &rtzButton, &playButton,
-                                                             &recordButton, &loopButton, &perfButton,
+                                                             &instrumentsButton, &historyButton, &rtzButton,
+                                                             &playButton, &recordButton, &loopButton, &perfButton,
                                                              &collapseButton, &keyboard })
         b->setWantsKeyboardFocus (false);
 
@@ -263,7 +265,14 @@ void MainComponent::createDefaultTrack()
 
             safe->engine.addTrackOutput (track, instrumentId, 1);
             safe->autoNameTrackForOutput (track, instrumentId);
-            safe->engine.markProjectClean();   // the untouched startup state shouldn't nag about saving
+
+            // The untouched startup state shouldn't nag about saving - but only if the
+            // user hasn't done anything while the instrument was loading. The history
+            // knows: more entries than Start + track + instrument means real work.
+            const auto entries = safe->commandDispatcher.run ("history.list")["result"];
+
+            if (entries.getArray() == nullptr || entries.getArray()->size() <= 3)
+                safe->engine.markProjectClean();
         });
 }
 
@@ -320,6 +329,7 @@ void MainComponent::selectTrack (AudioEngine::TrackId id, bool forceArm)
     if (contentView == ContentView::midiEditor)
         pianoRollView.setTrack (id);   // the editor follows the selected track
 
+    historyView.setSelectedTrack (id);
     updatePlaceholders();
 }
 
@@ -729,6 +739,8 @@ void MainComponent::updateViewVisibility()
     audioRegionsView.setVisible (contentView == ContentView::audioRegions);
     instrumentsView.setVisible (contentView == ContentView::instruments);
     instrumentEditorView.setVisible (contentView == ContentView::instrumentEditor);
+    historyView.setVisible (contentView == ContentView::history);
+    historyButton.setToggleState (contentView == ContentView::history, juce::dontSendNotification);
 
     trackList.setVisible (! sidebarCollapsed && domain == Domain::midi);
     channelList.setVisible (! sidebarCollapsed && domain == Domain::audio);
@@ -909,7 +921,8 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
             return true;
         }
 
-        if (contentView == ContentView::midiEditor || contentView == ContentView::instruments)
+        if (contentView == ContentView::midiEditor || contentView == ContentView::instruments
+             || contentView == ContentView::history)
         {
             showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
             return true;
@@ -973,6 +986,8 @@ void MainComponent::resized()
     audioDomainButton.setBounds (toolbar.removeFromLeft (56));
     toolbar.removeFromLeft (4);
     instrumentsButton.setBounds (toolbar.removeFromLeft (94));
+    toolbar.removeFromLeft (4);
+    historyButton.setBounds (toolbar.removeFromLeft (62));
     toolbar.removeFromLeft (14);
     rtzButton.setBounds (toolbar.removeFromLeft (34));
     toolbar.removeFromLeft (4);
@@ -1012,7 +1027,7 @@ void MainComponent::resized()
 
     // Content container
     for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView, &audioRegionsView,
-                                                                &instrumentsView, &instrumentEditorView })
+                                                                &instrumentsView, &instrumentEditorView, &historyView })
         view->setBounds (area);
 
     // Settings replaces the whole UI

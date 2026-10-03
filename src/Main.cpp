@@ -5,6 +5,7 @@
 #include "api/ApiServer.h"
 #include "api/EventBroadcaster.h"
 #include "api/McpProcess.h"
+#include "engine/HistoryManager.h"
 #include "ui/SettingsView.h"
 
 class OrchestralDAWApplication final : public juce::JUCEApplication
@@ -28,6 +29,19 @@ public:
 
         engine = std::make_unique<AudioEngine> (*settings);
         dispatcher = std::make_unique<CommandDispatcher> (*engine);
+        historyManager = std::make_unique<HistoryManager> (*engine);
+        dispatcher->setHistoryManager (historyManager.get());
+
+        // Engine events fan out to the history and (when running) the API server.
+        engine->eventSink = [this] (const juce::var& event)
+        {
+            if (historyManager != nullptr)
+                historyManager->onEngineEvent (event);
+
+            if (apiServer != nullptr)
+                apiServer->broadcastEvent (event);
+        };
+
         mcpProcess = std::make_unique<McpProcess>();
 
         if (settings->getBoolValue (SettingsView::mcpEnabledKey, false))
@@ -55,10 +69,12 @@ public:
 
     void shutdown() override
     {
-        mcpProcess.reset();       // the adapter talks to the API server: kill it first
-        eventBroadcaster.reset(); // detach from the engine before anything it watches dies
-        apiServer.reset();        // stop accepting commands
-        mainWindow.reset();   // UI (and plugin editors) before the engine
+        engine->eventSink = nullptr;   // stop the fan-out before its targets die
+        mcpProcess.reset();            // the adapter talks to the API server: kill it first
+        eventBroadcaster.reset();
+        apiServer.reset();             // stop accepting commands
+        mainWindow.reset();            // UI (and plugin editors) before the engine
+        historyManager.reset();
         dispatcher.reset();
         engine.reset();
         settings.reset();
@@ -102,6 +118,7 @@ private:
     std::unique_ptr<juce::PropertiesFile> settings;
     std::unique_ptr<AudioEngine> engine;
     std::unique_ptr<CommandDispatcher> dispatcher;
+    std::unique_ptr<HistoryManager> historyManager;
     std::unique_ptr<ApiServer> apiServer;
     std::unique_ptr<EventBroadcaster> eventBroadcaster;
     std::unique_ptr<McpProcess> mcpProcess;

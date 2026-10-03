@@ -20,6 +20,9 @@ public:
         ApiServer server (dispatcher);
         EventBroadcaster broadcaster (engine, server);
 
+        // The application wires this fan-out in Main.cpp; tests do it themselves.
+        engine.eventSink = [&server] (const juce::var& event) { server.broadcastEvent (event); };
+
         expect (server.start (53913), "couldn't listen on the test port");
 
         juce::StreamingSocket client;
@@ -135,6 +138,7 @@ public:
             expect (countEvents ("markerAdded") == 0, "event arrived after unsubscribe");
         }
 
+        engine.eventSink = nullptr;
         server.shutdown();
     }
 };

@@ -154,8 +154,14 @@ private:
 static TempoMapTests tempoMapTests;
 
 //==============================================================================
-int main()
+#include "TestFlags.h"
+
+int main (int argc, char* argv[])
 {
+    for (int i = 1; i < argc; ++i)
+        if (juce::String (argv[i]) == "--quiet")
+            skipAudibleTests = true;
+
     juce::ScopedJuceInitialiser_GUI juceInit;   // the graph tests need a message manager
 
     struct ConsoleRunner final : juce::UnitTestRunner

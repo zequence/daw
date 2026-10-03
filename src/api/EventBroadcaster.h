@@ -3,23 +3,23 @@
 #include "../AudioEngine.h"
 #include "ApiServer.h"
 
-// Forwards engine events to subscribed API connections, and watches the transport
-// (whose state changes on the audio thread) from a message-thread timer:
+// Watches the transport (whose state changes on the audio thread) from a
+// message-thread timer and broadcasts to subscribed API connections:
 //  - a "transport" event whenever play/record/loop state changes
 //  - a "position" event every 500 ms while playing
+// Engine mutation events reach the server through the application's event fan-out
+// (see Main.cpp), not through this class.
 class EventBroadcaster final : private juce::Timer
 {
 public:
     EventBroadcaster (AudioEngine& e, ApiServer& s) : engine (e), server (s)
     {
-        engine.eventSink = [this] (const juce::var& event) { server.broadcastEvent (event); };
         startTimerHz (20);
     }
 
     ~EventBroadcaster() override
     {
         stopTimer();
-        engine.eventSink = nullptr;
     }
 
 private:

@@ -8,7 +8,7 @@ out of here (into work, with any open questions going through ISSUES.md).
 Sits under the menu, on top of the different non-full-window gui modes. Has:
 - time (hours:min:sec:ms) (hours only when non-zero)
 - tempo track
-- time signature
+- time signature track
 - markers
 - bars
 
