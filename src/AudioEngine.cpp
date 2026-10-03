@@ -116,6 +116,8 @@ juce::Array<juce::PluginDescription> AudioEngine::getInstrumentTypes() const
 //==============================================================================
 void AudioEngine::emitEvent (const juce::String& type, juce::DynamicObject::Ptr data)
 {
+    projectDirty = true;   // every emitted mutation dirties the project
+
     if (eventSink == nullptr)
         return;
 
@@ -741,7 +743,11 @@ bool AudioEngine::startRecording()
     takeIsReplace = track->recordReplace;
     preTakeSequence = track->sequence;
     replaceFromTick = -1;
-    erasedUpToTick = -1;
+
+    // Replace mode: the track's own material is silent for the whole take.
+    if (takeIsReplace)
+        if (auto* source = getSource (armedTrack))
+            source->setSuppressed (true);
 
     recordingSawPlayback = false;
     recorder->start (armedTrack);
@@ -766,12 +772,12 @@ void AudioEngine::stopRecording()
     const auto stopTick = transport.getPositionTicks();
     const auto result = recorder->finish (stopTick);
 
+    if (auto* source = getSource (trackId))
+        source->setSuppressed (false);
+
     // finish() drains the FIFO, so the first input may only be known now.
     if (takeIsReplace && replaceFromTick < 0 && recorder->getFirstEventTick() >= 0)
-    {
         replaceFromTick = recorder->getFirstEventTick();
-        erasedUpToTick = replaceFromTick;
-    }
 
     juce::Logger::writeToLog ("Recording stopped on track " + juce::String (trackId) + ": "
                               + juce::String ((int) result.notes.size()) + " notes, "
@@ -781,7 +787,7 @@ void AudioEngine::stopRecording()
     if (takeIsReplace && replaceFromTick >= 0)
     {
         // One undoable step: pre-take material erased from first input to stop, plus the take.
-        auto base = eraseRangeFrom (preTakeSequence, replaceFromTick, juce::jmax (erasedUpToTick, stopTick));
+        auto base = eraseRangeFrom (preTakeSequence, replaceFromTick, juce::jmax (replaceFromTick + 1, stopTick));
 
         auto notes = result.notes;
         auto controls = result.controls;
@@ -825,29 +831,8 @@ void AudioEngine::pollRecording()
     {
         recorder->consumeWrapFlag();   // replace mode commits once, at stop
 
-        // First input starts the replacement: cut sounding notes and begin erasing.
         if (replaceFromTick < 0 && recorder->getFirstEventTick() >= 0)
-        {
             replaceFromTick = recorder->getFirstEventTick();
-            erasedUpToTick = replaceFromTick;
-
-            if (auto* source = getSource (recorder->getTrackId()))
-                source->requestKillAllNotes();
-        }
-
-        // Erase pre-take material under the playhead so you hear it vanish as you play.
-        if (replaceFromTick >= 0)
-        {
-            const auto position = transport.getPositionTicks();
-
-            if (position > erasedUpToTick)
-            {
-                if (auto* track = findTrack (recorder->getTrackId()))
-                    applySequence (*track, eraseRangeFrom (track->sequence, erasedUpToTick, position));
-
-                erasedUpToTick = position;
-            }
-        }
     }
     else if (recorder->consumeWrapFlag())
     {
@@ -977,6 +962,7 @@ bool AudioEngine::saveProject (const juce::File& file)
         auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
         data->setProperty ("path", file.getFullPathName());
         emitEvent ("projectSaved", data);
+        markProjectClean();
     }
 
     return ok;
@@ -1018,6 +1004,7 @@ void AudioEngine::clearProject()
 
     juce::Logger::writeToLog ("Project cleared");
     emitEvent ("projectCleared");
+    markProjectClean();
 }
 
 void AudioEngine::loadProject (const juce::File& file, std::function<void (bool, juce::String)> done)
@@ -1074,6 +1061,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
             auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
             data->setProperty ("path", state->path);
             emitEvent ("projectLoaded", data);
+            markProjectClean();
 
             if (state->done)
                 state->done (true, state->warnings.joinIntoString ("\n"));

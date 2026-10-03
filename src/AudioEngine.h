@@ -142,6 +142,11 @@ public:
     void loadProject (const juce::File&, std::function<void (bool ok, juce::String warnings)> done);
     void clearProject();
 
+    // True when anything changed since the last save/load/clear (every emitted
+    // mutation marks the project dirty).
+    bool isProjectDirty() const noexcept    { return projectDirty; }
+    void markProjectClean() noexcept        { projectDirty = false; }
+
     void saveSettings();
     juce::PropertiesFile& getSettingsFile()   { return settings; }
 
@@ -242,10 +247,12 @@ private:
     std::unique_ptr<MidiRecorder> recorder;
     bool recordingSawPlayback = false;
 
-    // Replace-on-first-input state for the active take
+    // Replace-recording state for the active take
     bool takeIsReplace = false;
     MidiSequence::Ptr preTakeSequence;
-    juce::int64 replaceFromTick = -1, erasedUpToTick = -1;
+    juce::int64 replaceFromTick = -1;
+
+    bool projectDirty = false;
 
     std::map<TrackId, Track> tracks;
     std::map<InstrumentId, Instrument> instruments;

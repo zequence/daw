@@ -32,6 +32,9 @@ public:
     void resized() override;
     bool keyPressed (const juce::KeyPress&) override;
 
+    // Close flow: asks to save when there are unsaved changes, then quits.
+    void confirmQuit();
+
 private:
     enum class ContentView { midiRegions, midiEditor, audioRegions, instruments, instrumentEditor };
     enum class Domain { midi, audio };
@@ -53,7 +56,7 @@ private:
     void confirmDiscard (const juce::String& action, std::function<void()> proceed);
     void newProject();
     void loadProjectDialog();
-    void saveProject (bool saveAs);
+    void saveProject (bool saveAs, std::function<void()> onSaved = nullptr);
     void applyLoadedProject (const juce::File&, bool ok, const juce::String& warnings);
     void updateWindowTitle();
     static juce::File getProjectsDirectory();

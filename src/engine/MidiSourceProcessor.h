@@ -27,8 +27,12 @@ public:
     void setSequence (MidiSequence::Ptr s)       { sequence.store (std::move (s)); }
     MidiSequence::Ptr getSequence() const        { return sequence.load(); }
 
-    // Release everything sounding at the next block (replace-recording's first input).
+    // Release everything sounding at the next block.
     void requestKillAllNotes()                   { killAllRequest.store (true); }
+
+    // While suppressed (replace-recording a take on this track), the sequencer plays
+    // nothing from this source; live input through the routes is unaffected.
+    void setSuppressed (bool shouldSuppress)     { suppressed.store (shouldSuppress); }
 
     //==============================================================================
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer& midi) override
@@ -37,11 +41,12 @@ public:
 
         const auto& b = transport.getBlock();
         const auto seq = sequence.load();
+        const auto isSuppressed = suppressed.load();
 
-        if (b.killAtStart || killAllRequest.exchange (false))
+        if (b.killAtStart || killAllRequest.exchange (false) || (isSuppressed && ! activeNotes.empty()))
             emitAllNotesOff (midi, 0);
 
-        if (! b.playing || b.numSegments == 0)
+        if (! b.playing || b.numSegments == 0 || isSuppressed)
             return;
 
         if (b.chaseAtStart && seq != nullptr)
@@ -214,7 +219,7 @@ private:
 
     const Transport& transport;
     std::atomic<MidiSequence::Ptr> sequence;
-    std::atomic<bool> killAllRequest { false };
+    std::atomic<bool> killAllRequest { false }, suppressed { false };
 
     std::vector<ActiveNote> activeNotes;
     bool sustainDown[16] = {};

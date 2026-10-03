@@ -88,7 +88,10 @@ private:
 
         void closeButtonPressed() override
         {
-            JUCEApplication::getInstance()->systemRequestedQuit();
+            if (auto* main = dynamic_cast<MainComponent*> (getContentComponent()))
+                main->confirmQuit();
+            else
+                JUCEApplication::getInstance()->systemRequestedQuit();
         }
 
     private:

@@ -240,6 +240,7 @@ void MainComponent::createDefaultTrack()
     if (! found)
     {
         juce::Logger::writeToLog ("Default instrument '" + wanted + "' not in the plugin cache; track left unrouted");
+        engine.markProjectClean();   // the untouched startup state shouldn't nag about saving
         return;
     }
 
@@ -262,6 +263,7 @@ void MainComponent::createDefaultTrack()
 
             safe->engine.addTrackOutput (track, instrumentId, 1);
             safe->autoNameTrackForOutput (track, instrumentId);
+            safe->engine.markProjectClean();   // the untouched startup state shouldn't nag about saving
         });
 }
 
@@ -633,13 +635,17 @@ void MainComponent::applyLoadedProject (const juce::File& file, bool ok, const j
                                                 "Project loaded with warnings", warnings);
 }
 
-void MainComponent::saveProject (bool saveAs)
+void MainComponent::saveProject (bool saveAs, std::function<void()> onSaved)
 {
     if (! saveAs && currentProjectFile != juce::File())
     {
-        statusLabel.setText (engine.saveProject (currentProjectFile)
-                                 ? "Saved " + currentProjectFile.getFileName()
-                                 : "Save FAILED", juce::dontSendNotification);
+        const auto ok = engine.saveProject (currentProjectFile);
+        statusLabel.setText (ok ? "Saved " + currentProjectFile.getFileName()
+                                : "Save FAILED", juce::dontSendNotification);
+
+        if (ok && onSaved)
+            onSaved();
+
         return;
     }
 
@@ -647,7 +653,8 @@ void MainComponent::saveProject (bool saveAs)
                                                        getProjectsDirectory().getChildFile ("Untitled.odaw"), "*.odaw");
 
     fileChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::warnAboutOverwriting,
-        [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::FileChooser& chooser)
+        [safe = juce::Component::SafePointer<MainComponent> (this), onSaved = std::move (onSaved)]
+        (const juce::FileChooser& chooser)
         {
             if (safe == nullptr || chooser.getResult() == juce::File())
                 return;
@@ -659,12 +666,39 @@ void MainComponent::saveProject (bool saveAs)
                 safe->currentProjectFile = file;
                 safe->updateWindowTitle();
                 safe->statusLabel.setText ("Saved " + file.getFileName(), juce::dontSendNotification);
+
+                if (onSaved)
+                    onSaved();
             }
             else
             {
                 safe->statusLabel.setText ("Save FAILED", juce::dontSendNotification);
             }
         });
+}
+
+void MainComponent::confirmQuit()
+{
+    if (! engine.isProjectDirty())
+    {
+        juce::JUCEApplication::getInstance()->systemRequestedQuit();
+        return;
+    }
+
+    juce::AlertWindow::showYesNoCancelBox (juce::MessageBoxIconType::QuestionIcon,
+        "Save before closing?", "The project has unsaved changes.",
+        "Save", "Discard", "Cancel", this,
+        juce::ModalCallbackFunction::create (
+            [safe = juce::Component::SafePointer<MainComponent> (this)] (int result)
+            {
+                if (safe == nullptr)
+                    return;
+
+                if (result == 1)        // Save, then quit
+                    safe->saveProject (false, [] { juce::JUCEApplication::getInstance()->systemRequestedQuit(); });
+                else if (result == 2)   // Discard
+                    juce::JUCEApplication::getInstance()->systemRequestedQuit();
+            }));
 }
 
 void MainComponent::updateWindowTitle()
@@ -901,6 +935,14 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         engine.getTransport().returnToZero();
         return true;
     }
+
+    // Global clip undo/redo on the selected track (the piano roll consumes its own first)
+    if (key == juce::KeyPress ('z', juce::ModifierKeys::ctrlModifier, 0))
+        return selectedTrack != 0 && engine.undoTrackSequence (selectedTrack);
+
+    if (key == juce::KeyPress ('y', juce::ModifierKeys::ctrlModifier, 0)
+        || key == juce::KeyPress ('z', juce::ModifierKeys::ctrlModifier | juce::ModifierKeys::shiftModifier, 0))
+        return selectedTrack != 0 && engine.redoTrackSequence (selectedTrack);
 
     return false;
 }

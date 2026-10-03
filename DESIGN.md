@@ -76,10 +76,12 @@ need, clips-as-windowed-references can be layered on top of streams without
 replacing the model. The reverse migration would be a rewrite, which is why streams
 win as the foundation.
 
-**MIDI recording** gets two modes (final wording open): *add to existing* (merge,
-today's behavior) and *replace on first input* - playback of existing material is
-untouched until the first played event; from that moment sounding notes are
-truncated and existing events are erased until recording stops.
+**MIDI recording** has two modes (per track): *add to existing* (merge) and
+*replace* - while a replace take records, the track's own material is silent
+(live input still monitors); the data is replaced from the first played event
+until recording stops, material after the stop point survives, and the whole
+take is one undo step. A third mode, *punch in/out*, is planned but needs
+fine-grained settings first - placeholder only for now.
 
 **Audio is different**: audio takes cannot merge into a stream, so the Audio domain
 will have real regions, with the mute/volume/fade handling that implies. Audio
