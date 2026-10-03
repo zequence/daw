@@ -2,8 +2,11 @@
 
 #include "../AudioEngine.h"
 
-// The MIDI-domain sidebar: compact track rows with R/E/S/M/I buttons.
-// Rows are rebuilt when the engine's track set changes; call refresh() from a UI timer.
+// The MIDI-domain sidebar: compact track rows with R/E/S/M/I buttons, grouped by
+// folders (Cubase-style). Folder rows are half a track row tall, nest arbitrarily,
+// and an indented guide area on the left shows what belongs to which folder.
+// Rows are rebuilt when the engine's track/folder tree changes; call refresh()
+// from a UI timer.
 class TrackList final : public juce::Component
 {
 public:
@@ -22,15 +25,20 @@ public:
 
 private:
     class Row;
+    class FolderRow;
 
     void rebuildRows();
     void layoutRows();
+    void showFolderMenu (AudioEngine::FolderId);
 
     AudioEngine& engine;
-    juce::TextButton addButton { "+ Track" };
+    juce::TextButton addButton { "+ Track" }, addFolderButton { "+ Folder" };
     juce::Viewport viewport;
     juce::Component rowContainer;
-    std::vector<std::unique_ptr<Row>> rows;
+
+    std::vector<AudioEngine::SidebarItem> items;          // what the rows were built from
+    std::vector<std::unique_ptr<juce::Component>> rowComponents;   // parallel to items
+
     AudioEngine::TrackId selectedTrack = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TrackList)

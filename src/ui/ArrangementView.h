@@ -64,6 +64,7 @@ private:
     int scrollLane = 0;
     juce::int64 lastPlayheadTick = -1;
     int lastAxisRevision = -1;
+    std::vector<AudioEngine::TrackId> lastOrder;   // repaint when folders re-arrange lanes
 
     // Block cache per track (recomputed when the sequence pointer changes)
     struct CacheEntry

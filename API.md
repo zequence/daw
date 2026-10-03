@@ -41,6 +41,7 @@ Quick test from a terminal while the app is running:
 | clips | `clip.get`, `clip.addNotes`, `clip.set`, `clip.clear` |
 | instruments | `plugins.list`, `instrument.list`, `instrument.add`, `instrument.setChannelName` |
 | audio | `channel.list`, `channel.setGain`, `channel.setMuted` |
+| folders | `folder.list`, `folder.create`, `folder.rename`, `folder.remove`, `folder.setParent`, `folder.setCollapsed`, `track.setFolder`, `channel.setFolder` (sidebar grouping; `domain` is `midi` or `audio`, folders nest) |
 | recording | `record.start`, `record.stop` |
 | projects | `project.save`, `project.load`, `project.new` |
 | history | `history.list` (filter by category/trackId), `history.travel` (time-travel to an entry) |

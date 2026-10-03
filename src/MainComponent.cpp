@@ -354,6 +354,24 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     juce::PopupMenu menu;
 
     menu.addItem ("Set output...", [safe, id] { if (safe != nullptr) safe->chooseTrackOutput (id); });
+
+    // Folders (Cubase-style grouping in the sidebar)
+    juce::PopupMenu moveTo;
+    moveTo.addItem ("Top level", true, engine.getTrackFolder (id) == 0,
+                    [safe, id] { if (safe != nullptr) safe->engine.setTrackFolder (id, 0); });
+
+    for (auto folderId : engine.getFolderIds (true))
+        moveTo.addItem (engine.getFolderName (folderId), true, engine.getTrackFolder (id) == folderId,
+                        [safe, id, folderId] { if (safe != nullptr) safe->engine.setTrackFolder (id, folderId); });
+
+    moveTo.addSeparator();
+    moveTo.addItem ("New folder", [safe, id]
+    {
+        if (safe != nullptr)
+            safe->engine.setTrackFolder (id, safe->engine.addFolder (true));
+    });
+
+    menu.addSubMenu ("Move to folder", moveTo);
     menu.addSeparator();
     menu.addItem ("Demo clip", [safe, id]
     {

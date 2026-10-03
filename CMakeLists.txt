@@ -92,6 +92,7 @@ target_sources(OrchestralDAWTests PRIVATE
     tests/EventTests.cpp
     tests/ReplaceModeTests.cpp
     tests/HistoryTests.cpp
+    tests/FolderTests.cpp
     src/AudioEngine.cpp
     src/api/CommandDispatcher.cpp
     src/model/TempoMap.cpp

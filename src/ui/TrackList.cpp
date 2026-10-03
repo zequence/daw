@@ -3,14 +3,26 @@
 namespace
 {
     constexpr int rowHeight = 56;
+    constexpr int folderRowHeight = 28;      // about half a channel row
+    constexpr int indentPerLevel = 10;
+
+    // The slight area on the left that shows what belongs to which folder.
+    void paintIndentGuides (juce::Graphics& g, int depth, int height)
+    {
+        for (int level = 1; level <= depth; ++level)
+        {
+            g.setColour (juce::Colours::gold.withAlpha (0.18f + 0.04f * (float) level));
+            g.fillRect (level * indentPerLevel - 6, 0, 2, height);
+        }
+    }
 }
 
 //==============================================================================
 class TrackList::Row final : public juce::Component
 {
 public:
-    Row (TrackList& ownerToUse, AudioEngine& engineToUse, AudioEngine::TrackId id)
-        : owner (ownerToUse), engine (engineToUse), trackId (id)
+    Row (TrackList& ownerToUse, AudioEngine& engineToUse, AudioEngine::TrackId id, int depthToUse)
+        : owner (ownerToUse), engine (engineToUse), trackId (id), depth (depthToUse)
     {
         nameLabel.setText (engine.getTrackName (trackId), juce::dontSendNotification);
         nameLabel.setEditable (false, true);
@@ -102,7 +114,7 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        auto bounds = getLocalBounds().toFloat().reduced (2.0f, 1.5f);
+        auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
 
         g.setColour (selected ? juce::Colour (0xff39404d) : juce::Colour (0xff2b2e33));
         g.fillRoundedRectangle (bounds, 4.0f);
@@ -112,11 +124,13 @@ public:
             g.setColour (juce::Colour (0xff6c87b5));
             g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
         }
+
+        paintIndentGuides (g, depth, getHeight());
     }
 
     void resized() override
     {
-        auto area = getLocalBounds().reduced (8, 4);
+        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).reduced (8, 4);
         nameLabel.setBounds (area.removeFromTop (22));
         area.removeFromTop (2);
 
@@ -136,6 +150,7 @@ private:
     TrackList& owner;
     AudioEngine& engine;
     const AudioEngine::TrackId trackId;
+    const int depth;
 
     juce::Label nameLabel;
     juce::TextButton armButton { "R" }, editorButton { "E" }, soloButton { "S" },
@@ -146,11 +161,104 @@ private:
 };
 
 //==============================================================================
+class TrackList::FolderRow final : public juce::Component
+{
+public:
+    FolderRow (TrackList& ownerToUse, AudioEngine& engineToUse, AudioEngine::FolderId id, int depthToUse)
+        : owner (ownerToUse), engine (engineToUse), folderId (id), depth (depthToUse)
+    {
+        nameLabel.setText (engine.getFolderName (folderId), juce::dontSendNotification);
+        nameLabel.setEditable (false, true);
+        nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
+        nameLabel.setColour (juce::Label::textColourId, juce::Colours::gold.withAlpha (0.85f));
+        nameLabel.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        nameLabel.onTextChange = [this]
+        {
+            engine.setFolderName (folderId, nameLabel.getText());
+            nameLabel.setText (engine.getFolderName (folderId), juce::dontSendNotification);
+        };
+        nameLabel.setInterceptsMouseClicks (false, false);   // single click toggles; double click edits
+        addAndMakeVisible (nameLabel);
+    }
+
+    void refresh()
+    {
+        if (! nameLabel.isBeingEdited())
+            nameLabel.setText (engine.getFolderName (folderId), juce::dontSendNotification);
+
+        repaint();
+    }
+
+    void mouseDown (const juce::MouseEvent& event) override
+    {
+        if (event.mods.isPopupMenu())
+        {
+            owner.showFolderMenu (folderId);
+            return;
+        }
+
+        engine.setFolderCollapsed (folderId, ! engine.isFolderCollapsed (folderId));
+        owner.refresh();
+    }
+
+    void mouseDoubleClick (const juce::MouseEvent& event) override
+    {
+        if (nameLabel.getBounds().contains (event.getPosition()))
+            nameLabel.showEditor();
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
+        g.setColour (juce::Colour (0xff2e3038));
+        g.fillRoundedRectangle (bounds, 4.0f);
+
+        // Collapse triangle
+        const auto collapsed = engine.isFolderCollapsed (folderId);
+        juce::Path triangle;
+        const auto cx = bounds.getX() + 13.0f, cy = bounds.getCentreY();
+
+        if (collapsed)
+            triangle.addTriangle (cx - 3.0f, cy - 5.0f, cx - 3.0f, cy + 5.0f, cx + 5.0f, cy);
+        else
+            triangle.addTriangle (cx - 5.0f, cy - 3.0f, cx + 5.0f, cy - 3.0f, cx, cy + 5.0f);
+
+        g.setColour (juce::Colours::gold.withAlpha (0.8f));
+        g.fillPath (triangle);
+
+        paintIndentGuides (g, depth, getHeight());
+    }
+
+    void resized() override
+    {
+        nameLabel.setBounds (getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 24).reduced (0, 2));
+    }
+
+private:
+    TrackList& owner;
+    AudioEngine& engine;
+    const AudioEngine::FolderId folderId;
+    const int depth;
+    juce::Label nameLabel;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FolderRow)
+};
+
+//==============================================================================
 TrackList::TrackList (AudioEngine& e) : engine (e)
 {
     addButton.setWantsKeyboardFocus (false);
     addButton.onClick = [this] { if (onAddTrack) onAddTrack(); };
     addAndMakeVisible (addButton);
+
+    addFolderButton.setWantsKeyboardFocus (false);
+    addFolderButton.setTooltip ("Add a folder for grouping tracks (right-click tracks and folders to move them)");
+    addFolderButton.onClick = [this]
+    {
+        engine.addFolder (true);
+        refresh();
+    };
+    addAndMakeVisible (addFolderButton);
 
     viewport.setViewedComponent (&rowContainer, false);
     viewport.setScrollBarsShown (true, false);
@@ -167,28 +275,39 @@ void TrackList::setSelectedTrack (AudioEngine::TrackId id)
 
 void TrackList::refresh()
 {
-    const auto ids = engine.getTrackIds();
+    auto freshItems = engine.getSidebarItems (true, true);
 
-    const auto needsRebuild = ids.size() != rows.size()
-        || ! std::equal (ids.begin(), ids.end(), rows.begin(),
-                         [] (auto id, const auto& row) { return row->getTrackId() == id; });
-
-    if (needsRebuild)
+    if (freshItems != items)
+    {
+        items = std::move (freshItems);
         rebuildRows();
+    }
 
-    for (auto& row : rows)
-        row->refresh (row->getTrackId() == selectedTrack, row->getTrackId() == engine.getArmedTrack());
+    for (size_t i = 0; i < rowComponents.size(); ++i)
+    {
+        if (auto* trackRow = dynamic_cast<Row*> (rowComponents[i].get()))
+            trackRow->refresh (trackRow->getTrackId() == selectedTrack,
+                               trackRow->getTrackId() == engine.getArmedTrack());
+        else if (auto* folderRow = dynamic_cast<FolderRow*> (rowComponents[i].get()))
+            folderRow->refresh();
+    }
 }
 
 void TrackList::rebuildRows()
 {
-    rows.clear();
+    rowComponents.clear();
 
-    for (auto id : engine.getTrackIds())
+    for (auto& item : items)
     {
-        auto row = std::make_unique<Row> (*this, engine, id);
+        std::unique_ptr<juce::Component> row;
+
+        if (item.folder != 0)
+            row = std::make_unique<FolderRow> (*this, engine, item.folder, item.depth);
+        else
+            row = std::make_unique<Row> (*this, engine, item.member, item.depth);
+
         rowContainer.addAndMakeVisible (*row);
-        rows.push_back (std::move (row));
+        rowComponents.push_back (std::move (row));
     }
 
     layoutRows();
@@ -197,16 +316,67 @@ void TrackList::rebuildRows()
 void TrackList::layoutRows()
 {
     const auto width = juce::jmax (1, viewport.getMaximumVisibleWidth());
-    rowContainer.setSize (width, juce::jmax (1, (int) rows.size() * rowHeight));
+    int y = 0;
 
-    for (size_t i = 0; i < rows.size(); ++i)
-        rows[i]->setBounds (0, (int) i * rowHeight, width, rowHeight);
+    for (size_t i = 0; i < rowComponents.size(); ++i)
+    {
+        const auto height = items[i].folder != 0 ? folderRowHeight : rowHeight;
+        rowComponents[i]->setBounds (0, y, width, height);
+        y += height;
+    }
+
+    rowContainer.setSize (width, juce::jmax (1, y));
+}
+
+void TrackList::showFolderMenu (AudioEngine::FolderId folderId)
+{
+    const auto safe = juce::Component::SafePointer<TrackList> (this);
+    juce::PopupMenu menu;
+
+    menu.addItem ("New subfolder", [safe, folderId]
+    {
+        if (safe != nullptr)
+        {
+            safe->engine.addFolder (true, {}, folderId);
+            safe->engine.setFolderCollapsed (folderId, false);
+            safe->refresh();
+        }
+    });
+
+    juce::PopupMenu moveTo;
+    moveTo.addItem ("Top level", true, engine.getFolderParent (folderId) == 0, [safe, folderId]
+    {
+        if (safe != nullptr) { safe->engine.setFolderParent (folderId, 0); safe->refresh(); }
+    });
+
+    for (auto id : engine.getFolderIds (true))
+    {
+        if (id == folderId)
+            continue;
+
+        moveTo.addItem (engine.getFolderName (id), true, engine.getFolderParent (folderId) == id, [safe, folderId, id]
+        {
+            if (safe != nullptr) { safe->engine.setFolderParent (folderId, id); safe->refresh(); }
+        });
+    }
+
+    menu.addSubMenu ("Move to folder", moveTo);
+    menu.addSeparator();
+    menu.addItem ("Remove folder (contents move up)", [safe, folderId]
+    {
+        if (safe != nullptr) { safe->engine.removeFolder (folderId); safe->refresh(); }
+    });
+
+    menu.showMenuAsync (juce::PopupMenu::Options());
 }
 
 void TrackList::resized()
 {
     auto area = getLocalBounds();
-    addButton.setBounds (area.removeFromTop (30).reduced (6, 3));
+    auto header = area.removeFromTop (30).reduced (6, 3);
+    addFolderButton.setBounds (header.removeFromRight (62));
+    header.removeFromRight (4);
+    addButton.setBounds (header);
     viewport.setBounds (area);
     layoutRows();
 }

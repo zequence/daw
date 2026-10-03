@@ -227,6 +227,7 @@ void CommandDispatcher::registerCommands()
                  t->setProperty ("soloed", engine.isTrackSoloed (id));
                  t->setProperty ("armed", id == engine.getArmedTrack());
                  t->setProperty ("recordMode", engine.isTrackRecordReplace (id) ? "replace" : "add");
+                 t->setProperty ("folderId", engine.getTrackFolder (id));
 
                  juce::Array<juce::var> outputs;
 
@@ -1001,6 +1002,7 @@ void CommandDispatcher::registerCommands()
                  o->setProperty ("id", id);
                  o->setProperty ("name", engine.getAudioChannelName (id));
                  o->setProperty ("inputInstrument", engine.getAudioChannelInput (id));
+                 o->setProperty ("folderId", engine.getAudioChannelFolder (id));
 
                  if (auto* processor = engine.getAudioChannel (id))
                  {
@@ -1037,6 +1039,155 @@ void CommandDispatcher::registerCommands()
                  return respond (fail ("no audio channel with that id (see channel.list)"));
 
              processor->setMuted (params.getProperty ("muted", true));
+             respond (ok());
+         });
+
+    //==========================================================================
+    // Folders: Cubase-style grouping of the sidebar lists. Two trees ("midi" for
+    // tracks, "audio" for channels); purely organisational, no effect on playback.
+    auto requireFolder = [this] (const juce::var& params, Respond respond, int& outId) -> bool
+    {
+        outId = (int) params.getProperty ("folderId", 0);
+
+        if (engine.folderExists (outId))
+            return true;
+
+        respond (fail ("no folder with id " + juce::String (outId) + " (see folder.list)"));
+        return false;
+    };
+
+    add ("folder.create", "Create a folder for grouping sidebar channels; folders nest",
+         "domain:'midi'|'audio' name:string? parent:folderId?",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const auto domain = params.getProperty ("domain", "midi").toString();
+
+             if (domain != "midi" && domain != "audio")
+                 return respond (fail ("'domain' must be 'midi' or 'audio'"));
+
+             const auto parent = (int) params.getProperty ("parent", 0);
+
+             if (parent != 0 && ! engine.folderExists (parent))
+                 return respond (fail ("no folder with id " + juce::String (parent) + " (see folder.list)"));
+
+             if (parent != 0 && engine.isFolderMidiDomain (parent) != (domain == "midi"))
+                 return respond (fail ("parent folder is in the other domain"));
+
+             const auto id = engine.addFolder (domain == "midi", params.getProperty ("name", {}).toString(), parent);
+
+             auto o = object();
+             o->setProperty ("folderId", id);
+             o->setProperty ("name", engine.getFolderName (id));
+             respond (ok (juce::var (o.get())));
+         });
+
+    add ("folder.list", "Folders of one or both domains, with parent and collapsed state",
+         "domain:'midi'|'audio'?",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const auto domain = params.getProperty ("domain", {}).toString();
+             juce::Array<juce::var> list;
+
+             for (auto midi : { true, false })
+             {
+                 if (domain.isNotEmpty() && (domain == "midi") != midi)
+                     continue;
+
+                 for (auto id : engine.getFolderIds (midi))
+                 {
+                     auto o = object();
+                     o->setProperty ("folderId", id);
+                     o->setProperty ("name", engine.getFolderName (id));
+                     o->setProperty ("domain", midi ? "midi" : "audio");
+                     o->setProperty ("parent", engine.getFolderParent (id));
+                     o->setProperty ("collapsed", engine.isFolderCollapsed (id));
+                     list.add (juce::var (o.get()));
+                 }
+             }
+
+             respond (ok (list));
+         });
+
+    add ("folder.rename", "Rename a folder", "folderId:int name:string",
+         [this, requireFolder] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireFolder (params, respond, id)) return;
+
+             const auto name = params.getProperty ("name", {}).toString();
+
+             if (name.isEmpty())
+                 return respond (fail ("'name' must not be empty"));
+
+             engine.setFolderName (id, name);
+             respond (ok());
+         });
+
+    add ("folder.remove", "Remove a folder; its contents move to its parent", "folderId:int",
+         [this, requireFolder] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireFolder (params, respond, id)) return;
+             engine.removeFolder (id);
+             respond (ok());
+         });
+
+    add ("folder.setParent", "Move a folder into another folder (0 = top level)", "folderId:int parent:int",
+         [this, requireFolder] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireFolder (params, respond, id)) return;
+
+             if (! engine.setFolderParent (id, (int) params.getProperty ("parent", 0)))
+                 return respond (fail ("can't move there (unknown parent, other domain, or it would create a cycle)"));
+
+             respond (ok());
+         });
+
+    add ("folder.setCollapsed", "Collapse/expand a folder in the sidebar", "folderId:int collapsed:bool",
+         [this, requireFolder] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireFolder (params, respond, id)) return;
+             engine.setFolderCollapsed (id, params.getProperty ("collapsed", true));
+             respond (ok());
+         });
+
+    add ("track.setFolder", "Put a track in a folder (folderId 0 = top level)", "trackId:int folderId:int",
+         [this, requireTrack] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             const auto folderId = (int) params.getProperty ("folderId", 0);
+
+             if (folderId != 0 && ! engine.folderExists (folderId))
+                 return respond (fail ("no folder with id " + juce::String (folderId) + " (see folder.list)"));
+
+             if (folderId != 0 && ! engine.isFolderMidiDomain (folderId))
+                 return respond (fail ("that folder is for audio channels"));
+
+             engine.setTrackFolder (id, folderId);
+             respond (ok());
+         });
+
+    add ("channel.setFolder", "Put an audio channel in a folder (folderId 0 = top level)", "channelId:int folderId:int",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const auto channelId = (int) params.getProperty ("channelId", 0);
+
+             if (engine.getAudioChannel (channelId) == nullptr)
+                 return respond (fail ("no audio channel with that id (see channel.list)"));
+
+             const auto folderId = (int) params.getProperty ("folderId", 0);
+
+             if (folderId != 0 && ! engine.folderExists (folderId))
+                 return respond (fail ("no folder with id " + juce::String (folderId) + " (see folder.list)"));
+
+             if (folderId != 0 && engine.isFolderMidiDomain (folderId))
+                 return respond (fail ("that folder is for midi tracks"));
+
+             engine.setAudioChannelFolder (channelId, folderId);
              respond (ok());
          });
 

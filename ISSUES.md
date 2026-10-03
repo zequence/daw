@@ -29,20 +29,37 @@ below. If Claude is unsure of an issue they will pose a question.
 
 # Top bar
 
-- [ ] Make the Main menu a hamburger menu
+- [x] Make the Main menu a hamburger menu
+      (the Menu button shows the hamburger glyph, tooltip "Main menu")
 - [x] Clicking on UI buttons toggles that UI between the UI and arrange mode.
       (Instruments and History toggle back to the current domain's arrange view
       when clicked while open; Escape still works too)
 
 # Timeline bar
 
-- [ ] Time [h:m:s] per visible bar should be the top row in the timeline bar. This means we calculate time for every bar according tempo and signature.
-- [ ] Order should be (the bar lines go all the way up to the top of the timeline view):
+- [x] Time [h:m:s] per visible bar should be the top row in the timeline bar. This means we calculate time for every bar according tempo and signature.
+      (computed per bar via TempoMap::ticksToSeconds, so tempo and signature
+      changes are respected; hours shown only when non-zero; labels that would
+      overlap at far zoom are skipped)
+- [x] Order should be (the bar lines go all the way up to the top of the timeline view):
     - Time
     - Tempo
     - Time signature
     - Marker
     - bars
+      (rows reordered exactly so; bar lines now run the full bar height)
+
+# Sidebar
+
+- [ ] Drag tracks/channels/folders onto a folder row to move them into it
+      (folders landed 2026-10-03 with context-menu moving; drag is the missing
+      gesture)
+- [x] Folders for grouping channels, like in Cubase; nested; half channel
+      height; indented area on the left shows membership
+      (both sidebars: "+ Folder" button, collapse/expand on click, right-click
+      menus to move/rename/remove, gold indent guides; arrangement lane order
+      follows the tree and collapsed folders hide their lanes; folder.* API
+      commands; saved in the project and covered by history time-travel)
 
 # Midi record
 

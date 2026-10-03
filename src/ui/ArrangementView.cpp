@@ -52,7 +52,7 @@ ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)
     if (position.x < TimeAxis::gutter)
         return {};
 
-    const auto trackIds = engine.getTrackIds();
+    const auto trackIds = engine.getArrangeTrackOrder();
     const auto lane = laneIndexAt (position.y);
 
     if (lane < 0 || lane >= (int) trackIds.size())
@@ -112,7 +112,7 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
     else
     {
         const auto lane = laneIndexAt (position.y);
-        const auto trackIds = engine.getTrackIds();
+        const auto trackIds = engine.getArrangeTrackOrder();
 
         if (lane >= 0 && lane < (int) trackIds.size() && onSelectTrack)
             onSelectTrack (trackIds[(size_t) lane]);
@@ -166,7 +166,7 @@ void ArrangementView::mouseWheelMove (const juce::MouseEvent& event, const juce:
 {
     if (! axis.handleWheel (event, wheel))
     {
-        const auto laneCount = (int) engine.getTrackIds().size();
+        const auto laneCount = (int) engine.getArrangeTrackOrder().size();
         scrollLane = juce::jlimit (0, juce::jmax (0, laneCount - 1),
                                    scrollLane + (wheel.deltaY > 0 ? -1 : 1));
     }
@@ -250,6 +250,15 @@ void ArrangementView::timerCallback()
     lastPlayheadTick = playhead;
     lastAxisRevision = axis.revision;
 
+    // Folder changes (order, collapse) re-arrange the lanes
+    auto order = engine.getArrangeTrackOrder();
+
+    if (order != lastOrder)
+    {
+        lastOrder = std::move (order);
+        needsRepaint = true;
+    }
+
     // Repaint when any visible sequence changed (the cache notices pointer changes)
     if (! needsRepaint)
         for (auto trackId : engine.getTrackIds())
@@ -273,7 +282,9 @@ void ArrangementView::paint (juce::Graphics& g)
     g.fillAll (juce::Colour (0xff1a1c1f));
 
     const auto map = engine.getTransport().getTempoMap();
-    const auto trackIds = engine.getTrackIds();
+
+    // Lane order follows the sidebar's folder tree; collapsed folders hide their lanes
+    const auto trackIds = engine.getArrangeTrackOrder();
 
     // --- Lanes background ---
     for (int lane = scrollLane; lane < (int) trackIds.size(); ++lane)

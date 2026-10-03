@@ -713,7 +713,7 @@ AudioEngine::HistorySnapshot AudioEngine::captureHistorySnapshot() const
 
     for (auto& [id, track] : tracks)
         snapshot.tracks.push_back ({ id, track.name, track.muted, track.soloed, track.recordReplace,
-                                     getTrackOutputs (id), track.sequence });
+                                     getTrackOutputs (id), track.sequence, track.folder });
 
     snapshot.armedTrack = armedTrack;
     snapshot.tempoMap = masterTempoMap;
@@ -721,7 +721,10 @@ AudioEngine::HistorySnapshot AudioEngine::captureHistorySnapshot() const
 
     for (auto& [id, channel] : audioChannels)
         if (auto* processor = getAudioChannel (id))
-            snapshot.channels.push_back ({ id, processor->getGain(), processor->isMuted() });
+            snapshot.channels.push_back ({ id, processor->getGain(), processor->isMuted(), channel.folder });
+
+    for (auto& [id, folder] : folders)
+        snapshot.folders.push_back ({ id, folder.name, folder.midiDomain, folder.parent, folder.collapsed });
 
     return snapshot;
 }
@@ -729,6 +732,15 @@ AudioEngine::HistorySnapshot AudioEngine::captureHistorySnapshot() const
 void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
 {
     historySuppress = true;
+
+    // Folders restore wholesale (ids are stable, nothing in the graph references them)
+    folders.clear();
+
+    for (auto& state : snapshot.folders)
+    {
+        folders[state.id] = { state.name, state.midiDomain, state.parent, state.collapsed };
+        nextFolderId = juce::jmax (nextFolderId, state.id + 1);
+    }
 
     // Tracks that don't exist in the snapshot disappear
     {
@@ -754,6 +766,7 @@ void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
         auto* track = findTrack (state.id);
         track->name = state.name;
         track->recordReplace = state.recordReplace;
+        track->folder = folderExists (state.folder) ? state.folder : 0;
         setTrackMuted (state.id, state.muted);
         setTrackSoloed (state.id, state.soloed);
 
@@ -778,6 +791,9 @@ void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
             processor->setGain (channel.gain);
             processor->setMuted (channel.muted);
         }
+
+        if (auto it = audioChannels.find (channel.id); it != audioChannels.end())
+            it->second.folder = folderExists (channel.folder) ? channel.folder : 0;
     }
 
     historySuppress = false;
@@ -809,6 +825,256 @@ void AudioEngine::removeMarker (juce::int64 tick)
         data->setProperty ("tick", tick);
         emitEvent ("markerRemoved", data);
     }
+}
+
+//==============================================================================
+AudioEngine::FolderId AudioEngine::addFolder (bool midiDomain, const juce::String& name, FolderId parent)
+{
+    if (parent != 0 && (! folderExists (parent) || folders[parent].midiDomain != midiDomain))
+        parent = 0;
+
+    const auto id = nextFolderId++;
+    const auto resolvedName = name.isNotEmpty() ? name : "Folder " + juce::String (id);
+    folders[id] = { resolvedName, midiDomain, parent, false };
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("folderId", id);
+    data->setProperty ("name", resolvedName);
+    data->setProperty ("domain", midiDomain ? "midi" : "audio");
+    data->setProperty ("parent", parent);
+    emitEvent ("folderAdded", data);
+    return id;
+}
+
+void AudioEngine::removeFolder (FolderId id)
+{
+    const auto it = folders.find (id);
+
+    if (it == folders.end())
+        return;
+
+    const auto parent = it->second.parent;
+
+    // Children and members move up to the removed folder's parent
+    for (auto& [childId, child] : folders)
+        if (child.parent == id)
+            child.parent = parent;
+
+    for (auto& [trackId, track] : tracks)
+        if (track.folder == id)
+            track.folder = parent;
+
+    for (auto& [channelId, channel] : audioChannels)
+        if (channel.folder == id)
+            channel.folder = parent;
+
+    folders.erase (it);
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("folderId", id);
+    emitEvent ("folderRemoved", data);
+}
+
+std::vector<AudioEngine::FolderId> AudioEngine::getFolderIds (bool midiDomain) const
+{
+    std::vector<FolderId> ids;
+
+    for (auto& [id, folder] : folders)
+        if (folder.midiDomain == midiDomain)
+            ids.push_back (id);
+
+    return ids;
+}
+
+bool AudioEngine::folderExists (FolderId id) const           { return folders.count (id) > 0; }
+
+bool AudioEngine::isFolderMidiDomain (FolderId id) const
+{
+    const auto it = folders.find (id);
+    return it != folders.end() && it->second.midiDomain;
+}
+
+juce::String AudioEngine::getFolderName (FolderId id) const
+{
+    const auto it = folders.find (id);
+    return it != folders.end() ? it->second.name : juce::String();
+}
+
+void AudioEngine::setFolderName (FolderId id, const juce::String& name)
+{
+    const auto it = folders.find (id);
+
+    if (it == folders.end() || it->second.name == name || name.isEmpty())
+        return;
+
+    it->second.name = name;
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("folderId", id);
+    data->setProperty ("name", name);
+    data->setProperty ("change", "renamed");
+    emitEvent ("folderChanged", data);
+}
+
+AudioEngine::FolderId AudioEngine::getFolderParent (FolderId id) const
+{
+    const auto it = folders.find (id);
+    return it != folders.end() ? it->second.parent : 0;
+}
+
+bool AudioEngine::setFolderParent (FolderId id, FolderId parent)
+{
+    const auto it = folders.find (id);
+
+    if (it == folders.end() || id == parent)
+        return false;
+
+    if (parent != 0)
+    {
+        const auto parentIt = folders.find (parent);
+
+        if (parentIt == folders.end() || parentIt->second.midiDomain != it->second.midiDomain)
+            return false;
+
+        // No cycles: the new parent must not sit below this folder
+        for (auto walk = parent; walk != 0; walk = folders.at (walk).parent)
+            if (walk == id)
+                return false;
+    }
+
+    if (it->second.parent == parent)
+        return true;
+
+    it->second.parent = parent;
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("folderId", id);
+    data->setProperty ("parent", parent);
+    data->setProperty ("change", "parent");
+    emitEvent ("folderChanged", data);
+    return true;
+}
+
+bool AudioEngine::isFolderCollapsed (FolderId id) const
+{
+    const auto it = folders.find (id);
+    return it != folders.end() && it->second.collapsed;
+}
+
+void AudioEngine::setFolderCollapsed (FolderId id, bool collapsed)
+{
+    const auto it = folders.find (id);
+
+    if (it == folders.end() || it->second.collapsed == collapsed)
+        return;
+
+    it->second.collapsed = collapsed;
+
+    // View state, not an edit: HistoryManager skips this event type
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("folderId", id);
+    data->setProperty ("collapsed", collapsed);
+    emitEvent ("folderViewChanged", data);
+}
+
+void AudioEngine::setTrackFolder (TrackId trackId, FolderId folderId)
+{
+    auto* track = findTrack (trackId);
+
+    if (track == nullptr)
+        return;
+
+    if (folderId != 0 && ! isFolderMidiDomain (folderId))
+        folderId = 0;
+
+    if (track->folder == folderId)
+        return;
+
+    track->folder = folderId;
+    emitTrackChanged (trackId, "folder");
+}
+
+AudioEngine::FolderId AudioEngine::getTrackFolder (TrackId trackId) const
+{
+    const auto* track = findTrack (trackId);
+    return track != nullptr && folderExists (track->folder) ? track->folder : 0;
+}
+
+void AudioEngine::setAudioChannelFolder (AudioChannelId channelId, FolderId folderId)
+{
+    const auto it = audioChannels.find (channelId);
+
+    if (it == audioChannels.end())
+        return;
+
+    if (folderId != 0 && (! folderExists (folderId) || isFolderMidiDomain (folderId)))
+        folderId = 0;
+
+    if (it->second.folder == folderId)
+        return;
+
+    it->second.folder = folderId;
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("channelId", channelId);
+    data->setProperty ("folderId", folderId);
+    data->setProperty ("change", "folder");
+    emitEvent ("channelChanged", data);
+}
+
+AudioEngine::FolderId AudioEngine::getAudioChannelFolder (AudioChannelId channelId) const
+{
+    const auto it = audioChannels.find (channelId);
+    return it != audioChannels.end() && folderExists (it->second.folder) ? it->second.folder : 0;
+}
+
+std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDomain, bool skipCollapsed) const
+{
+    std::vector<SidebarItem> items;
+
+    // Members whose folder no longer exists show at the root
+    const auto effectiveFolder = [this] (FolderId f) { return folderExists (f) ? f : 0; };
+
+    const std::function<void (FolderId, int)> visit = [&] (FolderId parent, int depth)
+    {
+        for (auto& [id, folder] : folders)
+        {
+            if (folder.midiDomain != midiDomain || folder.parent != parent)
+                continue;
+
+            items.push_back ({ id, 0, depth });
+
+            if (! (skipCollapsed && folder.collapsed))
+                visit (id, depth + 1);
+        }
+
+        if (midiDomain)
+        {
+            for (auto& [id, track] : tracks)
+                if (effectiveFolder (track.folder) == parent)
+                    items.push_back ({ 0, id, depth });
+        }
+        else
+        {
+            for (auto& [id, channel] : audioChannels)
+                if (effectiveFolder (channel.folder) == parent)
+                    items.push_back ({ 0, id, depth });
+        }
+    };
+
+    visit (0, 0);
+    return items;
+}
+
+std::vector<AudioEngine::TrackId> AudioEngine::getArrangeTrackOrder() const
+{
+    std::vector<TrackId> order;
+
+    for (auto& item : getSidebarItems (true, true))
+        if (item.member != 0)
+            order.push_back (item.member);
+
+    return order;
 }
 
 //==============================================================================
@@ -979,6 +1245,16 @@ bool AudioEngine::saveProject (const juce::File& file)
         m->setAttribute ("name", marker.name);
     }
 
+    for (auto& [id, folder] : folders)
+    {
+        auto* f = root.createNewChildElement ("FOLDER");
+        f->setAttribute ("id", id);
+        f->setAttribute ("name", folder.name);
+        f->setAttribute ("midi", folder.midiDomain);
+        f->setAttribute ("parent", folder.parent);
+        f->setAttribute ("collapsed", folder.collapsed);
+    }
+
     for (auto& [id, instrument] : instruments)
     {
         auto* e = root.createNewChildElement ("INSTRUMENT");
@@ -1008,6 +1284,7 @@ bool AudioEngine::saveProject (const juce::File& file)
             auto* a = e->createNewChildElement ("AUDIOCHANNEL");
             a->setAttribute ("gain", audioChannel->getGain());
             a->setAttribute ("muted", audioChannel->isMuted());
+            a->setAttribute ("folder", getAudioChannelFolder (instrument.audioChannel));
         }
     }
 
@@ -1019,6 +1296,7 @@ bool AudioEngine::saveProject (const juce::File& file)
         e->setAttribute ("soloed", track.soloed);
         e->setAttribute ("armed", id == armedTrack);
         e->setAttribute ("recordReplace", track.recordReplace);
+        e->setAttribute ("folder", getTrackFolder (id));
 
         for (auto& output : track.outputs)
         {
@@ -1078,6 +1356,7 @@ void AudioEngine::clearProject()
 
     armedTrack = 0;
     markers.clear();
+    folders.clear();
     masterTempoMap = TempoMap::create (120.0);
     transport.setTempoMap (masterTempoMap);
 
@@ -1109,12 +1388,30 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
     for (auto* m : xml->getChildWithTagNameIterator ("MARKER"))
         addMarker (m->getStringAttribute ("tick").getLargeIntValue(), m->getStringAttribute ("name"));
 
+    // Folders: create first (ids change), then wire parents and collapse states.
+    std::map<int, FolderId> folderIdMap;
+
+    for (auto* f : xml->getChildWithTagNameIterator ("FOLDER"))
+        folderIdMap[f->getIntAttribute ("id")] = addFolder (f->getBoolAttribute ("midi", true),
+                                                            f->getStringAttribute ("name"));
+
+    for (auto* f : xml->getChildWithTagNameIterator ("FOLDER"))
+    {
+        const auto id = folderIdMap[f->getIntAttribute ("id")];
+
+        if (auto it = folderIdMap.find (f->getIntAttribute ("parent")); it != folderIdMap.end())
+            setFolderParent (id, it->second);
+
+        setFolderCollapsed (id, f->getBoolAttribute ("collapsed"));
+    }
+
     struct LoadState
     {
         std::unique_ptr<juce::XmlElement> xml;
         std::vector<juce::XmlElement*> instrumentElements;
         size_t next = 0;
         std::map<int, InstrumentId> idMap;
+        std::map<int, FolderId> folderIdMap;
         juce::StringArray warnings;
         juce::String path;
         std::function<void (bool, juce::String)> done;
@@ -1122,6 +1419,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
     auto state = std::make_shared<LoadState>();
     state->xml = std::move (xml);
+    state->folderIdMap = std::move (folderIdMap);
     state->path = file.getFullPathName();
     state->done = std::move (done);
 
@@ -1135,7 +1433,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
     {
         if (state->next >= state->instrumentElements.size())
         {
-            restoreProjectTracks (*state->xml, state->idMap, state->warnings);
+            restoreProjectTracks (*state->xml, state->idMap, state->folderIdMap, state->warnings);
 
             auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
             data->setProperty ("path", state->path);
@@ -1188,11 +1486,17 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
                 if (auto* a = element->getChildByName ("AUDIOCHANNEL"))
                 {
-                    if (auto* audioChannel = getAudioChannel (getAudioChannelForInstrument (newId)))
+                    const auto channelId = getAudioChannelForInstrument (newId);
+
+                    if (auto* audioChannel = getAudioChannel (channelId))
                     {
                         audioChannel->setGain ((float) a->getDoubleAttribute ("gain", 1.0));
                         audioChannel->setMuted (a->getBoolAttribute ("muted"));
                     }
+
+                    if (auto it = state->folderIdMap.find (a->getIntAttribute ("folder"));
+                        it != state->folderIdMap.end())
+                        setAudioChannelFolder (channelId, it->second);
                 }
 
                 (*step)();
@@ -1203,7 +1507,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 }
 
 void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std::map<int, InstrumentId>& instrumentIds,
-                                        juce::StringArray& warnings)
+                                        const std::map<int, FolderId>& folderIds, juce::StringArray& warnings)
 {
     for (auto* e : root.getChildWithTagNameIterator ("TRACK"))
     {
@@ -1212,6 +1516,9 @@ void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std:
         setTrackMuted (trackId, e->getBoolAttribute ("muted"));
         setTrackSoloed (trackId, e->getBoolAttribute ("soloed"));
         setTrackRecordReplace (trackId, e->getBoolAttribute ("recordReplace"));
+
+        if (auto it = folderIds.find (e->getIntAttribute ("folder")); it != folderIds.end())
+            setTrackFolder (trackId, it->second);
 
         for (auto* o : e->getChildWithTagNameIterator ("OUTPUT"))
         {

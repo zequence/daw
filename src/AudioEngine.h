@@ -26,6 +26,7 @@ public:
     using TrackId = int;
     using InstrumentId = int;
     using AudioChannelId = int;
+    using FolderId = int;
     using NodeID  = juce::AudioProcessorGraph::NodeID;
 
     explicit AudioEngine (juce::PropertiesFile& settings);
@@ -109,6 +110,46 @@ public:
     TrackId getArmedTrack() const noexcept    { return armedTrack; }
 
     //==============================================================================
+    // Folders group channels in the sidebars, Cubase-style. Two independent trees:
+    // one for MIDI tracks, one for audio channels; folders nest arbitrarily.
+    // Membership lives on the track/channel (0 = root). Purely organisational -
+    // no effect on routing or playback.
+    FolderId addFolder (bool midiDomain, const juce::String& name = {}, FolderId parent = 0);
+    void removeFolder (FolderId);             // children and members move to its parent
+    std::vector<FolderId> getFolderIds (bool midiDomain) const;
+    bool folderExists (FolderId) const;
+    bool isFolderMidiDomain (FolderId) const;
+    juce::String getFolderName (FolderId) const;
+    void setFolderName (FolderId, const juce::String&);
+    FolderId getFolderParent (FolderId) const;
+    bool setFolderParent (FolderId, FolderId parent);   // false: unknown id, domain mismatch or cycle
+    bool isFolderCollapsed (FolderId) const;
+    void setFolderCollapsed (FolderId, bool);
+
+    void setTrackFolder (TrackId, FolderId);            // folder 0 = root; must be the midi tree
+    FolderId getTrackFolder (TrackId) const;
+    void setAudioChannelFolder (AudioChannelId, FolderId);
+    FolderId getAudioChannelFolder (AudioChannelId) const;
+
+    // The sidebar/arrangement display order: a depth-first walk of one domain's
+    // tree. Each item is either a folder or a member (track/channel id in 'member').
+    // With skipCollapsed, a collapsed folder still appears but its contents don't.
+    struct SidebarItem
+    {
+        FolderId folder = 0;
+        int member = 0;
+        int depth = 0;
+
+        bool operator== (const SidebarItem& other) const noexcept
+        {
+            return folder == other.folder && member == other.member && depth == other.depth;
+        }
+    };
+
+    std::vector<SidebarItem> getSidebarItems (bool midiDomain, bool skipCollapsed) const;
+    std::vector<TrackId> getArrangeTrackOrder() const;   // visible tracks, tree order
+
+    //==============================================================================
     Transport& getTransport()                 { return transport; }
 
     double getTempoBpm() const;
@@ -169,6 +210,7 @@ public:
             bool muted = false, soloed = false, recordReplace = false;
             std::vector<TrackOutput> outputs;
             MidiSequence::Ptr sequence;
+            FolderId folder = 0;
         };
 
         struct ChannelState
@@ -176,6 +218,16 @@ public:
             AudioChannelId id = 0;
             float gain = 1.0f;
             bool muted = false;
+            FolderId folder = 0;
+        };
+
+        struct FolderState
+        {
+            FolderId id = 0;
+            juce::String name;
+            bool midiDomain = true;
+            FolderId parent = 0;
+            bool collapsed = false;
         };
 
         std::vector<TrackState> tracks;
@@ -183,6 +235,7 @@ public:
         TempoMap::Ptr tempoMap;
         std::vector<Marker> markers;
         std::vector<ChannelState> channels;
+        std::vector<FolderState> folders;
     };
 
     HistorySnapshot captureHistorySnapshot() const;
@@ -202,6 +255,15 @@ private:
         NodeID node;
         InstrumentId input = 0;                     // 0 = none (device inputs later)
         juce::String name;
+        FolderId folder = 0;                        // 0 = root
+    };
+
+    struct Folder
+    {
+        juce::String name;
+        bool midiDomain = true;                     // which sidebar tree it belongs to
+        FolderId parent = 0;                        // 0 = root; always the same domain
+        bool collapsed = false;
     };
 
     struct Output
@@ -220,6 +282,7 @@ private:
         std::vector<Output> outputs;
         bool muted = false, soloed = false;
         bool recordReplace = false;                 // false = add, true = replace on first input
+        FolderId folder = 0;                        // 0 = root
     };
 
     // Runs the transport once per device callback, before the graph renders the block.
@@ -254,7 +317,7 @@ private:
     MidiRouteProcessor* getRoute (const Output&) const;
 
     void restoreProjectTracks (const juce::XmlElement& root, const std::map<int, InstrumentId>& instrumentIds,
-                               juce::StringArray& warnings);
+                               const std::map<int, FolderId>& folderIds, juce::StringArray& warnings);
     void applySequence (Track&, MidiSequence::Ptr);   // pushes to the source node, no history
     static MidiSequence::Ptr eraseRangeFrom (const MidiSequence::Ptr&, juce::int64 start, juce::int64 end);
     MidiSourceProcessor* getSource (TrackId) const;
@@ -292,9 +355,11 @@ private:
     std::map<InstrumentId, Instrument> instruments;
     std::vector<Marker> markers;
     std::map<AudioChannelId, AudioChannel> audioChannels;
+    std::map<FolderId, Folder> folders;
     TrackId nextTrackId = 1;
     InstrumentId nextInstrumentId = 1;
     AudioChannelId nextAudioChannelId = 1;
+    FolderId nextFolderId = 1;
     TrackId armedTrack = 0;
 
     // Async plugin-creation callbacks hold a weak_ptr to this so they can detect engine destruction.

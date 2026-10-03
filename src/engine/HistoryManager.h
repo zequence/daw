@@ -37,8 +37,9 @@ public:
     {
         const auto type = event.getProperty ("event", {}).toString();
 
-        // Not history material: our own travels, state-free notifications
-        if (type == "historyTravelled" || type == "recordingStarted" || type == "projectSaved")
+        // Not history material: our own travels, state-free notifications, view state
+        if (type == "historyTravelled" || type == "recordingStarted" || type == "projectSaved"
+             || type == "folderViewChanged")
             return;
 
         if (type == "projectCleared" || type == "projectLoaded")
@@ -139,6 +140,7 @@ private:
         if (type == "recordingFinished") return 90;
         if (type == "trackAdded" || type == "trackRemoved"
              || type == "instrumentAdded" || type == "instrumentRemoved") return 80;
+        if (type == "folderAdded" || type == "folderRemoved") return 75;
         if (type == "markerAdded" || type == "markerRemoved") return 70;
         if (type == "tempoChanged") return 60;
         if (type == "clipChanged") return 50;
@@ -148,6 +150,8 @@ private:
     static juce::String categoryFor (const juce::String& type)
     {
         if (type.startsWith ("track")) return "track";
+        if (type.startsWith ("folder")) return "folder";
+        if (type.startsWith ("channel")) return "channel";
         if (type.startsWith ("clip")) return "clip";
         if (type.startsWith ("instrument")) return "instrument";
         if (type.startsWith ("marker")) return "marker";
@@ -173,6 +177,16 @@ private:
         if (type == "tempoChanged")      return "Tempo " + juce::String ((double) event.getProperty ("bpm", 0.0), 1) + " bpm";
         if (type == "markerAdded")       return "Marker '" + event.getProperty ("name", {}).toString() + "'";
         if (type == "markerRemoved")     return "Remove marker";
+        if (type == "folderAdded")       return "Add folder '" + event.getProperty ("name", {}).toString() + "'";
+        if (type == "folderRemoved")     return "Remove folder " + event.getProperty ("folderId", {}).toString();
+
+        if (type == "folderChanged")
+            return "Folder '" + engine.getFolderName ((int) event.getProperty ("folderId", 0)) + "': "
+                   + event.getProperty ("change", {}).toString();
+
+        if (type == "channelChanged")
+            return "Channel " + event.getProperty ("channelId", {}).toString() + ": "
+                   + event.getProperty ("change", {}).toString();
 
         if (type == "recordingFinished")
             return "Record " + event.getProperty ("notes", 0).toString() + " notes on '"
