@@ -10,6 +10,21 @@ namespace
     constexpr int statusHeight   = 22;
     constexpr int keyboardHeight = 90;
     constexpr int collapsedSidebarWidth = 26;
+
+    // h:mm:ss:ms, hours only when non-zero (same convention as the timeline bar)
+    juce::String formatPositionTime (double seconds)
+    {
+        const auto totalMs = (juce::int64) std::llround (juce::jmax (0.0, seconds) * 1000.0);
+        const auto ms = (int) (totalMs % 1000);
+        const auto s = (int) ((totalMs / 1000) % 60);
+        const auto m = (int) ((totalMs / 60000) % 60);
+        const auto h = (int) (totalMs / 3600000);
+
+        auto text = juce::String (m).paddedLeft ('0', 2) + ":" + juce::String (s).paddedLeft ('0', 2)
+                      + ":" + juce::String (ms).paddedLeft ('0', 3);
+
+        return h > 0 ? juce::String (h) + ":" + text : text;
+    }
 }
 
 MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, McpProcess& mcp)
@@ -68,13 +83,16 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     };
 
     rtzButton.setTooltip ("Return to start (Home)");
+    rtzButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff3a3e46));
     rtzButton.onClick = [this] { engine.getTransport().returnToZero(); };
 
     playButton.setTooltip ("Play/Stop (space)");
+    playButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2b4634));
     playButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::darkgreen);
     playButton.onClick = [this] { engine.getTransport().togglePlayStop(); };
 
     recordButton.setTooltip ("Record live MIDI onto the armed track (starts playback if stopped)");
+    recordButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff4a2e2e));
     recordButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::darkred);
     recordButton.onClick = [this]
     {
@@ -86,6 +104,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     loopButton.setTooltip ("Loop from the start to the end of the last clip");
     loopButton.setClickingTogglesState (true);
+    loopButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2e3b4a));
     loopButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::steelblue);
     loopButton.onClick = [this]
     {
@@ -104,6 +123,16 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         engine.setTempoBpm (bpmLabel.getText().getDoubleValue());
         bpmLabel.setText (juce::String (engine.getTempoBpm(), 1), juce::dontSendNotification);
     };
+
+    positionLabel.setJustificationType (juce::Justification::centredRight);
+    positionLabel.setColour (juce::Label::textColourId, juce::Colours::white);
+    positionLabel.setFont (juce::FontOptions (18.0f, juce::Font::bold));
+    positionLabel.setInterceptsMouseClicks (false, false);
+
+    timeLabel.setJustificationType (juce::Justification::centredLeft);
+    timeLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    timeLabel.setFont (juce::FontOptions (14.0f));
+    timeLabel.setInterceptsMouseClicks (false, false);
 
     perfButton.setTooltip ("Performance monitor (F12)");
     perfButton.setClickingTogglesState (true);
@@ -209,7 +238,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     for (auto* c : std::initializer_list<juce::Component*> {
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
-             &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &perfButton,
+             &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
              &collapseButton, &trackList, &channelList, &sidebarResizer,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
              &instrumentsView, &instrumentEditorView, &historyView, &settingsView,
@@ -922,6 +951,12 @@ void MainComponent::timerCallback()
     recordButton.setToggleState (engine.isRecording(), juce::dontSendNotification);
     loopButton.setToggleState (transport.isLooping(), juce::dontSendNotification);
 
+    // Transport unit readout (Label::setText only repaints when the text changed)
+    const auto position = transport.getTempoMap()->ticksToBarsBeats (transport.getPositionTicks());
+    positionLabel.setText (juce::String (position.bar) + "." + juce::String (position.beat),
+                           juce::dontSendNotification);
+    timeLabel.setText (formatPositionTime (transport.getPositionSeconds()), juce::dontSendNotification);
+
     // Any engine mutation (from the UI, the API, or history travel) refreshes the
     // topbar widgets that mirror engine state.
     if (engine.getStateRevision() != lastEngineRevision)
@@ -1038,6 +1073,12 @@ void MainComponent::paint (juce::Graphics& g)
     g.setColour (juce::Colour (0xff2a2d33));
     g.fillRect (getLocalBounds().removeFromTop (topbarHeight));
 
+    // The transport unit's panel
+    g.setColour (juce::Colour (0xff1f2227));
+    g.fillRoundedRectangle (transportPanel.toFloat(), 6.0f);
+    g.setColour (juce::Colour (0xff43464d));
+    g.drawRoundedRectangle (transportPanel.toFloat(), 6.0f, 1.0f);
+
     g.setColour (juce::Colour (0xff17191c));
     auto bottom = getLocalBounds().removeFromBottom (statusHeight + keyboardHeight);
     g.fillRect (bottom.removeFromBottom (statusHeight));
@@ -1059,17 +1100,43 @@ void MainComponent::resized()
     toolbar.removeFromLeft (4);
     historyButton.setBounds (toolbar.removeFromLeft (62));
     toolbar.removeFromLeft (14);
-    rtzButton.setBounds (toolbar.removeFromLeft (34));
-    toolbar.removeFromLeft (4);
-    playButton.setBounds (toolbar.removeFromLeft (54));
-    toolbar.removeFromLeft (4);
-    recordButton.setBounds (toolbar.removeFromLeft (46));
-    toolbar.removeFromLeft (4);
-    loopButton.setBounds (toolbar.removeFromLeft (48));
-    toolbar.removeFromLeft (8);
-    bpmLabel.setBounds (toolbar.removeFromLeft (56));
-    toolbar.removeFromLeft (8);
-    perfButton.setBounds (toolbar.removeFromRight (50));
+
+    perfButton.setBounds (getWidth() - 8 - 50, toolbar.getY(), 50, toolbar.getHeight());
+
+    // The transport unit: buttons + position readout + tempo, PERFECTLY centered
+    // in the window. If it would collide, it shifts right of the view buttons and
+    // the Perf button hides - the window's minimum width normally prevents both.
+    constexpr auto unitWidth = 34 + 4 + 54 + 4 + 46 + 4 + 48 + 14 + 76 + 6 + 92 + 10 + 56;
+    auto unit = juce::Rectangle<int> ((getWidth() - unitWidth) / 2, toolbar.getY(),
+                                      unitWidth, toolbar.getHeight());
+
+    if (unit.getX() < toolbar.getX())
+        unit.setX (toolbar.getX());
+
+    const auto perfVisible = unit.getRight() + 16 <= perfButton.getX();
+    perfButton.setVisible (perfVisible);
+
+    const auto rightEdge = perfVisible ? perfButton.getX() - 8 : getWidth() - 8;
+
+    if (unit.getRight() > rightEdge)
+        unit.setX (juce::jmax (toolbar.getX(), rightEdge - unitWidth));
+
+    transportPanel = unit.expanded (8, 4)
+                         .getIntersection (getLocalBounds().removeFromTop (topbarHeight).reduced (0, 2));
+
+    rtzButton.setBounds (unit.removeFromLeft (34));
+    unit.removeFromLeft (4);
+    playButton.setBounds (unit.removeFromLeft (54));
+    unit.removeFromLeft (4);
+    recordButton.setBounds (unit.removeFromLeft (46));
+    unit.removeFromLeft (4);
+    loopButton.setBounds (unit.removeFromLeft (48));
+    unit.removeFromLeft (14);
+    positionLabel.setBounds (unit.removeFromLeft (76));
+    unit.removeFromLeft (6);
+    timeLabel.setBounds (unit.removeFromLeft (92));
+    unit.removeFromLeft (10);
+    bpmLabel.setBounds (unit.removeFromLeft (56));
 
     // Bottom
     statusLabel.setBounds (area.removeFromBottom (statusHeight).reduced (8, 1));

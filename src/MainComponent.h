@@ -82,9 +82,12 @@ private:
     // Topbar
     juce::TextButton menuButton { "Menu" }, midiDomainButton { "Midi" }, audioDomainButton { "Audio" },
                      instrumentsButton { "Instruments" }, historyButton { "History" };
+    // The transport unit: a visually grouped panel with the colorized transport
+    // buttons, the position readout (bars.beats + time) and the tempo.
     juce::TextButton rtzButton { "|<" }, playButton { "Play" }, recordButton { "Rec" }, loopButton { "Loop" },
                      perfButton { "Perf" };
-    juce::Label bpmLabel;   // position readout lives in the timeline bar
+    juce::Label bpmLabel, positionLabel, timeLabel;
+    juce::Rectangle<int> transportPanel;   // painted behind the unit
 
     // Sidebar
     juce::TextButton collapseButton { "<<" };

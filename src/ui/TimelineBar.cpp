@@ -3,20 +3,6 @@
 
 namespace
 {
-    juce::String formatTime (double seconds)
-    {
-        const auto totalMs = (juce::int64) std::llround (juce::jmax (0.0, seconds) * 1000.0);
-        const auto ms = (int) (totalMs % 1000);
-        const auto s = (int) ((totalMs / 1000) % 60);
-        const auto m = (int) ((totalMs / 60000) % 60);
-        const auto h = (int) (totalMs / 3600000);
-
-        auto text = juce::String (m).paddedLeft ('0', 2) + ":" + juce::String (s).paddedLeft ('0', 2)
-                      + ":" + juce::String (ms).paddedLeft ('0', 3);
-
-        return h > 0 ? juce::String (h) + ":" + text : text;
-    }
-
     // Compact h:m:s for the per-bar time row (hours only when non-zero).
     juce::String formatBarTime (double seconds)
     {
@@ -112,16 +98,10 @@ int TimelineBar::getPreferredHeight() const
         if (isRowVisible (row))
             ++rows;
 
-    // The readout panel needs two lines even when most rows are hidden
-    return juce::jmax (52, rows * rowHeight + 1);
+    return juce::jmax (16, rows * rowHeight + 1);
 }
 
 //==============================================================================
-juce::Rectangle<int> TimelineBar::lanesArea() const
-{
-    return getLocalBounds().withTrimmedRight (readoutWidth);
-}
-
 juce::int64 TimelineBar::nearestBeat (juce::int64 tick) const
 {
     const auto map = engine.getTransport().getTempoMap();
@@ -156,21 +136,21 @@ void TimelineBar::mouseDown (const juce::MouseEvent& event)
 {
     if (event.mods.isPopupMenu())
     {
-        if (event.x >= TimeAxis::gutter && lanesArea().contains (event.getPosition()))
+        if (event.x >= TimeAxis::gutter)
             showContextMenu (nearestBar (axis.xToTick (event.x)));
         else
-            showContextMenu (-1);   // gutter/readout: row toggles and Preferences only
+            showContextMenu (-1);   // gutter: row toggles and Preferences only
 
         return;
     }
 
-    if (event.x >= TimeAxis::gutter && lanesArea().contains (event.getPosition()))
+    if (event.x >= TimeAxis::gutter)
         locateAt (event.x);
 }
 
 void TimelineBar::mouseDrag (const juce::MouseEvent& event)
 {
-    if (! event.mods.isPopupMenu() && event.x >= TimeAxis::gutter && lanesArea().contains (event.getPosition()))
+    if (! event.mods.isPopupMenu() && event.x >= TimeAxis::gutter)
         locateAt (event.x);
 }
 
@@ -304,10 +284,9 @@ void TimelineBar::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (0xff232529));
 
-    const auto lanes = lanesArea();
     auto& transport = engine.getTransport();
     const auto map = transport.getTempoMap();
-    const auto endTick = axis.xToTick (lanes.getRight());
+    const auto endTick = axis.xToTick (getWidth());
 
     const auto barsY = rowY (RowKind::bars);
     const auto timeY = rowY (RowKind::time);
@@ -320,7 +299,7 @@ void TimelineBar::paint (juce::Graphics& g)
 
     for (auto y : { barsY, timeY, tempoY, sigY, markerY })
         if (y > 0)
-            g.fillRect (0, y, lanes.getWidth(), 1);
+            g.fillRect (0, y, getWidth(), 1);
 
     g.setColour (juce::Colours::grey.withAlpha (0.6f));
     g.setFont (juce::FontOptions (9.0f));
@@ -361,7 +340,7 @@ void TimelineBar::paint (juce::Graphics& g)
     {
         const auto x = axis.tickToX (barTick);
 
-        if (x >= TimeAxis::gutter && x < lanes.getRight())
+        if (x >= TimeAxis::gutter && x < getWidth())
         {
             g.setColour (juce::Colour (0xff45494f));
             g.fillRect (x, 0, 1, getHeight());
@@ -395,7 +374,7 @@ void TimelineBar::paint (juce::Graphics& g)
         {
             const auto x = axis.tickToX (marker.tick);
 
-            if (x < TimeAxis::gutter - 2 || x > lanes.getRight())
+            if (x < TimeAxis::gutter - 2 || x > getWidth())
                 continue;
 
             g.setColour (juce::Colours::gold.withAlpha (0.9f));
@@ -414,7 +393,7 @@ void TimelineBar::paint (juce::Graphics& g)
         {
             const auto x = axis.tickToX (tempo.tick);
 
-            if (x < TimeAxis::gutter - 2 || x > lanes.getRight())
+            if (x < TimeAxis::gutter - 2 || x > getWidth())
                 continue;
 
             g.setColour (juce::Colours::skyblue.withAlpha (0.9f));
@@ -433,7 +412,7 @@ void TimelineBar::paint (juce::Graphics& g)
         {
             const auto x = axis.tickToX (meter.tick);
 
-            if (x < TimeAxis::gutter - 2 || x > lanes.getRight())
+            if (x < TimeAxis::gutter - 2 || x > getWidth())
                 continue;
 
             g.setColour (juce::Colours::mediumpurple.withAlpha (0.95f));
@@ -445,27 +424,9 @@ void TimelineBar::paint (juce::Graphics& g)
     // --- Playhead ---
     const auto playheadX = axis.tickToX (transport.getPositionTicks());
 
-    if (playheadX >= TimeAxis::gutter && playheadX < lanes.getRight())
+    if (playheadX >= TimeAxis::gutter && playheadX < getWidth())
     {
         g.setColour (juce::Colours::white.withAlpha (0.8f));
         g.fillRect (playheadX, 0, 1, getHeight());
     }
-
-    // --- Readout panel ---
-    const auto panel = getLocalBounds().removeFromRight (readoutWidth);
-    g.setColour (juce::Colour (0xff1d1f23));
-    g.fillRect (panel);
-    g.setColour (juce::Colour (0xff2e3136));
-    g.fillRect (panel.getX(), 0, 1, getHeight());
-
-    const auto position = map->ticksToBarsBeats (transport.getPositionTicks());
-    g.setColour (juce::Colours::white);
-    g.setFont (juce::FontOptions (20.0f, juce::Font::bold));
-    g.drawText (juce::String (position.bar) + "." + juce::String (position.beat),
-                panel.reduced (10, 4).removeFromTop (28), juce::Justification::centredLeft);
-
-    g.setColour (juce::Colours::lightgrey);
-    g.setFont (juce::FontOptions (15.0f));
-    g.drawText (formatTime (transport.getPositionSeconds()),
-                panel.reduced (10, 4).removeFromBottom (24), juce::Justification::centredLeft);
 }

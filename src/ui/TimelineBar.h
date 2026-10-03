@@ -10,9 +10,9 @@ class CommandDispatcher;
 // (h:m:s per visible bar, computed from tempo and signature), tempo track,
 // time-signature track, markers; bar lines run the full height. Rows can be shown/
 // hidden from the right-click menu (persisted in settings), which also manages
-// markers and opens Preferences. A readout panel on the right shows bars.beats and
-// h:mm:ss:ms (hours only when non-zero). Click/drag locates (beat-snapped);
-// ctrl/shift wheel zooms and scrolls every timeline view at once.
+// markers and opens Preferences. Click/drag locates (beat-snapped); ctrl/shift
+// wheel zooms and scrolls every timeline view at once. The position readout lives
+// in the topbar's transport unit.
 class TimelineBar final : public juce::Component,
                           private juce::Timer
 {
@@ -42,7 +42,6 @@ private:
     void setRowVisible (RowKind, bool);     // persists, re-lays-out, repaints
     int rowY (RowKind) const;               // top of the row; -1 when hidden
 
-    juce::Rectangle<int> lanesArea() const;    // everything left of the readout panel
     juce::int64 nearestBeat (juce::int64 tick) const;
     juce::int64 nearestBar (juce::int64 tick) const;
 
@@ -59,8 +58,6 @@ private:
 
     juce::int64 lastPlayheadTick = -1;
     int lastAxisRevision = -1, lastEngineRevision = -1;
-
-    static constexpr int readoutWidth = 148;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TimelineBar)
 };

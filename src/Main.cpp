@@ -96,7 +96,8 @@ private:
             setUsingNativeTitleBar (true);
             setContentOwned (new MainComponent (engine, dispatcher, mcp), true);
             setResizable (true, true);
-            setResizeLimits (900, 500, 10000, 10000);
+            // Wide enough that the topbar's transport unit always centers cleanly
+            setResizeLimits (1150, 500, 10000, 10000);
             centreWithSize (getWidth(), getHeight());
             setVisible (true);
             setFullScreen (true);   // maximized by default (user requirement)

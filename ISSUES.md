@@ -38,7 +38,12 @@ Claude is unsure of an issue they will pose a question.
 
 # Top bar
 
-- [ ] Make the transport controls its own unit in the top bar. Colorize the buttons. Add the current point in time there and remove it from the right side.
+- [x] Make the transport controls its own unit in the top bar. Colorize the buttons. Add the current point in time there and remove it from the right side.
+      (rounded panel perfectly centered in the window - shifts right of the
+      view buttons and hides Perf only when space runs out, and the window's
+      min width now prevents that; Play/Rec/Loop tinted green/red/blue;
+      bars.beats + h:mm:ss:ms readout and tempo live in the unit; the
+      timeline bar's right-side readout panel is gone)
 - [x] Make the Main menu a hamburger menu
       (the Menu button shows the hamburger glyph, tooltip "Main menu")
 - [x] Clicking on UI buttons toggles that UI between the UI and arrange mode.
