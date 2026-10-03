@@ -54,6 +54,7 @@ private:
     AudioEngine& engine;
     HistoryManager* history = nullptr;
     std::map<juce::String, Command> commands;
+    bool veproSyncRunning = false;
 
     JUCE_DECLARE_WEAK_REFERENCEABLE (CommandDispatcher)
     JUCE_DECLARE_NON_COPYABLE (CommandDispatcher)

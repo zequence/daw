@@ -1314,6 +1314,16 @@ void CommandDispatcher::registerCommands()
          "[host:string] [port:int] [cliPath:string]",
          [this] (const juce::var& params, Respond respond)
          {
+             if (veproSyncRunning)
+                 return respond (fail ("a VE Pro sync is already running"));
+
+             veproSyncRunning = true;
+             respond = [this, inner = std::move (respond)] (const juce::var& reply)
+             {
+                 veproSyncRunning = false;
+                 inner (reply);
+             };
+
              auto& settings = engine.getSettingsFile();
              const auto host = params.getProperty ("host",
                                    settings.getValue (vepro::serverHostKey, vepro::defaultServerHost())).toString();
@@ -1740,23 +1750,41 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
 
         engine.setInstrumentName (instrumentId, instance.name);
 
-        // (Re)connect when the latency fingerprint says we're not connected
+        // (Re)connect when the latency fingerprint says we're not connected.
+        // Never force-connect to an instance the server reports as taken: VSL can
+        // block inside the connect (freezing the app AND the server) when the
+        // instance still belongs to another - possibly dead - plugin socket.
         if (auto* plugin = engine.getInstrumentPlugin (instrumentId))
         {
             if (plugin->getLatencySamples() == 0)
             {
-                vepro::ConnectTarget target;
-                target.instanceName = instance.name;
-                target.hostAddress = state->host;
-                target.hostName = state->host;
-
-                const auto blob = vepro::buildConnectionState (state->version, target);
-
-                if (blob.getSize() > 0)
-                    plugin->setStateInformation (blob.getData(), (int) blob.getSize());
+                if (instance.connected)
+                {
+                    state->notes.add (instance.name + ": the server reports it as connected to another plugin"
+                                      " - left untouched (disconnect it on the server, then re-sync)");
+                }
                 else
-                    state->notes.add (instance.name + ": unsupported state-format version '"
-                                      + state->version + "' - not connected");
+                {
+                    vepro::ConnectTarget target;
+                    target.instanceName = instance.name;
+                    target.hostAddress = state->host;
+                    target.hostName = state->host;
+
+                    const auto blob = vepro::buildConnectionState (state->version, target);
+
+                    if (blob.getSize() > 0)
+                    {
+                        juce::Logger::writeToLog ("VE Pro sync: connecting '" + instance.name + "' via "
+                                                  + state->host + "...");
+                        plugin->setStateInformation (blob.getData(), (int) blob.getSize());
+                        juce::Logger::writeToLog ("VE Pro sync: '" + instance.name + "' state applied");
+                    }
+                    else
+                    {
+                        state->notes.add (instance.name + ": unsupported state-format version '"
+                                          + state->version + "' - not connected");
+                    }
+                }
             }
         }
 

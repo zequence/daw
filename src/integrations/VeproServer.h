@@ -44,8 +44,16 @@ namespace vepro
             return {};
         }
 
+        // Hard timeout: a CLI aimed at a dead or wedged service must never hang us
+        if (! child.waitForProcessToFinish (15000))
+        {
+            child.kill();
+            error = "the VE Pro CLI timed out talking to " + host + ":" + juce::String (port)
+                      + " (is the server running and the address right?)";
+            return {};
+        }
+
         const auto output = child.readAllProcessOutput();
-        child.waitForProcessToFinish (20000);
 
         const auto jsonStart = output.indexOf ("{");
 
