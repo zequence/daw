@@ -14,12 +14,58 @@ namespace vepro
     constexpr auto serverPortKey = "veproServerPort";
     constexpr auto cliPathKey    = "veproCliPath";
 
-    inline juce::String defaultServerHost()  { return "127.0.0.1"; }
+    // "auto" = let the CLI discover the server on the network (ZeroConf announce)
+    inline juce::String defaultServerHost()  { return "auto"; }
     constexpr int defaultServerPort = 7200;
+
+    inline bool isAutoHost (const juce::String& host)
+    {
+        return host.trim().isEmpty() || host.trim().equalsIgnoreCase ("auto");
+    }
 
     inline juce::File defaultCliPath()
     {
         return juce::File ("C:\\ProgramData\\VSL\\Vienna Ensemble Pro\\mcp\\vepro-api-cli.exe");
+    }
+
+    // ZeroConf discovery through the CLI: fills host/port with the announced
+    // server. Blocking; false + 'error' set when nothing announces itself.
+    inline bool discoverServer (const juce::File& cli, juce::String& host, int& port, juce::String& error)
+    {
+        if (! cli.existsAsFile())
+        {
+            error = "VE Pro CLI not found: " + cli.getFullPathName();
+            return false;
+        }
+
+        juce::ChildProcess child;
+
+        if (! child.start (juce::StringArray { cli.getFullPathName(), "discover" }, juce::ChildProcess::wantStdOut))
+        {
+            error = "couldn't start the VE Pro CLI";
+            return false;
+        }
+
+        if (! child.waitForProcessToFinish (15000))
+        {
+            child.kill();
+            error = "VE Pro server discovery timed out";
+            return false;
+        }
+
+        const auto output = child.readAllProcessOutput();
+        const auto jsonStart = output.indexOf ("{");
+        const auto parsed = jsonStart >= 0 ? juce::JSON::parse (output.substring (jsonStart)) : juce::var();
+
+        if (! parsed.isObject() || parsed.getProperty ("host", {}).toString().isEmpty())
+        {
+            error = "no VE Pro server announced itself on the network (is the server running?)";
+            return false;
+        }
+
+        host = parsed.getProperty ("host", {}).toString();
+        port = (int) parsed.getProperty ("port", defaultServerPort);
+        return true;
     }
 
     // One request -> the response's 'data'; void var + 'error' set on failure.

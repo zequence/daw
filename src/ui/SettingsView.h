@@ -141,8 +141,9 @@ public:
         };
         page.addAndMakeVisible (veproPortEditor);
 
-        veproServerHint.setText ("Used by \"Sync to VE Pro Server\" (instruments view) and vepro.sync. "
-                                 "Talks through VSL's CLI shipped with VE Pro 8.1+.",
+        veproServerHint.setText ("\"auto\" discovers the server on the network (it announces itself); "
+                                 "set an address only to pick a specific server. Used by "
+                                 "\"Sync to VE Pro Server\" and vepro.sync, via VSL's CLI (VE Pro 8.1+).",
                                  juce::dontSendNotification);
         veproServerHint.setColour (juce::Label::textColourId, juce::Colours::grey);
         veproServerHint.setFont (juce::FontOptions (12.0f));

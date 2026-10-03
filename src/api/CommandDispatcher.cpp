@@ -1334,14 +1334,24 @@ void CommandDispatcher::registerCommands()
                                                       vepro::defaultCliPath().getFullPathName())).toString());
              const auto version = settings.getValue (vepro::versionSettingsKey, vepro::defaultVersion());
 
-             // Server queries block -> background thread; everything else -> message thread
+             // Server queries block -> background thread; everything else -> message
+             // thread. Host "auto" resolves via ZeroConf discovery first, so the
+             // plugin connection states always get the server's real address.
              juce::Thread::launch ([weak = juce::WeakReference<CommandDispatcher> (this),
                                     host, port, cli, version, respond]
              {
                  juce::String fetchError;
-                 auto fetched = vepro::fetchInstances (cli, host, port, fetchError);
+                 auto resolvedHost = host;
+                 auto resolvedPort = port;
 
-                 juce::MessageManager::callAsync ([weak, host, version, respond,
+                 if (vepro::isAutoHost (resolvedHost))
+                     vepro::discoverServer (cli, resolvedHost, resolvedPort, fetchError);
+
+                 auto fetched = fetchError.isEmpty()
+                                    ? vepro::fetchInstances (cli, resolvedHost, resolvedPort, fetchError)
+                                    : std::vector<vepro::SyncInstance>();
+
+                 juce::MessageManager::callAsync ([weak, resolvedHost, version, respond,
                                                    fetchError, instances = std::move (fetched)]
                  {
                      if (weak == nullptr)
@@ -1350,7 +1360,7 @@ void CommandDispatcher::registerCommands()
                      if (fetchError.isNotEmpty())
                          return respond (fail ("VE Pro server: " + fetchError));
 
-                     weak->applyVeproSync (instances, host, version, respond);
+                     weak->applyVeproSync (instances, resolvedHost, version, respond);
                  });
              });
          });
