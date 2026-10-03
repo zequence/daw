@@ -1341,6 +1341,7 @@ void CommandDispatcher::registerCommands()
                                     host, port, cli, version, respond]
              {
                  juce::String fetchError;
+                 juce::StringArray fetchWarnings;
                  auto resolvedHost = host;
                  auto resolvedPort = port;
 
@@ -1348,11 +1349,11 @@ void CommandDispatcher::registerCommands()
                      vepro::discoverServer (cli, resolvedHost, resolvedPort, fetchError);
 
                  auto fetched = fetchError.isEmpty()
-                                    ? vepro::fetchInstances (cli, resolvedHost, resolvedPort, fetchError)
+                                    ? vepro::fetchInstances (cli, resolvedHost, resolvedPort, fetchError, fetchWarnings)
                                     : std::vector<vepro::SyncInstance>();
 
                  juce::MessageManager::callAsync ([weak, resolvedHost, version, respond,
-                                                   fetchError, instances = std::move (fetched)]
+                                                   fetchError, fetchWarnings, instances = std::move (fetched)]
                  {
                      if (weak == nullptr)
                          return;
@@ -1360,7 +1361,7 @@ void CommandDispatcher::registerCommands()
                      if (fetchError.isNotEmpty())
                          return respond (fail ("VE Pro server: " + fetchError));
 
-                     weak->applyVeproSync (instances, resolvedHost, version, respond);
+                     weak->applyVeproSync (instances, resolvedHost, version, respond, fetchWarnings);
                  });
              });
          });
@@ -1734,7 +1735,8 @@ void CommandDispatcher::registerCommands()
 // the instance or creates one, (re)connects it, replaces its synced channels and
 // creates a track per player that doesn't have one yet.
 void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& instances,
-                                        const juce::String& host, const juce::String& version, Respond respond)
+                                        const juce::String& host, const juce::String& version, Respond respond,
+                                        const juce::StringArray& fetchWarnings)
 {
     struct SyncState
     {
@@ -1750,6 +1752,7 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
     state->instances = instances;
     state->host = host;
     state->version = version;
+    state->notes = fetchWarnings;
     state->respond = std::move (respond);
 
     auto step = std::make_shared<std::function<void()>>();

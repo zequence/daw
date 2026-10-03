@@ -80,11 +80,15 @@ namespace vepro
         }
 
         juce::ChildProcess child;
-        const juce::StringArray args { cli.getFullPathName(), "call",
-                                       "--host", host, "--port", juce::String (port),
-                                       "--payload-json", juce::JSON::toString (payload, true) };
 
-        if (! child.start (args, juce::ChildProcess::wantStdOut))
+        // Build the command line ourselves: JUCE doesn't escape embedded quotes on
+        // Windows, which silently mangles the JSON payload (CRT rules: \" inside "...").
+        const auto json = juce::JSON::toString (payload, true);
+        const auto command = cli.getFullPathName().quoted()
+                               + " call --host " + host + " --port " + juce::String (port)
+                               + " --payload-json \"" + json.replace ("\\", "\\\\").replace ("\"", "\\\"") + "\"";
+
+        if (! child.start (command, juce::ChildProcess::wantStdOut))
         {
             error = "couldn't start the VE Pro CLI";
             return {};
@@ -144,9 +148,10 @@ namespace vepro
     };
 
     // Blocking: instance list + each instance's MIDI routing (player names per
-    // port/channel). Empty + 'error' set on failure.
+    // port/channel). Empty + 'error' set on failure; per-instance routing
+    // failures land in 'warnings' instead of being swallowed.
     inline std::vector<SyncInstance> fetchInstances (const juce::File& cli, const juce::String& host, int port,
-                                                     juce::String& error)
+                                                     juce::String& error, juce::StringArray& warnings)
     {
         auto listPayload = juce::DynamicObject::Ptr (new juce::DynamicObject());
         listPayload->setProperty ("cmd", "instance/list");
@@ -175,6 +180,9 @@ namespace vepro
 
             juce::String routingError;
             const auto routing = serverCall (cli, host, port, juce::var (routingPayload.get()), routingError);
+
+            if (routingError.isNotEmpty())
+                warnings.add (instance.name + ": couldn't read its MIDI routing - " + routingError);
 
             if (routingError.isEmpty())
             {
