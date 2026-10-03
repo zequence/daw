@@ -585,18 +585,13 @@ void AudioEngine::pollRecording()
         stopRecording();
 }
 
-void AudioEngine::mergeIntoTrack (TrackId id, const MidiRecorder::Result& result)
+void AudioEngine::addToTrackSequence (TrackId id, std::vector<MidiSequence::Note> notes,
+                                      std::vector<MidiSequence::Control> controls)
 {
-    if (result.isEmpty())
-        return;
-
     auto* track = findTrack (id);
 
-    if (track == nullptr)
+    if (track == nullptr || (notes.empty() && controls.empty()))
         return;
-
-    auto notes = result.notes;
-    auto controls = result.controls;
 
     if (track->sequence != nullptr)
     {
@@ -606,6 +601,11 @@ void AudioEngine::mergeIntoTrack (TrackId id, const MidiRecorder::Result& result
     }
 
     setTrackSequence (id, MidiSequence::create (std::move (notes), std::move (controls)));
+}
+
+void AudioEngine::mergeIntoTrack (TrackId id, const MidiRecorder::Result& result)
+{
+    addToTrackSequence (id, result.notes, result.controls);
 }
 
 juce::int64 AudioEngine::getLoopEndTicks() const

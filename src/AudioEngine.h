@@ -91,6 +91,7 @@ public:
 
     void setTrackSequence (TrackId, MidiSequence::Ptr);
     MidiSequence::Ptr getTrackSequence (TrackId) const;
+    void addToTrackSequence (TrackId, std::vector<MidiSequence::Note>, std::vector<MidiSequence::Control>);
 
     void setArmedTrack (TrackId);             // live MIDI follows the armed track's outputs
     TrackId getArmedTrack() const noexcept    { return armedTrack; }

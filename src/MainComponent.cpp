@@ -1,6 +1,7 @@
 #include "MainComponent.h"
 #include "UserData.h"
 #include "model/DemoSequence.h"
+#include "api/CommandDispatcher.h"
 
 namespace
 {
@@ -10,9 +11,33 @@ namespace
     constexpr int collapsedSidebarWidth = 26;
 }
 
-MainComponent::MainComponent (AudioEngine& e)
+MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher)
     : engine (e)
 {
+    // Keep the window state sane when projects change through the API.
+    dispatcher.onBeforeProjectChange = [safe = juce::Component::SafePointer<MainComponent> (this)]
+    {
+        if (safe != nullptr)
+            safe->pluginWindows.clear();
+    };
+
+    dispatcher.onAfterProjectChange = [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::File& file)
+    {
+        if (safe == nullptr)
+            return;
+
+        safe->currentProjectFile = file;
+        safe->loopButton.setToggleState (safe->engine.getTransport().isLooping(), juce::dontSendNotification);
+        safe->bpmLabel.setText (juce::String (safe->engine.getTempoBpm(), 1), juce::dontSendNotification);
+
+        const auto trackIds = safe->engine.getTrackIds();
+
+        if (std::find (trackIds.begin(), trackIds.end(), safe->selectedTrack) == trackIds.end())
+            safe->selectTrack (trackIds.empty() ? 0 : trackIds.front(), false);
+
+        safe->updateWindowTitle();
+    };
+
     // --- Topbar ---
     menuButton.onClick = [this] { showMainMenu(); };
     midiDomainButton.onClick = [this] { setDomain (Domain::midi); };

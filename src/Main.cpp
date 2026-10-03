@@ -1,6 +1,8 @@
 #include "AudioEngine.h"
 #include "MainComponent.h"
 #include "UserData.h"
+#include "api/CommandDispatcher.h"
+#include "api/ApiServer.h"
 
 class OrchestralDAWApplication final : public juce::JUCEApplication
 {
@@ -22,12 +24,27 @@ public:
         settings = std::make_unique<juce::PropertiesFile> (UserData::getSettingsFile(), options);
 
         engine = std::make_unique<AudioEngine> (*settings);
-        mainWindow = std::make_unique<MainWindow> (getApplicationName(), *engine);
+        dispatcher = std::make_unique<CommandDispatcher> (*engine);
+        mainWindow = std::make_unique<MainWindow> (getApplicationName(), *engine, *dispatcher);
+
+        if (settings->getBoolValue ("apiEnabled", true))
+        {
+            const auto port = settings->getIntValue ("apiPort", 53217);
+            apiServer = std::make_unique<ApiServer> (*dispatcher);
+
+            if (apiServer->start (port))
+                juce::Logger::writeToLog ("API listening on 127.0.0.1:" + juce::String (port));
+            else
+                juce::Logger::writeToLog ("API could not listen on port " + juce::String (port)
+                                          + " (already in use?)");
+        }
     }
 
     void shutdown() override
     {
+        apiServer.reset();    // stop accepting commands first
         mainWindow.reset();   // UI (and plugin editors) before the engine
+        dispatcher.reset();
         engine.reset();
         settings.reset();
 
@@ -42,11 +59,11 @@ private:
     class MainWindow final : public juce::DocumentWindow
     {
     public:
-        MainWindow (const juce::String& name, AudioEngine& engine)
+        MainWindow (const juce::String& name, AudioEngine& engine, CommandDispatcher& dispatcher)
             : DocumentWindow (name, juce::Colour (0xff1d1f23), DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar (true);
-            setContentOwned (new MainComponent (engine), true);
+            setContentOwned (new MainComponent (engine, dispatcher), true);
             setResizable (true, true);
             setResizeLimits (900, 500, 10000, 10000);
             centreWithSize (getWidth(), getHeight());
@@ -66,6 +83,8 @@ private:
     std::unique_ptr<juce::FileLogger> logger;
     std::unique_ptr<juce::PropertiesFile> settings;
     std::unique_ptr<AudioEngine> engine;
+    std::unique_ptr<CommandDispatcher> dispatcher;
+    std::unique_ptr<ApiServer> apiServer;
     std::unique_ptr<MainWindow> mainWindow;
 };
 

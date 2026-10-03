@@ -14,13 +14,15 @@
 // The single-window shell (see GUI_DESIGN.md):
 //   topbar (menu, domain buttons, transport) / sidebar + content container / status + keyboard.
 // Settings overlays the whole UI; everything else swaps inside the content container.
+class CommandDispatcher;
+
 class MainComponent final : public juce::Component,
                             private juce::MidiKeyboardState::Listener,
                             private juce::ChangeListener,
                             private juce::Timer
 {
 public:
-    explicit MainComponent (AudioEngine&);
+    MainComponent (AudioEngine&, CommandDispatcher&);
     ~MainComponent() override;
 
     void paint (juce::Graphics&) override;
