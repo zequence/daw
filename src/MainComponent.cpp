@@ -1,5 +1,6 @@
 #include "MainComponent.h"
 #include "UserData.h"
+#include "ui/ColorPalette.h"
 #include "model/DemoSequence.h"
 #include "api/CommandDispatcher.h"
 #include "api/McpProcess.h"
@@ -481,6 +482,9 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     });
 
     menu.addSubMenu ("Move to folder", moveTo);
+    menu.addSubMenu ("Color", colours::buildMenu (engine.getTrackColour (id),
+                                                  [safe, id] (juce::String hex)
+                                                  { if (safe != nullptr) safe->engine.setTrackColour (id, hex); }));
     menu.addSeparator();
     menu.addItem ("Demo clip", [safe, id]
     {

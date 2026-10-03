@@ -92,6 +92,20 @@ public:
     juce::String getTrackName (TrackId) const;
     void setTrackName (TrackId, const juce::String&);
 
+    // Colors are "#rrggbb" strings (the VE Pro server's format); empty = none.
+    void setTrackColour (TrackId, const juce::String& hex);
+    juce::String getTrackColour (TrackId) const;
+    void setFolderColour (FolderId, const juce::String& hex);
+    juce::String getFolderColour (FolderId) const;
+
+    static juce::Colour colourFromHex (const juce::String& hex, juce::Colour fallback = {})
+    {
+        if (hex.length() == 7 && hex.startsWithChar ('#'))
+            return juce::Colour::fromString ("ff" + hex.substring (1));
+
+        return fallback;
+    }
+
     struct TrackOutput
     {
         InstrumentId instrument = 0;
@@ -246,6 +260,7 @@ public:
             MidiSequence::Ptr sequence;
             FolderId folder = 0;
             int position = 0;
+            juce::String colour;
         };
 
         struct ChannelState
@@ -265,6 +280,7 @@ public:
             FolderId parent = 0;
             bool collapsed = false;
             int position = 0;
+            juce::String colour;
         };
 
         std::vector<TrackState> tracks;
@@ -304,6 +320,7 @@ private:
         FolderId parent = 0;                        // 0 = root; always the same domain
         bool collapsed = false;
         int position = 0;                           // order among siblings
+        juce::String colour;                        // "#rrggbb"; empty = none
     };
 
     struct Output
@@ -325,6 +342,7 @@ private:
         bool recordReplace = false;                 // false = add, true = replace on first input
         FolderId folder = 0;                        // 0 = root
         int position = 0;                           // order among siblings
+        juce::String colour;                        // "#rrggbb"; empty = none
     };
 
     // Runs the transport once per device callback, before the graph renders the block.

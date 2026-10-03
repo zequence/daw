@@ -239,6 +239,7 @@ void CommandDispatcher::registerCommands()
                  t->setProperty ("armed", id == engine.getArmedTrack());
                  t->setProperty ("recordMode", engine.isTrackRecordReplace (id) ? "replace" : "add");
                  t->setProperty ("folderId", engine.getTrackFolder (id));
+                 t->setProperty ("color", engine.getTrackColour (id));
 
                  juce::Array<juce::var> outputs;
 
@@ -312,6 +313,22 @@ void CommandDispatcher::registerCommands()
              int id = 0;
              if (! requireTrack (params, respond, id)) return;
              engine.setTrackName (id, params.getProperty ("name", {}).toString());
+             respond (ok());
+         });
+
+    add ("track.setColor", "Color a track ('#rrggbb', empty = none); shown as the row's left border and the region borders",
+         "trackId:int color:string",
+         [this, requireTrack] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             const auto color = params.getProperty ("color", {}).toString().trim();
+
+             if (color.isNotEmpty() && ! (color.length() == 7 && color.startsWithChar ('#')))
+                 return respond (fail ("'color' must be '#rrggbb' or empty"));
+
+             engine.setTrackColour (id, color);
              respond (ok());
          });
 
@@ -1486,6 +1503,7 @@ void CommandDispatcher::registerCommands()
                      o->setProperty ("domain", midi ? "midi" : "audio");
                      o->setProperty ("parent", engine.getFolderParent (id));
                      o->setProperty ("collapsed", engine.isFolderCollapsed (id));
+                     o->setProperty ("color", engine.getFolderColour (id));
                      list.add (juce::var (o.get()));
                  }
              }
@@ -1505,6 +1523,21 @@ void CommandDispatcher::registerCommands()
                  return respond (fail ("'name' must not be empty"));
 
              engine.setFolderName (id, name);
+             respond (ok());
+         });
+
+    add ("folder.setColor", "Color a folder ('#rrggbb', empty = none)", "folderId:int color:string",
+         [this, requireFolder] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireFolder (params, respond, id)) return;
+
+             const auto color = params.getProperty ("color", {}).toString().trim();
+
+             if (color.isNotEmpty() && ! (color.length() == 7 && color.startsWithChar ('#')))
+                 return respond (fail ("'color' must be '#rrggbb' or empty"));
+
+             engine.setFolderColour (id, color);
              respond (ok());
          });
 
@@ -1857,7 +1890,13 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
                     instanceFolder = folderId;
 
             if (instanceFolder == 0)
+            {
                 instanceFolder = engine.addFolder (true, instance.name, serverFolder);
+
+                // Instance color -> folder color, on creation only (user edits win later)
+                if (instance.colour.isNotEmpty())
+                    engine.setFolderColour (instanceFolder, instance.colour);
+            }
 
             newTrackFolder = instanceFolder;
         }
@@ -1879,6 +1918,10 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
 
                 if (newTrackFolder != 0)
                     engine.setTrackFolder (trackId, newTrackFolder);
+
+                // Player color -> track color, on creation only (user edits win later)
+                if (player.colour.isNotEmpty())
+                    engine.setTrackColour (trackId, player.colour);
 
                 ++state->tracksCreated;
 

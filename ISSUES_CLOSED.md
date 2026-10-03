@@ -94,6 +94,18 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Sidebar
 
+- [x] Colored tracks (and regions): selectable colors in right-click menu; the
+      color shown only as a left border; regions get colored borders (all
+      around); a slide control for opacity in settings/theming with visible
+      examples next to it.
+      (tracks and folders carry a '#rrggbb' color: right-click > Color offers
+      a 12-swatch palette + None; sidebar rows show it as a 4 px left border;
+      arrange regions draw it as the all-around border; Settings > Theming
+      has the opacity slider with a live mock track row and region beside it.
+      Persisted, in history snapshots, and track.setColor/folder.setColor +
+      color in track.list/folder.list for agents.)
+- [x] Remove Add track/folder (not needed anymore)
+      (both sidebars' header buttons removed; right-click menus cover adding)
 - [x] When Rec is disabled (for example when selecting another channel) any playing notes on that channel should be stopped.
       (un-arming releases held notes: the previously armed track's routes get
       a kill request and emit note-offs on the next block, so switching
@@ -130,6 +142,11 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Integrations
 
+- [x] Syncing should fetch colors from the server. Use the instance colors for
+      instance folders and player colors for midi tracks.
+      (instance colors come with instance/list, player colors via
+      channel/color/get per player; applied when the folder/track is CREATED
+      only, so later color edits in the app are never overwritten by re-sync)
 - [x] When syncing create renamable folders: one for VE Pro Server, and inside
       it, one folder for each instance; inside those, the midi channels whose
       names are immutable. Folders stay freely renamable and movable.

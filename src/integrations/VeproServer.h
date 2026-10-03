@@ -148,12 +148,14 @@ namespace vepro
         int midiPort = 1;
         int midiChannel = 1;
         juce::String name;
+        juce::String colour;           // "#rrggbb" from channel/color/get
     };
 
     struct SyncInstance
     {
         juce::String id, name;
         bool connected = false;
+        juce::String colour;           // "#rrggbb" from instance/list
         std::vector<SyncPlayer> players;
     };
 
@@ -183,6 +185,7 @@ namespace vepro
             instance.id = entry.getProperty ("id", {}).toString();
             instance.name = entry.getProperty ("name", {}).toString();
             instance.connected = entry.getProperty ("connected", false);
+            instance.colour = entry.getProperty ("color", {}).toString();
 
             auto routingPayload = juce::DynamicObject::Ptr (new juce::DynamicObject());
             routingPayload->setProperty ("cmd", "instance/midirouting/summary");
@@ -207,14 +210,36 @@ namespace vepro
                                 SyncPlayer player;
                                 player.midiPort = (int) pair.getProperty ("midiPort", 1);
                                 player.midiChannel = (int) pair.getProperty ("midiChannel", 1);
+                                juce::String channelAddress;
 
                                 if (auto* channels = pair.getProperty ("channels", {}).getArray())
+                                {
                                     if (! channels->isEmpty())
+                                    {
                                         player.name = channels->getFirst().getProperty ("title", {}).toString();
+                                        channelAddress = channels->getFirst().getProperty ("channelAddress", {}).toString();
+                                    }
+                                }
 
                                 if (player.name.isEmpty())
                                     player.name = instance.name + " " + juce::String (player.midiPort)
                                                     + "." + juce::String (player.midiChannel);
+
+                                // The player's color (instance colors come with instance/list)
+                                if (channelAddress.isNotEmpty())
+                                {
+                                    auto colorPayload = juce::DynamicObject::Ptr (new juce::DynamicObject());
+                                    colorPayload->setProperty ("cmd", "channel/color/get");
+                                    colorPayload->setProperty ("instanceId", instance.id);
+                                    colorPayload->setProperty ("channelAddress", channelAddress);
+
+                                    juce::String colorError;
+                                    const auto color = serverCall (cli, host, port,
+                                                                   juce::var (colorPayload.get()), colorError);
+
+                                    if (colorError.isEmpty())
+                                        player.colour = color.toString();
+                                }
 
                                 instance.players.push_back (player);
                             }

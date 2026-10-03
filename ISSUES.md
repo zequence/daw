@@ -21,18 +21,7 @@ Claude is unsure of an issue they will pose a question.
 
 # Sidebar
 
-- [x] Remove Add track/folder (not needed anymore)
-      (both sidebars' header buttons removed; right-click menus cover adding)
-- [ ] Colored tracks (and regions)
-  - Selectable colors in right-click menu
-  - The color is shown only as a left border
-  - Regions in arrange view get colored borders (all around)
-  - a slide control for opacity in settings/theming with visible examples next to it
-
-
 # Integrations
-
-- [ ] Syncing should fetch colors from the server. Use the instance colors for instance folders and player colors for midi tracks.
 
 # Midi record
 

@@ -801,7 +801,8 @@ AudioEngine::HistorySnapshot AudioEngine::captureHistorySnapshot() const
 
     for (auto& [id, track] : tracks)
         snapshot.tracks.push_back ({ id, track.name, track.muted, track.soloed, track.recordReplace,
-                                     getTrackOutputs (id), track.sequence, track.folder, track.position });
+                                     getTrackOutputs (id), track.sequence, track.folder, track.position,
+                                     track.colour });
 
     snapshot.armedTrack = armedTrack;
     snapshot.tempoMap = masterTempoMap;
@@ -814,7 +815,7 @@ AudioEngine::HistorySnapshot AudioEngine::captureHistorySnapshot() const
 
     for (auto& [id, folder] : folders)
         snapshot.folders.push_back ({ id, folder.name, folder.midiDomain, folder.parent,
-                                      folder.collapsed, folder.position });
+                                      folder.collapsed, folder.position, folder.colour });
 
     return snapshot;
 }
@@ -828,7 +829,8 @@ void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
 
     for (auto& state : snapshot.folders)
     {
-        folders[state.id] = { state.name, state.midiDomain, state.parent, state.collapsed, state.position };
+        folders[state.id] = { state.name, state.midiDomain, state.parent, state.collapsed,
+                              state.position, state.colour };
         nextFolderId = juce::jmax (nextFolderId, state.id + 1);
     }
 
@@ -858,6 +860,7 @@ void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
         track->recordReplace = state.recordReplace;
         track->folder = folderExists (state.folder) ? state.folder : 0;
         track->position = state.position;
+        track->colour = state.colour;
         setTrackMuted (state.id, state.muted);
         setTrackSoloed (state.id, state.soloed);
 
@@ -919,6 +922,45 @@ void AudioEngine::removeMarker (juce::int64 tick)
         data->setProperty ("tick", tick);
         emitEvent ("markerRemoved", data);
     }
+}
+
+//==============================================================================
+void AudioEngine::setTrackColour (TrackId id, const juce::String& hex)
+{
+    auto* track = findTrack (id);
+
+    if (track == nullptr || track->colour == hex)
+        return;
+
+    track->colour = hex;
+    emitTrackChanged (id, "colour");
+}
+
+juce::String AudioEngine::getTrackColour (TrackId id) const
+{
+    auto* track = findTrack (id);
+    return track != nullptr ? track->colour : juce::String();
+}
+
+void AudioEngine::setFolderColour (FolderId id, const juce::String& hex)
+{
+    const auto it = folders.find (id);
+
+    if (it == folders.end() || it->second.colour == hex)
+        return;
+
+    it->second.colour = hex;
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("folderId", id);
+    data->setProperty ("change", "colour");
+    emitEvent ("folderChanged", data);
+}
+
+juce::String AudioEngine::getFolderColour (FolderId id) const
+{
+    const auto it = folders.find (id);
+    return it != folders.end() ? it->second.colour : juce::String();
 }
 
 //==============================================================================
@@ -1475,6 +1517,7 @@ bool AudioEngine::saveProject (const juce::File& file)
         f->setAttribute ("parent", folder.parent);
         f->setAttribute ("collapsed", folder.collapsed);
         f->setAttribute ("position", folder.position);
+        f->setAttribute ("colour", folder.colour);
     }
 
     for (auto& [id, instrument] : instruments)
@@ -1525,6 +1568,7 @@ bool AudioEngine::saveProject (const juce::File& file)
         e->setAttribute ("recordReplace", track.recordReplace);
         e->setAttribute ("folder", getTrackFolder (id));
         e->setAttribute ("position", track.position);
+        e->setAttribute ("colour", track.colour);
 
         for (auto& output : track.outputs)
         {
@@ -1635,6 +1679,8 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
         if (f->hasAttribute ("position"))
             folders[id].position = f->getIntAttribute ("position");
+
+        folders[id].colour = f->getStringAttribute ("colour");
     }
 
     struct LoadState
@@ -1766,6 +1812,8 @@ void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std:
 
         if (e->hasAttribute ("position"))
             findTrack (trackId)->position = e->getIntAttribute ("position");
+
+        findTrack (trackId)->colour = e->getStringAttribute ("colour");
 
         for (auto* o : e->getChildWithTagNameIterator ("OUTPUT"))
         {

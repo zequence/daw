@@ -1,5 +1,6 @@
 #include "ArrangementView.h"
 #include "../api/CommandDispatcher.h"
+#include "ColorPalette.h"
 
 ArrangementView::ArrangementView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     : engine (e), dispatcher (d), axis (a)
@@ -343,8 +344,19 @@ void ArrangementView::paint (juce::Graphics& g)
 
             g.setColour (isSelected || isDragged ? juce::Colour (0xcc7aa3d4) : juce::Colour (0x995d8fc4));
             g.fillRoundedRectangle (rect.toFloat(), 4.0f);
-            g.setColour (juce::Colours::black.withAlpha (0.4f));
-            g.drawRoundedRectangle (rect.toFloat(), 4.0f, 1.0f);
+
+            // Regions carry the track color as an all-around border (ISSUES.md)
+            if (const auto hex = engine.getTrackColour (trackId); hex.isNotEmpty())
+            {
+                g.setColour (AudioEngine::colourFromHex (hex)
+                                 .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
+                g.drawRoundedRectangle (rect.toFloat(), 4.0f, 1.8f);
+            }
+            else
+            {
+                g.setColour (juce::Colours::black.withAlpha (0.4f));
+                g.drawRoundedRectangle (rect.toFloat(), 4.0f, 1.0f);
+            }
 
             // Mini note preview
             if (sequence != nullptr && block.noteCount > 0)

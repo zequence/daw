@@ -2,6 +2,7 @@
 
 #include "../AudioEngine.h"
 #include "../engine/AudioChannelProcessor.h"
+#include "ColorPalette.h"
 
 // The Audio-domain sidebar: one row per audio channel showing its input, a meter,
 // mute and volume, grouped by folders (Cubase-style, like the track list): folder
@@ -303,6 +304,13 @@ private:
             auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
             g.setColour (juce::Colour (0xff2e3038));
             g.fillRoundedRectangle (bounds, 4.0f);
+
+            if (const auto hex = engine.getFolderColour (folderId); hex.isNotEmpty())
+            {
+                g.setColour (AudioEngine::colourFromHex (hex)
+                                 .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
+                g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
+            }
 
             const auto collapsed = engine.isFolderCollapsed (folderId);
             juce::Path triangle;
@@ -624,6 +632,15 @@ private:
         }
 
         menu.addSubMenu ("Move to folder", moveTo);
+        menu.addSubMenu ("Color", colours::buildMenu (engine.getFolderColour (folderId),
+                                                      [safe, folderId] (juce::String hex)
+                                                      {
+                                                          if (safe != nullptr)
+                                                          {
+                                                              safe->engine.setFolderColour (folderId, hex);
+                                                              safe->refresh();
+                                                          }
+                                                      }));
         menu.addSeparator();
         menu.addItem ("Remove folder (contents move up)", [safe, folderId]
         {

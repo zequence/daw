@@ -3,6 +3,7 @@
 #include "../AudioEngine.h"
 #include "../integrations/VeproState.h"
 #include "../integrations/VeproServer.h"
+#include "ColorPalette.h"
 
 // Full-window settings page (replaces the whole UI; close with X or ESC).
 // Tab system (ISSUES.md "Settings Window"): a category column on the left
@@ -28,7 +29,8 @@ public:
         closeButton.onClick = [this] { if (onClose) onClose(); };
         addAndMakeVisible (closeButton);
 
-        categories.names = { "Audio & MIDI", "Plugins", "Tracks", "Agents (MCP)", "Integrations", "Key commands" };
+        categories.names = { "Audio & MIDI", "Plugins", "Tracks", "Agents (MCP)", "Integrations",
+                             "Theming", "Key commands" };
         categories.onSelect = [this] (int index) { setCategory (index); };
         addAndMakeVisible (categories);
 
@@ -149,6 +151,23 @@ public:
         veproServerHint.setFont (juce::FontOptions (12.0f));
         page.addAndMakeVisible (veproServerHint);
 
+        // --- Theming ---
+        opacityLabel.setText ("Track color opacity", juce::dontSendNotification);
+        opacityLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
+        page.addAndMakeVisible (opacityLabel);
+
+        opacitySlider.setRange (0.2, 1.0, 0.01);
+        opacitySlider.setValue (settings.getDoubleValue (colours::opacitySettingsKey, 1.0),
+                                juce::dontSendNotification);
+        opacitySlider.setWantsKeyboardFocus (false);
+        opacitySlider.onValueChange = [this]
+        {
+            engine.getSettingsFile().setValue (colours::opacitySettingsKey, opacitySlider.getValue());
+            engine.getSettingsFile().saveIfNeeded();
+            page.repaint();   // the examples follow live
+        };
+        page.addAndMakeVisible (opacitySlider);
+
         for (auto* c : std::initializer_list<juce::Component*> { &scanButton, &retryButton, &rescanButton,
                                                                  &onTopToggle, &autoRecordToggle, &mcpToggle })
         {
@@ -192,7 +211,7 @@ public:
     }
 
 private:
-    enum Category { audioMidi = 0, plugins, tracks, agents, integrations, keyCommands };
+    enum Category { audioMidi = 0, plugins, tracks, agents, integrations, theming, keyCommands };
 
     void setCategory (int index)
     {
@@ -225,6 +244,9 @@ private:
                                                                  &veproServerLabel, &veproHostEditor, &veproPortEditor,
                                                                  &veproServerHint })
             c->setVisible (category == integrations);
+
+        for (auto* c : std::initializer_list<juce::Component*> { &opacityLabel, &opacitySlider })
+            c->setVisible (category == theming);
 
         switch (category)
         {
@@ -270,6 +292,14 @@ private:
                 y += 30;
                 veproServerHint.setBounds (4, y, width - 8, 18);
                 y += 26;
+                break;
+
+            case theming:
+                opacityLabel.setBounds (4, y, 180, 22);
+                opacitySlider.setBounds (188, y, juce::jmin (320, width - 196), 24);
+                y += 32;
+                themingExamples = { 4, y, juce::jmin (520, width - 8), 96 };
+                y += 102;
                 break;
 
             case keyCommands:
@@ -333,6 +363,32 @@ private:
 
         void paint (juce::Graphics& g) override
         {
+            if (owner.categories.selected == theming)
+            {
+                // Visible examples next to the opacity slider (ISSUES.md): a mock
+                // track row with its left color border, and a mock region border.
+                const auto alpha = (float) owner.opacitySlider.getValue();
+                auto area = owner.themingExamples.toFloat();
+
+                auto rowArea = area.removeFromTop (40.0f).reduced (0.0f, 4.0f);
+                g.setColour (juce::Colour (0xff2b2e33));
+                g.fillRoundedRectangle (rowArea, 4.0f);
+                g.setColour (AudioEngine::colourFromHex ("#dd2c40").withAlpha (alpha));
+                g.fillRect (rowArea.getX() + 1.0f, rowArea.getY() + 2.0f, 4.0f, rowArea.getHeight() - 4.0f);
+                g.setColour (juce::Colours::white.withAlpha (0.7f));
+                g.setFont (juce::FontOptions (13.0f));
+                g.drawText ("Track row", rowArea.reduced (14.0f, 0.0f), juce::Justification::centredLeft);
+
+                auto regionArea = area.removeFromTop (44.0f).reduced (0.0f, 6.0f).withTrimmedRight (area.getWidth() * 0.4f);
+                g.setColour (juce::Colour (0x995d8fc4));
+                g.fillRoundedRectangle (regionArea, 4.0f);
+                g.setColour (AudioEngine::colourFromHex ("#56b58c").withAlpha (alpha));
+                g.drawRoundedRectangle (regionArea, 4.0f, 1.8f);
+                g.setColour (juce::Colours::white.withAlpha (0.7f));
+                g.drawText ("Region", regionArea.reduced (10.0f, 0.0f), juce::Justification::centredLeft);
+                return;
+            }
+
             if (owner.categories.selected != keyCommands)
                 return;
 
@@ -371,7 +427,10 @@ private:
     juce::ComboBox veproVersionBox;
     juce::TextEditor veproHostEditor, veproPortEditor;
 
-    juce::Rectangle<int> keyCommandsBounds;
+    juce::Label opacityLabel;
+    juce::Slider opacitySlider { juce::Slider::LinearHorizontal, juce::Slider::TextBoxRight };
+
+    juce::Rectangle<int> keyCommandsBounds, themingExamples;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SettingsView)
 };

@@ -1,4 +1,5 @@
 #include "TrackList.h"
+#include "ColorPalette.h"
 
 namespace
 {
@@ -130,6 +131,14 @@ public:
         g.setColour (selected ? juce::Colour (0xff39404d) : juce::Colour (0xff2b2e33));
         g.fillRoundedRectangle (bounds, 4.0f);
 
+        // The track color shows as a left border only (ISSUES.md)
+        if (const auto hex = engine.getTrackColour (trackId); hex.isNotEmpty())
+        {
+            g.setColour (AudioEngine::colourFromHex (hex)
+                             .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
+            g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
+        }
+
         if (selected)
         {
             g.setColour (juce::Colour (0xff6c87b5));
@@ -239,6 +248,13 @@ public:
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
         g.setColour (juce::Colour (0xff2e3038));
         g.fillRoundedRectangle (bounds, 4.0f);
+
+        if (const auto hex = engine.getFolderColour (folderId); hex.isNotEmpty())
+        {
+            g.setColour (AudioEngine::colourFromHex (hex)
+                             .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
+            g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
+        }
 
         // Collapse triangle
         const auto collapsed = engine.isFolderCollapsed (folderId);
@@ -649,6 +665,15 @@ void TrackList::showFolderMenu (AudioEngine::FolderId folderId)
     }
 
     menu.addSubMenu ("Move to folder", moveTo);
+    menu.addSubMenu ("Color", colours::buildMenu (engine.getFolderColour (folderId),
+                                                  [safe, folderId] (juce::String hex)
+                                                  {
+                                                      if (safe != nullptr)
+                                                      {
+                                                          safe->engine.setFolderColour (folderId, hex);
+                                                          safe->refresh();
+                                                      }
+                                                  }));
     menu.addSeparator();
     menu.addItem ("Remove folder (contents move up)", [safe, folderId]
     {
