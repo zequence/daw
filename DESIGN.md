@@ -42,6 +42,50 @@ These keep the pillars true as the app grows:
   immutable snapshots shared with the audio thread; edits swap pointers. No locks on
   the audio path.
 
+## MIDI data model: one stream per track, meta-regions on top
+
+Each MIDI track holds a single continuous stream of notes and controller data, with
+bounds derived from the content (first event to last). There are no stored MIDI clip
+objects, and that is a deliberate choice:
+
+- one coordinate system (absolute ticks), one editing surface per track, no
+  clip-boundary bugs, trivial recording merge and serialization;
+- CC curves (dynamics, expression) stay continuous across musical sections - no
+  part boundaries chopping automation, no chase-across-boundary edge cases;
+- agents and scripts address music as "bars 17-24 of the horns", which maps onto
+  range commands, not region handles.
+
+The region *experience* is provided by **meta-regions**: computed time ranges, not
+containers. Two sources:
+
+1. **Markers.** Named positions dividing the project into parts (theme-1, verse,
+   chorus...). A part is the span from one marker to the next; selecting a part
+   selects that range on whichever tracks you choose.
+2. **Content gaps.** Enough silence inside a track's stream (threshold adjustable,
+   about a bar by default) visually divides it into phrase blocks, so the
+   arrangement view shows structure and pauses. Notes define phrases; CC data rides
+   along when a range is selected or copied.
+
+Selection by part or by phrase block feeds the same range operations: loop this,
+copy/move/repeat this, erase this, (later) mute or scale this. Because meta-regions
+are queries over the stream, they can never desynchronize from the content.
+
+What this gives up: clip aliasing (edit one looped part, all instances follow).
+Repetition is explicit duplication via repeat-range. If aliasing ever becomes a felt
+need, clips-as-windowed-references can be layered on top of streams without
+replacing the model. The reverse migration would be a rewrite, which is why streams
+win as the foundation.
+
+**MIDI recording** gets two modes (final wording open): *add to existing* (merge,
+today's behavior) and *replace on first input* - playback of existing material is
+untouched until the first played event; from that moment sounding notes are
+truncated and existing events are erased until recording stops.
+
+**Audio is different**: audio takes cannot merge into a stream, so the Audio domain
+will have real regions, with the mute/volume/fade handling that implies. The
+Midi/Audio domain split in GUI_DESIGN.md keeps the two paradigms from leaking into
+each other.
+
 ## Status
 
 - Control API: live (API.md) - transport, tracks, routing, clips, instruments,
