@@ -5,18 +5,21 @@
 class CommandDispatcher;
 
 // The MIDI editor (GUI_DESIGN.md): piano keys on the left, notes as draggable
-// rectangles on a bar/beat grid, velocity lane below, playhead on top.
+// rectangles on a bar/beat grid, an editable lane below (velocity, any CC, or pitch
+// bend), playhead on top.
 //
 // All edits go through the command dispatcher (clip.* commands), so the editor,
 // scripts and agents perform identical operations and share one undo history.
 //
 // Interactions:
-//   double-click empty    add a note (snap-sized)      drag note          move (snap; vertical = transpose)
-//   drag empty            marquee-select               drag note's right edge   resize
-//   right-click note      delete                       drag in velocity lane    set velocity (selection-aware)
-//   Delete                delete selection             Ctrl+Z / Ctrl+Y          undo / redo
-//   wheel                 scroll keys                  shift+wheel              scroll time
-//   ctrl+wheel            zoom time                    ruler click              locate
+//   double-click empty    add a note (length dropdown)   drag note          move (snap; vertical = transpose)
+//   drag empty            marquee-select                 drag note's right edge   resize
+//   right-click note      delete                         Delete                   delete selection
+//   Ctrl+Z / Ctrl+Y       undo / redo                    Ctrl+A                   select all
+//   wheel                 scroll keys                    shift+wheel              scroll time
+//   ctrl+wheel            zoom time                      ruler click              locate
+//   lane drag             velocity: set values; CC/bend: draw a curve (one undo step per stroke)
+//   lane right-drag       CC/bend: erase the dragged range
 class PianoRollView final : public juce::Component,
                             private juce::Timer
 {
@@ -38,14 +41,15 @@ public:
     bool keyPressed (const juce::KeyPress&) override;
 
 private:
-    enum class Drag { none, marquee, move, resize, velocity };
+    enum class Drag { none, marquee, move, resize, lane };
+    enum class LaneMode { velocity, pitchBend, controller };
 
     //==============================================================================
     // Geometry
     juce::Rectangle<int> rulerArea() const;
     juce::Rectangle<int> keysArea() const;
     juce::Rectangle<int> gridArea() const;
-    juce::Rectangle<int> velocityArea() const;
+    juce::Rectangle<int> laneArea() const;
 
     juce::int64 xToTick (int x) const;
     int tickToX (juce::int64 tick) const;
@@ -53,7 +57,19 @@ private:
     int keyToY (int key) const;
     juce::Rectangle<int> noteRect (const MidiSequence::Note&) const;
     juce::int64 snapTick (juce::int64 tick) const;
-    juce::int64 snapTicksOrZero() const;
+    juce::int64 snapTicksOrZero() const;      // 0 when the Snap toggle is off
+    juce::int64 gridTicks() const;            // the grid dropdown, regardless of the toggle
+    juce::int64 newNoteTicks() const;         // the note-length dropdown
+
+    //==============================================================================
+    // Lane (velocity / CC / pitch bend)
+    LaneMode laneMode() const;
+    int laneControllerNumber() const;
+    int laneValueMax() const;                 // 127, or 16383 for pitch bend
+    int laneValueFromY (int y) const;
+    int laneValueToY (int value) const;
+    void rebuildLaneBox();
+    void commitLaneGesture();
 
     //==============================================================================
     // Editing (all through clip.* commands)
@@ -63,6 +79,7 @@ private:
     void deleteNote (int index);
     void commitMoveOrResize();
     void commitVelocities();
+    void nudgeSelection (juce::int64 tickDelta, int keyDelta);
     void reselectByValue (const std::vector<MidiSequence::Note>& wanted);
 
     int noteIndexAt (juce::Point<int>, bool& onRightEdge) const;
@@ -92,12 +109,20 @@ private:
     bool dragChangedSomething = false;
     std::map<int, int> velocityPreview;    // index -> velocity during a velocity drag
 
+    // CC/bend lane gesture (tick -> value while drawing)
+    std::map<juce::int64, int> laneGesture;
+    juce::int64 gestureMinTick = -1, gestureMaxTick = -1;
+    bool laneErasing = false;
+
     // Toolbar
-    juce::ComboBox snapBox;
+    juce::TextButton snapToggle { "Snap" };
+    juce::ComboBox modeBox, snapBox, lengthBox, laneBox;
     juce::TextButton quantizeButton { "Q" }, undoButton { "Undo" }, redoButton { "Redo" };
     juce::Label trackLabel;
+    std::vector<int> lastCcList;           // CCs currently offered by laneBox
 
-    static constexpr int rulerHeight = 26, keysWidth = 56, velocityHeight = 64, toolbarHeight = 30;
+    static constexpr int rulerHeight = 26, keysWidth = 56, laneHeight = 80, toolbarHeight = 30;
+    static constexpr juce::int64 laneDrawQuantum = Ticks::perQuarterNote / 32;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PianoRollView)
 };

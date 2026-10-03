@@ -113,6 +113,66 @@ public:
             expectEquals (notesOf()[7].startTick, 9 * Q);
         }
 
+        beginTest ("setControlRange replaces one controller's window only");
+        {
+            juce::Array<juce::var> controls {
+                params ({ { "tick", 0 },     { "type", 0 }, { "number", 1 },  { "value", 10 } }),
+                params ({ { "tick", Q },     { "type", 0 }, { "number", 1 },  { "value", 20 } }),
+                params ({ { "tick", 2 * Q }, { "type", 0 }, { "number", 1 },  { "value", 30 } }),
+                params ({ { "tick", Q },     { "type", 0 }, { "number", 11 }, { "value", 99 } }) };
+
+            api.run ("clip.set", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var>() },
+                                           { "controls", controls } }));
+
+            // Replace CC1 inside [Q, 2Q) with two new points
+            juce::Array<juce::var> events { params ({ { "tick", Q }, { "value", 55 } }),
+                                            params ({ { "tick", Q + 1000 }, { "value", 56 } }) };
+
+            expect (api.run ("clip.setControlRange",
+                             params ({ { "trackId", tid }, { "type", 0 }, { "number", 1 },
+                                       { "start", Q }, { "end", 2 * Q }, { "events", events } }))["ok"]);
+
+            const auto& after = engine.getTrackSequence (trackId)->getControls();
+            expectEquals ((int) after.size(), 5);   // CC1: 10,55,56,30 + CC11: 99
+
+            int cc1 = 0, cc11 = 0;
+            for (auto& control : after)
+                (control.number == 1 ? cc1 : cc11) += 1;
+
+            expectEquals (cc1, 4);
+            expectEquals (cc11, 1);
+
+            // Empty events erases the controller in the window; CC11 survives
+            expect (api.run ("clip.setControlRange",
+                             params ({ { "trackId", tid }, { "type", 0 }, { "number", 1 },
+                                       { "start", 0 }, { "end", 4 * Q },
+                                       { "events", juce::Array<juce::var>() } }))["ok"]);
+
+            const auto& erased = engine.getTrackSequence (trackId)->getControls();
+            expectEquals ((int) erased.size(), 1);
+            expectEquals (erased[0].number, 11);
+
+            // Pitch bend values clamp to 14 bits
+            juce::Array<juce::var> bend { params ({ { "tick", 0 }, { "value", 20000 } }) };
+            expect (api.run ("clip.setControlRange",
+                             params ({ { "trackId", tid }, { "type", 1 }, { "number", 0 },
+                                       { "start", 0 }, { "end", Q }, { "events", bend } }))["ok"]);
+
+            const auto& withBend = engine.getTrackSequence (trackId)->getControls();
+            bool foundBend = false;
+
+            for (auto& control : withBend)
+                if (control.type == MidiSequence::ControlType::pitchBend)
+                {
+                    foundBend = true;
+                    expectEquals (control.value, 16383);
+                }
+
+            expect (foundBend);
+
+            api.run ("clip.clear", params ({ { "trackId", tid } }));
+        }
+
         beginTest ("undo/redo walk the clip history");
         {
             api.run ("clip.set", params ({ { "trackId", tid },
@@ -120,7 +180,7 @@ public:
             expectEquals ((int) notesOf().size(), 1);
 
             expect (api.run ("clip.undo", params ({ { "trackId", tid } }))["ok"]);
-            expectEquals ((int) notesOf().size(), 8);                // back to the moveRange result
+            expect (engine.getTrackSequence (trackId) == nullptr);   // back to the cleared state
 
             expect (api.run ("clip.redo", params ({ { "trackId", tid } }))["ok"]);
             expectEquals ((int) notesOf().size(), 1);

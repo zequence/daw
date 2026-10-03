@@ -769,6 +769,48 @@ void CommandDispatcher::registerCommands()
          "trackId:int start:int64 end:int64 destStart:int64 [includeControls:bool=true]",
          rangeCopier (true));
 
+    add ("clip.setControlRange",
+         "Replace one controller's events inside [start,end) in one undoable step; empty 'events' erases. "
+         "The CC-lane editor draws through this.",
+         "trackId:int type:int(0=cc,1=pitchBend,2=program) number:int(cc only) start:int64 end:int64 "
+         "events:[{tick,value}] [channel:int=1]",
+         [requireTrack, editClip] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             const auto type = (MidiSequence::ControlType) juce::jlimit (0, 2, (int) params.getProperty ("type", 0));
+             const auto number = (int) params.getProperty ("number", 1);
+             const auto start = (juce::int64) params.getProperty ("start", 0);
+             const auto end = (juce::int64) params.getProperty ("end", 0);
+             const auto channel = (int) params.getProperty ("channel", 1);
+
+             if (end <= start)
+                 return respond (fail ("'end' must be greater than 'start'"));
+
+             auto* eventList = params["events"].getArray();
+
+             if (eventList == nullptr && ! params["events"].isVoid())
+                 return respond (fail ("'events' must be an array of {tick,value}"));
+
+             editClip (id, [&] (auto&, auto& controls) -> juce::String
+             {
+                 std::erase_if (controls, [type, number, start, end] (const auto& c)
+                 {
+                     return c.type == type
+                         && (type != MidiSequence::ControlType::controller || c.number == number)
+                         && c.tick >= start && c.tick < end;
+                 });
+
+                 if (eventList != nullptr)
+                     for (auto& event : *eventList)
+                         controls.push_back ({ (juce::int64) event.getProperty ("tick", 0), type, channel,
+                                               number, (int) event.getProperty ("value", 0) });
+
+                 return {};
+             }, respond);
+         });
+
     add ("clip.undo", "Undo the last clip change on a track", "trackId:int",
          [this, requireTrack] (const juce::var& params, Respond respond)
          {
