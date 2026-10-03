@@ -12,7 +12,7 @@ namespace
 }
 
 MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher)
-    : engine (e)
+    : engine (e), commandDispatcher (dispatcher)
 {
     // Keep the window state sane when projects change through the API.
     dispatcher.onBeforeProjectChange = [safe = juce::Component::SafePointer<MainComponent> (this)]
@@ -157,7 +157,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher)
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &positionLabel, &perfButton,
              &collapseButton, &trackList, &channelList, &sidebarResizer,
-             &midiRegionsView, &audioRegionsView, &midiEditorView,
+             &midiRegionsView, &audioRegionsView, &pianoRollView,
              &instrumentsView, &instrumentEditorView, &settingsView,
              &statusLabel, &keyboard })
         addAndMakeVisible (c);
@@ -228,6 +228,9 @@ void MainComponent::selectTrack (AudioEngine::TrackId id, bool forceArm)
 
     if (contentView == ContentView::instruments)
         instrumentsView.focusTrack (id);
+
+    if (contentView == ContentView::midiEditor)
+        pianoRollView.setTrack (id);   // the editor follows the selected track
 
     updatePlaceholders();
 }
@@ -393,8 +396,15 @@ void MainComponent::setDomain (Domain newDomain)
 void MainComponent::showContent (ContentView view)
 {
     contentView = view;
+
+    if (view == ContentView::midiEditor)
+        pianoRollView.setTrack (selectedTrack);
+
     updatePlaceholders();
     updateViewVisibility();
+
+    if (view == ContentView::midiEditor)
+        pianoRollView.grabKeyboardFocus();
 }
 
 void MainComponent::showMainMenu()
@@ -572,7 +582,7 @@ void MainComponent::closeSettings()
 void MainComponent::updateViewVisibility()
 {
     midiRegionsView.setVisible (contentView == ContentView::midiRegions);
-    midiEditorView.setVisible (contentView == ContentView::midiEditor);
+    pianoRollView.setVisible (contentView == ContentView::midiEditor);
     audioRegionsView.setVisible (contentView == ContentView::audioRegions);
     instrumentsView.setVisible (contentView == ContentView::instruments);
     instrumentEditorView.setVisible (contentView == ContentView::instrumentEditor);
@@ -600,27 +610,6 @@ void MainComponent::updatePlaceholders()
                                   "This area will show clips on a timeline.",
                                   "Right-click a track for its clip and output options.",
                                   "Press E on a track to open the MIDI editor." });
-
-    juce::StringArray editorLines;
-
-    if (selectedTrack != 0)
-    {
-        editorLines.add ("Track: " + engine.getTrackName (selectedTrack));
-
-        if (auto sequence = engine.getTrackSequence (selectedTrack))
-            editorLines.add (juce::String ((int) sequence->getNotes().size()) + " notes, "
-                             + juce::String ((int) sequence->getControls().size()) + " control events");
-        else
-            editorLines.add ("No clip yet - record something or add the demo clip.");
-    }
-    else
-    {
-        editorLines.add ("No track selected.");
-    }
-
-    editorLines.add ("");
-    editorLines.add ("The piano roll lands here in the next milestone.");
-    midiEditorView.setDetails (editorLines);
 
     const auto channelCount = (int) engine.getAudioChannelIds().size();
     audioRegionsView.setDetails ({ juce::String (channelCount) + (channelCount == 1 ? " audio channel" : " audio channels")
@@ -738,7 +727,7 @@ void MainComponent::timerCallback()
     if (instrumentEditorView.isShowing())
         instrumentEditorView.refresh();
 
-    if (midiRegionsView.isShowing() || midiEditorView.isShowing() || audioRegionsView.isShowing())
+    if (midiRegionsView.isShowing() || audioRegionsView.isShowing())
         updatePlaceholders();
 
     // Status line
@@ -879,7 +868,7 @@ void MainComponent::resized()
     sidebarResizer.setVisible (! sidebarCollapsed);
 
     // Content container
-    for (auto* view : std::initializer_list<juce::Component*> { &midiRegionsView, &midiEditorView, &audioRegionsView,
+    for (auto* view : std::initializer_list<juce::Component*> { &midiRegionsView, &pianoRollView, &audioRegionsView,
                                                                 &instrumentsView, &instrumentEditorView })
         view->setBounds (area);
 

@@ -16,6 +16,7 @@ target_sources(OrchestralDAW PRIVATE
     src/AudioEngine.cpp
     src/MainComponent.cpp
     src/ui/TrackList.cpp
+    src/ui/PianoRollView.cpp
     src/api/CommandDispatcher.cpp
     src/model/TempoMap.cpp
     src/engine/Transport.cpp
@@ -84,6 +85,7 @@ target_sources(OrchestralDAWTests PRIVATE
     tests/ProjectTests.cpp
     tests/EndToEndTests.cpp
     tests/ApiTests.cpp
+    tests/ClipCommandTests.cpp
     src/AudioEngine.cpp
     src/api/CommandDispatcher.cpp
     src/model/TempoMap.cpp

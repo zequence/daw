@@ -10,6 +10,7 @@
 #include "ui/InstrumentEditorView.h"
 #include "ui/SettingsView.h"
 #include "ui/PlaceholderView.h"
+#include "ui/PianoRollView.h"
 
 // The single-window shell (see GUI_DESIGN.md):
 //   topbar (menu, domain buttons, transport) / sidebar + content container / status + keyboard.
@@ -66,6 +67,7 @@ private:
 
     //==============================================================================
     AudioEngine& engine;
+    CommandDispatcher& commandDispatcher;
 
     // Topbar
     juce::TextButton menuButton { "Menu" }, midiDomainButton { "Midi" }, audioDomainButton { "Audio" },
@@ -104,8 +106,8 @@ private:
     } sidebarResizer { *this };
 
     // Content views
-    PlaceholderView midiRegionsView { "Arrangement" }, audioRegionsView { "Audio regions" },
-                    midiEditorView { "MIDI Editor" };
+    PlaceholderView midiRegionsView { "Arrangement" }, audioRegionsView { "Audio regions" };
+    PianoRollView pianoRollView { engine, commandDispatcher };
     InstrumentsView instrumentsView { engine };
     InstrumentEditorView instrumentEditorView { engine };
     SettingsView settingsView { engine };

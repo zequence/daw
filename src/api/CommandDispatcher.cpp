@@ -81,6 +81,18 @@ void CommandDispatcher::dispatch (const juce::String& message, Respond out)
     it->second.run (parsed.getProperty ("params", {}), std::move (respond));
 }
 
+juce::var CommandDispatcher::run (const juce::String& cmd, const juce::var& params)
+{
+    juce::var reply;
+
+    if (const auto it = commands.find (cmd); it != commands.end())
+        it->second.run (params, [&reply] (const juce::var& r) { reply = r; });
+    else
+        reply = fail ("unknown command '" + cmd + "'");
+
+    return reply;
+}
+
 //==============================================================================
 void CommandDispatcher::registerCommands()
 {
@@ -497,6 +509,264 @@ void CommandDispatcher::registerCommands()
              int id = 0;
              if (! requireTrack (params, respond, id)) return;
              engine.setTrackSequence (id, nullptr);
+             respond (ok());
+         });
+
+    // Applies 'edit' to copies of the clip's note/control vectors, then commits the
+    // result as one undoable step. An empty result clears the clip.
+    auto editClip = [this] (int trackId,
+                            std::function<juce::String (std::vector<MidiSequence::Note>&,
+                                                        std::vector<MidiSequence::Control>&)> edit,
+                            Respond& respond)
+    {
+        std::vector<MidiSequence::Note> notes;
+        std::vector<MidiSequence::Control> controls;
+
+        if (auto sequence = engine.getTrackSequence (trackId))
+        {
+            notes = sequence->getNotes();
+            controls = sequence->getControls();
+        }
+
+        if (auto error = edit (notes, controls); error.isNotEmpty())
+            return respond (fail (error));
+
+        engine.setTrackSequence (trackId, notes.empty() && controls.empty()
+                                              ? nullptr
+                                              : MidiSequence::create (std::move (notes), std::move (controls)));
+
+        const auto sequence = engine.getTrackSequence (trackId);
+        auto result = object();
+        result->setProperty ("noteCount", sequence != nullptr ? (int) sequence->getNotes().size() : 0);
+        result->setProperty ("controlCount", sequence != nullptr ? (int) sequence->getControls().size() : 0);
+        respond (ok (juce::var (result.get())));
+    };
+
+    add ("clip.updateNotes", "Modify notes by index (indices refer to the clip before the edit)",
+         "trackId:int notes:[{index:int, start?,length?,key?,velocity?,channel?}]",
+         [requireTrack, editClip] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             editClip (id, [&params] (auto& notes, auto&) -> juce::String
+             {
+                 auto* edits = params["notes"].getArray();
+
+                 if (edits == nullptr)
+                     return "'notes' must be an array of {index, ...changes}";
+
+                 for (auto& edit : *edits)
+                 {
+                     const int index = (int) edit.getProperty ("index", -1);
+
+                     if (index < 0 || index >= (int) notes.size())
+                         return "note index " + juce::String (index) + " out of range (0.."
+                                + juce::String ((int) notes.size() - 1) + ")";
+
+                     auto& note = notes[(size_t) index];
+                     if (edit.hasProperty ("start"))    note.startTick = (juce::int64) edit["start"];
+                     if (edit.hasProperty ("length"))   note.lengthTicks = (juce::int64) edit["length"];
+                     if (edit.hasProperty ("key"))      note.key = (int) edit["key"];
+                     if (edit.hasProperty ("velocity")) note.velocity = (int) edit["velocity"];
+                     if (edit.hasProperty ("channel"))  note.channel = (int) edit["channel"];
+                 }
+
+                 return {};
+             }, respond);
+         });
+
+    add ("clip.removeNotes", "Remove notes by index", "trackId:int indices:[int]",
+         [requireTrack, editClip] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             editClip (id, [&params] (auto& notes, auto&) -> juce::String
+             {
+                 auto* indices = params["indices"].getArray();
+
+                 if (indices == nullptr)
+                     return "'indices' must be an array of note indices";
+
+                 std::vector<bool> remove (notes.size(), false);
+
+                 for (auto& index : *indices)
+                 {
+                     const int i = (int) index;
+
+                     if (i < 0 || i >= (int) notes.size())
+                         return "note index " + juce::String (i) + " out of range";
+
+                     remove[(size_t) i] = true;
+                 }
+
+                 size_t kept = 0;
+                 for (size_t i = 0; i < notes.size(); ++i)
+                     if (! remove[i])
+                         notes[kept++] = notes[i];
+
+                 notes.resize (kept);
+                 return {};
+             }, respond);
+         });
+
+    add ("clip.quantize", "Snap note starts to a grid", "trackId:int grid:int64(ticks) [strength:0..1=1] [start:int64 end:int64] ",
+         [requireTrack, editClip] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             const auto grid = (juce::int64) params.getProperty ("grid", 0);
+
+             if (grid <= 0)
+                 return respond (fail ("'grid' must be a positive tick count (e.g. 960000 = quarter note)"));
+
+             const auto strength = juce::jlimit (0.0, 1.0, (double) params.getProperty ("strength", 1.0));
+             const auto rangeStart = (juce::int64) params.getProperty ("start", 0);
+             const auto rangeEnd = params.hasProperty ("end") ? (juce::int64) params["end"]
+                                                              : std::numeric_limits<juce::int64>::max();
+
+             editClip (id, [grid, strength, rangeStart, rangeEnd] (auto& notes, auto&) -> juce::String
+             {
+                 for (auto& note : notes)
+                 {
+                     if (note.startTick < rangeStart || note.startTick >= rangeEnd)
+                         continue;
+
+                     const auto target = ((note.startTick + grid / 2) / grid) * grid;
+                     note.startTick += (juce::int64) std::llround ((double) (target - note.startTick) * strength);
+                 }
+
+                 return {};
+             }, respond);
+         });
+
+    add ("clip.eraseRange", "Erase content in [start,end); notes crossing 'start' are truncated",
+         "trackId:int start:int64 end:int64 [includeControls:bool=true]",
+         [requireTrack, editClip] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             const auto start = (juce::int64) params.getProperty ("start", 0);
+             const auto end = (juce::int64) params.getProperty ("end", 0);
+
+             if (end <= start)
+                 return respond (fail ("'end' must be greater than 'start'"));
+
+             const bool includeControls = params.getProperty ("includeControls", true);
+
+             editClip (id, [start, end, includeControls] (auto& notes, auto& controls) -> juce::String
+             {
+                 std::erase_if (notes, [start, end] (const auto& n)
+                                { return n.startTick >= start && n.startTick < end; });
+
+                 for (auto& note : notes)
+                     if (note.startTick < start && note.startTick + note.lengthTicks > start)
+                         note.lengthTicks = start - note.startTick;
+
+                 if (includeControls)
+                     std::erase_if (controls, [start, end] (const auto& c)
+                                    { return c.tick >= start && c.tick < end; });
+
+                 return {};
+             }, respond);
+         });
+
+    auto rangeCopier = [requireTrack, editClip] (bool removeSource)
+    {
+        return [requireTrack, editClip, removeSource] (const juce::var& params, Respond respond)
+        {
+            int id = 0;
+            if (! requireTrack (params, respond, id)) return;
+
+            const auto start = (juce::int64) params.getProperty ("start", 0);
+            const auto end = (juce::int64) params.getProperty ("end", 0);
+            const auto destStart = (juce::int64) params.getProperty ("destStart", 0);
+            const auto times = juce::jlimit (1, 256, (int) params.getProperty ("times", 1));
+            const bool includeControls = params.getProperty ("includeControls", true);
+
+            if (end <= start)
+                return respond (fail ("'end' must be greater than 'start'"));
+
+            editClip (id, [=] (auto& notes, auto& controls) -> juce::String
+            {
+                std::vector<MidiSequence::Note> sourceNotes;
+                std::vector<MidiSequence::Control> sourceControls;
+
+                for (auto& note : notes)
+                    if (note.startTick >= start && note.startTick < end)
+                        sourceNotes.push_back (note);
+
+                if (includeControls)
+                    for (auto& control : controls)
+                        if (control.tick >= start && control.tick < end)
+                            sourceControls.push_back (control);
+
+                if (removeSource)
+                {
+                    std::erase_if (notes, [start, end] (const auto& n)
+                                   { return n.startTick >= start && n.startTick < end; });
+
+                    if (includeControls)
+                        std::erase_if (controls, [start, end] (const auto& c)
+                                       { return c.tick >= start && c.tick < end; });
+                }
+
+                const auto span = end - start;
+
+                for (int repeat = 0; repeat < times; ++repeat)
+                {
+                    const auto offset = destStart + (juce::int64) repeat * span - start;
+
+                    for (auto note : sourceNotes)
+                    {
+                        note.startTick += offset;
+                        notes.push_back (note);
+                    }
+
+                    for (auto control : sourceControls)
+                    {
+                        control.tick += offset;
+                        controls.push_back (control);
+                    }
+                }
+
+                return {};
+            }, respond);
+        };
+    };
+
+    add ("clip.copyRange", "Copy [start,end) to destStart, optionally repeated (ostinato)",
+         "trackId:int start:int64 end:int64 destStart:int64 [times:int=1] [includeControls:bool=true]",
+         rangeCopier (false));
+
+    add ("clip.moveRange", "Move [start,end) to destStart",
+         "trackId:int start:int64 end:int64 destStart:int64 [includeControls:bool=true]",
+         rangeCopier (true));
+
+    add ("clip.undo", "Undo the last clip change on a track", "trackId:int",
+         [this, requireTrack] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             if (! engine.undoTrackSequence (id))
+                 return respond (fail ("nothing to undo on track " + juce::String (id)));
+
+             respond (ok());
+         });
+
+    add ("clip.redo", "Redo the last undone clip change on a track", "trackId:int",
+         [this, requireTrack] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             if (! engine.redoTrackSequence (id))
+                 return respond (fail ("nothing to redo on track " + juce::String (id)));
+
              respond (ok());
          });
 

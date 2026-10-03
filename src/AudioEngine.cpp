@@ -496,23 +496,71 @@ void AudioEngine::applyMuteAndSolo()
 }
 
 //==============================================================================
+void AudioEngine::applySequence (Track& track, MidiSequence::Ptr sequence)
+{
+    track.sequence = sequence;
+
+    if (auto* node = graph.getNodeForId (track.midiSourceNode))
+        if (auto* source = dynamic_cast<MidiSourceProcessor*> (node->getProcessor()))
+            source->setSequence (std::move (sequence));
+}
+
 void AudioEngine::setTrackSequence (TrackId id, MidiSequence::Ptr sequence)
 {
     if (auto* track = findTrack (id))
     {
-        track->sequence = sequence;
+        constexpr size_t maxHistory = 200;
 
-        auto* node = graph.getNodeForId (track->midiSourceNode);
-        auto* source = node != nullptr ? dynamic_cast<MidiSourceProcessor*> (node->getProcessor()) : nullptr;
+        track->undoStack.push_back (track->sequence);
+
+        if (track->undoStack.size() > maxHistory)
+            track->undoStack.erase (track->undoStack.begin());
+
+        track->redoStack.clear();
 
         juce::Logger::writeToLog ("Track " + juce::String (id)
                                   + (sequence != nullptr ? ": sequence set (" + juce::String ((int) sequence->getNotes().size()) + " notes)"
-                                                         : ": sequence cleared")
-                                  + (source == nullptr ? " - NO SOURCE NODE!" : ""));
-
-        if (source != nullptr)
-            source->setSequence (std::move (sequence));
+                                                         : ": sequence cleared"));
+        applySequence (*track, std::move (sequence));
     }
+}
+
+bool AudioEngine::undoTrackSequence (TrackId id)
+{
+    auto* track = findTrack (id);
+
+    if (track == nullptr || track->undoStack.empty())
+        return false;
+
+    track->redoStack.push_back (track->sequence);
+    applySequence (*track, track->undoStack.back());
+    track->undoStack.pop_back();
+    return true;
+}
+
+bool AudioEngine::redoTrackSequence (TrackId id)
+{
+    auto* track = findTrack (id);
+
+    if (track == nullptr || track->redoStack.empty())
+        return false;
+
+    track->undoStack.push_back (track->sequence);
+    applySequence (*track, track->redoStack.back());
+    track->redoStack.pop_back();
+    return true;
+}
+
+bool AudioEngine::canUndoClip (TrackId id) const
+{
+    auto* track = findTrack (id);
+    return track != nullptr && ! track->undoStack.empty();
+}
+
+bool AudioEngine::canRedoClip (TrackId id) const
+{
+    auto* track = findTrack (id);
+    return track != nullptr && ! track->redoStack.empty();
 }
 
 MidiSequence::Ptr AudioEngine::getTrackSequence (TrackId id) const
@@ -856,6 +904,13 @@ void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std:
 
         if (e->getBoolAttribute ("armed"))
             setArmedTrack (trackId);
+    }
+
+    // A freshly loaded project starts with clean clip histories.
+    for (auto& [id, track] : tracks)
+    {
+        track.undoStack.clear();
+        track.redoStack.clear();
     }
 }
 

@@ -22,6 +22,10 @@ public:
     // 'message' is one JSON object (see above). Must be called on the message thread.
     void dispatch (const juce::String& message, Respond);
 
+    // In-process clients (the UI) call commands directly; the reply is returned for
+    // synchronous commands (clip edits, transport...). Same code path as the socket.
+    juce::var run (const juce::String& cmd, const juce::var& params = {});
+
     // UI hooks, so API-driven project changes keep the window state sane.
     std::function<void()> onBeforeProjectChange;                 // e.g. close plugin editor windows
     std::function<void (const juce::File&)> onAfterProjectChange;   // e.g. refresh labels/title ({} = new project)

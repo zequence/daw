@@ -89,9 +89,15 @@ public:
     void setTrackSoloed (TrackId, bool);
     bool isTrackSoloed (TrackId) const;
 
-    void setTrackSequence (TrackId, MidiSequence::Ptr);
+    void setTrackSequence (TrackId, MidiSequence::Ptr);   // records clip history (undo)
     MidiSequence::Ptr getTrackSequence (TrackId) const;
     void addToTrackSequence (TrackId, std::vector<MidiSequence::Note>, std::vector<MidiSequence::Control>);
+
+    // Per-track clip history. Sequences are immutable, so history is a stack of pointers.
+    bool undoTrackSequence (TrackId);
+    bool redoTrackSequence (TrackId);
+    bool canUndoClip (TrackId) const;
+    bool canRedoClip (TrackId) const;
 
     void setArmedTrack (TrackId);             // live MIDI follows the armed track's outputs
     TrackId getArmedTrack() const noexcept    { return armedTrack; }
@@ -150,6 +156,7 @@ private:
         NodeID midiSourceNode;
         juce::String name;
         MidiSequence::Ptr sequence;                 // message-thread copy, for UI queries
+        std::vector<MidiSequence::Ptr> undoStack, redoStack;
         std::vector<Output> outputs;
         bool muted = false, soloed = false;
     };
@@ -187,6 +194,7 @@ private:
 
     void restoreProjectTracks (const juce::XmlElement& root, const std::map<int, InstrumentId>& instrumentIds,
                                juce::StringArray& warnings);
+    void applySequence (Track&, MidiSequence::Ptr);   // pushes to the source node, no history
     void updateMidiRouting();                 // keeps midiIn -> route connections matching the armed track
     void applyMuteAndSolo();
     void mergeIntoTrack (TrackId, const MidiRecorder::Result&);
