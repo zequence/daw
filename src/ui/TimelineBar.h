@@ -6,10 +6,12 @@
 class CommandDispatcher;
 
 // The timeline bar (MILESTONES.md): sits under the topbar, above the content views,
-// and owns the shared time axis. Rows: markers, bars, tempo track, time-signature
-// track; a readout panel on the right shows bars.beats and h:mm:ss:ms (hours only
-// when non-zero). Click/drag locates (beat-snapped); right-click manages markers;
-// ctrl/shift wheel zooms and scrolls every timeline view at once.
+// and owns the shared time axis. Rows, top to bottom: time (h:m:s per visible bar,
+// computed from tempo and signature), tempo track, time-signature track, markers,
+// bars; bar lines run the full height. A readout panel on the right shows bars.beats
+// and h:mm:ss:ms (hours only when non-zero). Click/drag locates (beat-snapped);
+// right-click manages markers; ctrl/shift wheel zooms and scrolls every timeline
+// view at once.
 class TimelineBar final : public juce::Component,
                           private juce::Timer
 {
@@ -17,7 +19,7 @@ public:
     TimelineBar (AudioEngine&, CommandDispatcher&, TimeAxis&);
     ~TimelineBar() override;
 
-    static constexpr int barHeight = 64;
+    static constexpr int barHeight = 76;
 
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
@@ -44,7 +46,7 @@ private:
     int lastAxisRevision = -1;
 
     static constexpr int readoutWidth = 148;
-    static constexpr int markerRow = 0, barRow = 16, tempoRow = 34, sigRow = 49;
+    static constexpr int timeRow = 0, tempoRow = 15, sigRow = 30, markerRow = 45, barRow = 60;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (TimelineBar)
 };

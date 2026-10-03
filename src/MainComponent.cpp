@@ -40,6 +40,8 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     };
 
     // --- Topbar ---
+    menuButton.setButtonText (juce::String::fromUTF8 ("\xE2\x98\xB0"));   // hamburger
+    menuButton.setTooltip ("Main menu");
     menuButton.onClick = [this] { showMainMenu(); };
     midiDomainButton.onClick = [this] { setDomain (Domain::midi); };
     audioDomainButton.onClick = [this] { setDomain (Domain::audio); };
@@ -980,7 +982,7 @@ void MainComponent::resized()
 
     // Topbar
     auto toolbar = area.removeFromTop (topbarHeight).reduced (8, 7);
-    menuButton.setBounds (toolbar.removeFromLeft (56));
+    menuButton.setBounds (toolbar.removeFromLeft (36));
     toolbar.removeFromLeft (10);
     midiDomainButton.setBounds (toolbar.removeFromLeft (52));
     toolbar.removeFromLeft (4);

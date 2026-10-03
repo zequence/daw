@@ -29,9 +29,20 @@ below. If Claude is unsure of an issue they will pose a question.
 
 # Top bar
 
+- [ ] Make the Main menu a hamburger menu
 - [x] Clicking on UI buttons toggles that UI between the UI and arrange mode.
       (Instruments and History toggle back to the current domain's arrange view
       when clicked while open; Escape still works too)
+
+# Timeline bar
+
+- [ ] Time [h:m:s] per visible bar should be the top row in the timeline bar. This means we calculate time for every bar according tempo and signature.
+- [ ] Order should be (the bar lines go all the way up to the top of the timeline view):
+    - Time
+    - Tempo
+    - Time signature
+    - Marker
+    - bars
 
 # Midi record
 

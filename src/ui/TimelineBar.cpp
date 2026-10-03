@@ -16,6 +16,20 @@ namespace
 
         return h > 0 ? juce::String (h) + ":" + text : text;
     }
+
+    // Compact h:m:s for the per-bar time row (hours only when non-zero).
+    juce::String formatBarTime (double seconds)
+    {
+        const auto total = (juce::int64) std::llround (juce::jmax (0.0, seconds));
+        const auto s = (int) (total % 60);
+        const auto m = (int) ((total / 60) % 60);
+        const auto h = (int) (total / 3600);
+
+        auto text = juce::String (m) + ":" + juce::String (s).paddedLeft ('0', 2);
+        return h > 0 ? juce::String (h) + ":" + juce::String (m).paddedLeft ('0', 2)
+                         + ":" + juce::String (s).paddedLeft ('0', 2)
+                     : text;
+    }
 }
 
 TimelineBar::TimelineBar (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
@@ -196,18 +210,19 @@ void TimelineBar::paint (juce::Graphics& g)
     const auto map = transport.getTempoMap();
     const auto endTick = axis.xToTick (lanes.getRight());
 
-    // --- Row separators + gutter labels ---
+    // --- Row separators + gutter labels (top to bottom: time, tempo, sig, markers, bars) ---
     g.setColour (juce::Colour (0xff2e3136));
 
-    for (auto y : { barRow, tempoRow, sigRow })
+    for (auto y : { tempoRow, sigRow, markerRow, barRow })
         g.fillRect (0, y, lanes.getWidth(), 1);
 
     g.setColour (juce::Colours::grey.withAlpha (0.6f));
     g.setFont (juce::FontOptions (9.0f));
-    g.drawText ("MARK",  2, markerRow + 2, TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
-    g.drawText ("BARS",  2, barRow + 3,    TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
+    g.drawText ("TIME",  2, timeRow + 2,   TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
     g.drawText ("TEMPO", 2, tempoRow + 2,  TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
     g.drawText ("SIG",   2, sigRow + 2,    TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
+    g.drawText ("MARK",  2, markerRow + 2, TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
+    g.drawText ("BARS",  2, barRow + 3,    TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
 
     // --- Loop band (on the bars row) ---
     if (transport.isLooping() && transport.getLoopEnd() > transport.getLoopStart())
@@ -215,12 +230,13 @@ void TimelineBar::paint (juce::Graphics& g)
         const auto x1 = juce::jmax (TimeAxis::gutter, axis.tickToX (transport.getLoopStart()));
         const auto x2 = axis.tickToX (transport.getLoopEnd());
         g.setColour (juce::Colours::steelblue.withAlpha (0.35f));
-        g.fillRect (x1, barRow + 1, juce::jmax (2, x2 - x1), tempoRow - barRow - 1);
+        g.fillRect (x1, barRow + 1, juce::jmax (2, x2 - x1), getHeight() - barRow - 1);
     }
 
-    // --- Bars (ticks + numbers) ---
+    // --- Bars: full-height lines, numbers at the bottom, wall-clock time at the top
+    //     (computed per bar from the tempo and signature timelines) ---
     auto barTick = map->getBarStart (axis.scrollTick);
-    int guard = 0;
+    int guard = 0, lastTimeLabelRight = -1;
 
     while (barTick < endTick && ++guard < 3000)
     {
@@ -229,12 +245,22 @@ void TimelineBar::paint (juce::Graphics& g)
         if (x >= TimeAxis::gutter && x < lanes.getRight())
         {
             g.setColour (juce::Colour (0xff45494f));
-            g.fillRect (x, barRow, 1, getHeight() - barRow);
+            g.fillRect (x, 0, 1, getHeight());
 
             g.setColour (juce::Colours::lightgrey);
             g.setFont (juce::FontOptions (11.0f));
             g.drawText (juce::String (map->ticksToBarsBeats (barTick).bar),
                         x + 3, barRow + 2, 44, 13, juce::Justification::left);
+
+            // Skip time labels that would overlap the previous one.
+            if (x + 2 > lastTimeLabelRight)
+            {
+                g.setColour (juce::Colours::grey);
+                g.setFont (juce::FontOptions (10.0f));
+                g.drawText (formatBarTime (map->ticksToSeconds (barTick)),
+                            x + 3, timeRow + 2, 52, 12, juce::Justification::left);
+                lastTimeLabelRight = x + 3 + 52;
+            }
         }
 
         barTick += map->getTicksPerBar (barTick);
@@ -249,7 +275,7 @@ void TimelineBar::paint (juce::Graphics& g)
             continue;
 
         g.setColour (juce::Colours::gold.withAlpha (0.9f));
-        g.fillRect (x, markerRow, 1, getHeight());
+        g.fillRect (x, markerRow, 1, getHeight() - markerRow);
         g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
         g.drawText (marker.name, x + 3, markerRow + 2, 120, 12, juce::Justification::left);
     }
