@@ -41,7 +41,7 @@ public:
     bool keyPressed (const juce::KeyPress&) override;
 
 private:
-    enum class Drag { none, marquee, move, resize, lane };
+    enum class Drag { none, marquee, move, resize, lane, draw };
     enum class LaneMode { velocity, pitchBend, controller };
 
     //==============================================================================
@@ -74,6 +74,7 @@ private:
     //==============================================================================
     // Editing (all through clip.* commands)
     void runCommand (const juce::String& cmd, juce::DynamicObject::Ptr params);
+    void commitNewNote (const MidiSequence::Note&);   // one clip.addNotes = one history event
     void addNoteAt (juce::int64 tick, int key);
     void deleteSelection();
     void deleteNote (int index);
@@ -108,6 +109,9 @@ private:
     int dragKeyOffset = 0;
     bool dragChangedSomething = false;
     std::map<int, int> velocityPreview;    // index -> velocity during a velocity drag
+
+    // Draw-mode note in progress (committed once, on mouse up)
+    MidiSequence::Note pendingNote;
 
     // CC/bend lane gesture (tick -> value while drawing)
     std::map<juce::int64, int> laneGesture;

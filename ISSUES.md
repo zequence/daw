@@ -4,12 +4,23 @@ Lightweight tracker. Claude checks this file at every prompt: small unambiguous
 items get fixed and marked `- [x]` with a note; ambiguous ones get a question;
 big ones become milestones. Add new items as `- [ ]` under a heading.
 Unsolved items go at the top of each chapter; solved ones sink below.
+If Claude is unsure of an issue they will pose a question.
 
 # Global
 
+- [ ] history UI. Button for it at the top bar. Show all actions there. Ability to time-travel backwards to an earlier edit.
 - [x] Closing the app should ask if wanting to save first
       (asks only when there are unsaved changes: Save / Discard / Cancel; the
       untouched startup state doesn't count as unsaved)
+
+# Timeline bar
+
+- Create timeline bar that sits under the menu, on top of the different non-full-window gui modes. Has:
+    - time (hours:min:sec:ms) (hours only when non-zero)
+    - Tempo track
+    - time signature
+    - markers
+    - bars (already implemented)
 
 # Midi record
 
@@ -22,6 +33,9 @@ Unsolved items go at the top of each chapter; solved ones sink below.
 
 ## Midi editing
 
+- [x] Drawing notes and "re-sizing" should not create two separate events in
+      history; the event ends when lifting the mouse button
+      (Draw mode now previews the note locally and commits once on mouse up)
 - [x] Edit modes (dropdown): select (key S), draw (key D)
       (Draw: click adds a note at the length dropdown's value, dragging stretches
       it; Select: marquee/move/resize as before, double-click still adds)

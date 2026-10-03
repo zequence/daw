@@ -348,13 +348,13 @@ void PianoRollView::runCommand (const juce::String& cmd, juce::DynamicObject::Pt
                                   + reply.getProperty ("error", {}).toString());
 }
 
-void PianoRollView::addNoteAt (juce::int64 tick, int key)
+void PianoRollView::commitNewNote (const MidiSequence::Note& newNote)
 {
     auto note = new juce::DynamicObject();
-    note->setProperty ("start", snapTick (tick));
-    note->setProperty ("length", newNoteTicks());
-    note->setProperty ("key", juce::jlimit (0, 127, key));
-    note->setProperty ("velocity", 96);
+    note->setProperty ("start", newNote.startTick);
+    note->setProperty ("length", newNote.lengthTicks);
+    note->setProperty ("key", juce::jlimit (0, 127, newNote.key));
+    note->setProperty ("velocity", newNote.velocity);
 
     juce::Array<juce::var> notes;
     notes.add (juce::var (note));
@@ -367,13 +367,18 @@ void PianoRollView::addNoteAt (juce::int64 tick, int key)
     // Select the new note
     if (auto seq = sequence())
     {
-        const auto snapped = snapTick (tick);
         selection.clear();
 
         for (int i = 0; i < (int) seq->getNotes().size(); ++i)
-            if (seq->getNotes()[(size_t) i].startTick == snapped && seq->getNotes()[(size_t) i].key == key)
+            if (seq->getNotes()[(size_t) i].startTick == newNote.startTick
+                 && seq->getNotes()[(size_t) i].key == newNote.key)
                 selection.insert (i);
     }
+}
+
+void PianoRollView::addNoteAt (juce::int64 tick, int key)
+{
+    commitNewNote ({ snapTick (tick), newNoteTicks(), 1, key, 96 });
 }
 
 void PianoRollView::deleteSelection()
@@ -608,9 +613,11 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
     }
     else if (modeBox.getSelectedId() == 2)
     {
-        // Draw mode: add a note right here; keep dragging to stretch it.
-        addNoteAt (xToTick (position.x), yToKey (position.y));
-        drag = Drag::resize;
+        // Draw mode: preview a note here; stretch while dragging; ONE event on mouse up.
+        pendingNote = { snapTick (xToTick (position.x)), newNoteTicks(), 1,
+                        juce::jlimit (0, 127, yToKey (position.y)), 96 };
+        selection.clear();
+        drag = Drag::draw;
     }
     else
     {
@@ -633,6 +640,16 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
         const auto grid = snapTicksOrZero();
         dragTickOffset = grid > 0 ? (rawTicks / juce::jmax ((juce::int64) 1, grid)) * grid : rawTicks;
         dragKeyOffset = drag == Drag::move ? (dragStart.y - position.y) / keyHeight : 0;
+        dragChangedSomething = true;
+        repaint();
+    }
+    else if (drag == Drag::draw)
+    {
+        const auto raw = xToTick (position.x) - pendingNote.startTick;
+        const auto grid = snapTicksOrZero();
+        const auto minimum = grid > 0 ? grid : laneDrawQuantum;
+        pendingNote.lengthTicks = juce::jmax (minimum,
+                                              grid > 0 ? ((raw + grid / 2) / grid) * grid : raw);
         dragChangedSomething = true;
         repaint();
     }
@@ -715,6 +732,10 @@ void PianoRollView::mouseUp (const juce::MouseEvent& event)
         commitMoveOrResize();
         dragTickOffset = 0;
         dragKeyOffset = 0;
+    }
+    else if (drag == Drag::draw)
+    {
+        commitNewNote (pendingNote);
     }
     else if (drag == Drag::lane)
     {
@@ -973,6 +994,14 @@ void PianoRollView::paint (juce::Graphics& g)
             g.setColour (juce::Colours::black.withAlpha (0.4f));
             g.drawRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f, 1.0f);
         }
+    }
+
+    // --- Draw-mode preview note ---
+    if (drag == Drag::draw)
+    {
+        const auto rect = noteRect (pendingNote);
+        g.setColour (juce::Colours::orange.withAlpha (0.8f));
+        g.fillRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f);
     }
 
     // --- Marquee ---
