@@ -63,8 +63,7 @@ private:
     // View state (time scroll/zoom live in the shared axis)
     int scrollLane = 0;
     juce::int64 lastPlayheadTick = -1;
-    int lastAxisRevision = -1;
-    std::vector<AudioEngine::TrackId> lastOrder;   // repaint when folders re-arrange lanes
+    int lastAxisRevision = -1, lastEngineRevision = -1;
 
     // Block cache per track (recomputed when the sequence pointer changes)
     struct CacheEntry

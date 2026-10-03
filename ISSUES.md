@@ -15,6 +15,12 @@ below. If Claude is unsure of an issue they will pose a question.
 
 # Global
 
+- [x] All gui elements that affect other gui elements need an update mechanism.
+      (systematic now: every engine mutation bumps a state revision counter
+      via emitEvent - the same channel that feeds the API stream, history and
+      the dirty flag. Each view's 30 Hz timer compares that one number and
+      repaints; no more hand-picking which state to watch. Topbar bpm/loop
+      follow it too.)
 - [x] history UI. Button for it at the top bar. Show all actions there. Ability
       to time-travel backwards to an earlier edit.
       (History button in the topbar opens the view: every action as an entry
@@ -37,6 +43,9 @@ below. If Claude is unsure of an issue they will pose a question.
 
 # Timeline bar
 
+- [x] Update UI when edited. Time is not updated when editing tempo.
+      (fixed by the global state-revision mechanism: tempo edits now redraw
+      the time row, and tempo set over the API updates the topbar bpm label)
 - [x] Time [h:m:s] per visible bar should be the top row in the timeline bar. This means we calculate time for every bar according tempo and signature.
       (computed per bar via TempoMap::ticksToSeconds, so tempo and signature
       changes are respected; hours shown only when non-zero; labels that would
@@ -51,6 +60,11 @@ below. If Claude is unsure of an issue they will pose a question.
 
 # Sidebar
 
+- [ ] Drag channels to re-order them. Select multiple channels by holding Shift or Ctrl (the usual functionality) and drag those together. Multiple will be put in order (as one group) once moved out of the current position. Moving only happens when mouse moves outside of the channel being dragged, and move is complete only after dropping.
+      (Milestone-sized - scoped as "Channel re-ordering by drag" in
+      MILESTONES.md: needs an explicit ordering model in the engine first;
+      will be built together with drag-into-folder below. Say the word if it
+      should come sooner.)
 - [ ] Drag tracks/channels/folders onto a folder row to move them into it
       (folders landed 2026-10-03 with context-menu moving; drag is the missing
       gesture)
@@ -70,8 +84,13 @@ below. If Claude is unsure of an issue they will pose a question.
 - [x] When recording with replace, no midi data is played from that track during
       the take (live monitoring unaffected; semantics updated in DESIGN.md)
 
-## Midi editing
+## Midi editor
 
+- [ ] Add small text descriptions to editor top panel items where needed.
+- [x] Play notes when added. Toggle button for it at the top editor panel.
+      ("Hear" toggle in the editor toolbar, on by default: double-click adds
+      and draw-mode clicks play the note for 250 ms through the armed track's
+      instrument)
 - [ ] CC and note velocity, aftertouch at the bottom. Velocity is default. More
       lanes can be added on top of each other. Requires controls below the piano
       keys. (Milestone-sized - also captured as "Stacked editor lanes" in

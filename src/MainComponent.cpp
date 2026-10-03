@@ -882,6 +882,17 @@ void MainComponent::timerCallback()
     playButton.setToggleState (transport.isPlaying(), juce::dontSendNotification);
     playButton.setButtonText (transport.isPlaying() ? "Stop" : "Play");
     recordButton.setToggleState (engine.isRecording(), juce::dontSendNotification);
+    loopButton.setToggleState (transport.isLooping(), juce::dontSendNotification);
+
+    // Any engine mutation (from the UI, the API, or history travel) refreshes the
+    // topbar widgets that mirror engine state.
+    if (engine.getStateRevision() != lastEngineRevision)
+    {
+        lastEngineRevision = engine.getStateRevision();
+
+        if (! bpmLabel.isBeingEdited())
+            bpmLabel.setText (juce::String (engine.getTempoBpm(), 1), juce::dontSendNotification);
+    }
 
     if (trackList.isShowing())
         trackList.refresh();

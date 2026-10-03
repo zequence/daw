@@ -117,6 +117,7 @@ juce::Array<juce::PluginDescription> AudioEngine::getInstrumentTypes() const
 void AudioEngine::emitEvent (const juce::String& type, juce::DynamicObject::Ptr data)
 {
     projectDirty = true;   // every emitted mutation dirties the project
+    ++stateRevision;       // ...and tells every polling view to repaint (see getStateRevision)
 
     if (eventSink == nullptr || historySuppress)
         return;

@@ -43,7 +43,7 @@ private:
     TimeAxis& axis;
 
     juce::int64 lastPlayheadTick = -1;
-    int lastAxisRevision = -1;
+    int lastAxisRevision = -1, lastEngineRevision = -1;
 
     static constexpr int readoutWidth = 148;
     static constexpr int timeRow = 0, tempoRow = 15, sigRow = 30, markerRow = 45, barRow = 60;

@@ -188,6 +188,11 @@ public:
     bool isProjectDirty() const noexcept    { return projectDirty; }
     void markProjectClean() noexcept        { projectDirty = false; }
 
+    // The UI update mechanism (ISSUES.md "Global"): every mutation bumps this,
+    // so a timer-driven view compares ONE number to know whether anything it
+    // might display has changed, instead of hand-picking state to watch.
+    int getStateRevision() const noexcept   { return stateRevision; }
+
     void saveSettings();
     juce::PropertiesFile& getSettingsFile()   { return settings; }
 
@@ -349,6 +354,7 @@ private:
     juce::int64 replaceFromTick = -1;
 
     bool projectDirty = false;
+    int stateRevision = 0;          // bumped by every emitEvent; polled by the UI
     bool historySuppress = false;   // mute event emission while applying a snapshot
 
     std::map<TrackId, Track> tracks;

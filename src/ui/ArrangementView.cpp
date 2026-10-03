@@ -245,32 +245,15 @@ void ArrangementView::showBlockMenu (const BlockRef& block)
 //==============================================================================
 void ArrangementView::timerCallback()
 {
+    // Playhead, shared axis, or any engine mutation (clips, folders, markers,
+    // tempo...) - the engine's state revision covers everything we display.
     const auto playhead = engine.getTransport().getPositionTicks();
-    bool needsRepaint = playhead != lastPlayheadTick || axis.revision != lastAxisRevision;
+    const auto needsRepaint = playhead != lastPlayheadTick || axis.revision != lastAxisRevision
+                                || engine.getStateRevision() != lastEngineRevision;
+
     lastPlayheadTick = playhead;
     lastAxisRevision = axis.revision;
-
-    // Folder changes (order, collapse) re-arrange the lanes
-    auto order = engine.getArrangeTrackOrder();
-
-    if (order != lastOrder)
-    {
-        lastOrder = std::move (order);
-        needsRepaint = true;
-    }
-
-    // Repaint when any visible sequence changed (the cache notices pointer changes)
-    if (! needsRepaint)
-        for (auto trackId : engine.getTrackIds())
-        {
-            const auto it = cache.find (trackId);
-
-            if (it == cache.end() || it->second.sequence != engine.getTrackSequence (trackId))
-            {
-                needsRepaint = true;
-                break;
-            }
-        }
+    lastEngineRevision = engine.getStateRevision();
 
     if (needsRepaint && isShowing())
         repaint();

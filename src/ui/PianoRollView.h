@@ -74,6 +74,7 @@ private:
     //==============================================================================
     // Editing (all through clip.* commands)
     void runCommand (const juce::String& cmd, juce::DynamicObject::Ptr params);
+    void auditionNote (int key, int velocity);        // hear a note as it's added (toolbar toggle)
     void commitNewNote (const MidiSequence::Note&);   // one clip.addNotes = one history event
     void addNoteAt (juce::int64 tick, int key);
     void deleteSelection();
@@ -97,7 +98,7 @@ private:
 
     // View state (time scroll/zoom live in the shared axis)
     juce::int64 lastPlayheadTick = -1;
-    int lastAxisRevision = -1;
+    int lastAxisRevision = -1, lastEngineRevision = -1;
     int keyHeight = 12;
     int topKey = 84;                       // highest visible key (C6)
 
@@ -119,7 +120,7 @@ private:
     bool laneErasing = false;
 
     // Toolbar
-    juce::TextButton snapToggle { "Snap" };
+    juce::TextButton snapToggle { "Snap" }, auditionToggle { "Hear" };
     juce::ComboBox modeBox, snapBox, lengthBox, laneBox;
     juce::TextButton quantizeButton { "Q" }, undoButton { "Undo" }, redoButton { "Redo" };
     juce::Label trackLabel;

@@ -89,6 +89,12 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     addAndMakeVisible (laneBox);
     rebuildLaneBox();
 
+    auditionToggle.setTooltip ("Play notes when added (through the armed track's instrument)");
+    auditionToggle.setClickingTogglesState (true);
+    auditionToggle.setToggleState (true, juce::dontSendNotification);
+    auditionToggle.setColour (juce::TextButton::buttonOnColourId, juce::Colours::steelblue);
+    addAndMakeVisible (auditionToggle);
+
     quantizeButton.setTooltip ("Quantize selected notes (or all) to the grid division");
     quantizeButton.onClick = [this]
     {
@@ -151,8 +157,9 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     trackLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (trackLabel);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &modeBox, &snapToggle, &snapBox, &lengthBox,
-                                                             &laneBox, &quantizeButton, &undoButton, &redoButton })
+    for (auto* c : std::initializer_list<juce::Component*> { &modeBox, &snapToggle, &auditionToggle, &snapBox,
+                                                             &lengthBox, &laneBox, &quantizeButton, &undoButton,
+                                                             &redoButton })
         c->setWantsKeyboardFocus (false);
 
     startTimerHz (30);
@@ -343,6 +350,27 @@ void PianoRollView::runCommand (const juce::String& cmd, juce::DynamicObject::Pt
                                   + reply.getProperty ("error", {}).toString());
 }
 
+void PianoRollView::auditionNote (int key, int velocity)
+{
+    if (! auditionToggle.getToggleState())
+        return;
+
+    auto on = juce::MidiMessage::noteOn (1, juce::jlimit (0, 127, key), (juce::uint8) juce::jlimit (1, 127, velocity));
+    on.setTimeStamp (juce::Time::getMillisecondCounterHiRes() * 0.001);
+    engine.getLiveMidiCollector().addMessageToQueue (on);
+
+    juce::Timer::callAfterDelay (250,
+        [safe = juce::Component::SafePointer<PianoRollView> (this), key]
+        {
+            if (safe == nullptr)
+                return;
+
+            auto off = juce::MidiMessage::noteOff (1, juce::jlimit (0, 127, key));
+            off.setTimeStamp (juce::Time::getMillisecondCounterHiRes() * 0.001);
+            safe->engine.getLiveMidiCollector().addMessageToQueue (off);
+        });
+}
+
 void PianoRollView::commitNewNote (const MidiSequence::Note& newNote)
 {
     auto note = new juce::DynamicObject();
@@ -373,6 +401,7 @@ void PianoRollView::commitNewNote (const MidiSequence::Note& newNote)
 
 void PianoRollView::addNoteAt (juce::int64 tick, int key)
 {
+    auditionNote (key, 96);
     commitNewNote ({ snapTick (tick), newNoteTicks(), 1, key, 96 });
 }
 
@@ -600,6 +629,7 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
         // Draw mode: preview a note here; stretch while dragging; ONE event on mouse up.
         pendingNote = { snapTick (xToTick (position.x)), newNoteTicks(), 1,
                         juce::jlimit (0, 127, yToKey (position.y)), 96 };
+        auditionNote (pendingNote.key, pendingNote.velocity);
         selection.clear();
         drag = Drag::draw;
     }
@@ -840,14 +870,16 @@ void PianoRollView::timerCallback()
     undoButton.setEnabled (engine.canUndoClip (trackId));
     redoButton.setEnabled (engine.canRedoClip (trackId));
 
-    // Follow the playhead whenever it moves - during playback or a locate while
-    // stopped - and the shared axis when another view scrolled or zoomed it.
+    // Playhead, shared axis, or any engine mutation (grid follows tempo and
+    // signature edits too) - the engine's state revision covers it all.
     const auto playhead = engine.getTransport().getPositionTicks();
 
-    if ((playhead != lastPlayheadTick || axis.revision != lastAxisRevision) && isShowing())
+    if ((playhead != lastPlayheadTick || axis.revision != lastAxisRevision
+          || engine.getStateRevision() != lastEngineRevision) && isShowing())
     {
         lastPlayheadTick = playhead;
         lastAxisRevision = axis.revision;
+        lastEngineRevision = engine.getStateRevision();
         repaint();
     }
 }
@@ -869,6 +901,8 @@ void PianoRollView::resized()
     undoButton.setBounds (toolbar.removeFromLeft (52));
     toolbar.removeFromLeft (4);
     redoButton.setBounds (toolbar.removeFromLeft (52));
+    toolbar.removeFromLeft (12);
+    auditionToggle.setBounds (toolbar.removeFromLeft (46));
     toolbar.removeFromLeft (12);
     laneBox.setBounds (toolbar.removeFromLeft (140));
     trackLabel.setBounds (toolbar);

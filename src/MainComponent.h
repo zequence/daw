@@ -141,6 +141,7 @@ private:
 
     //==============================================================================
     AudioEngine::TrackId selectedTrack = 0;
+    int lastEngineRevision = -1;    // topbar widgets follow engine mutations
     std::map<AudioEngine::InstrumentId, std::unique_ptr<PluginWindow>> pluginWindows;
 
     juce::File currentProjectFile;

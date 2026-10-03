@@ -191,12 +191,16 @@ void TimelineBar::promptForMarker (juce::int64 tick, const juce::String& existin
 //==============================================================================
 void TimelineBar::timerCallback()
 {
+    // Playhead, shared axis, or any engine mutation (tempo, signature, markers,
+    // loop...) - the engine's state revision covers everything we display.
     const auto playhead = engine.getTransport().getPositionTicks();
 
-    if (playhead != lastPlayheadTick || axis.revision != lastAxisRevision)
+    if (playhead != lastPlayheadTick || axis.revision != lastAxisRevision
+         || engine.getStateRevision() != lastEngineRevision)
     {
         lastPlayheadTick = playhead;
         lastAxisRevision = axis.revision;
+        lastEngineRevision = engine.getStateRevision();
         repaint();
     }
 }
