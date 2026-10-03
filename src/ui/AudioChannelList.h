@@ -86,6 +86,12 @@ private:
     {
         explicit RowContainer (AudioChannelList& o) : owner (o) {}
 
+        void mouseDown (const juce::MouseEvent& event) override   // background context menu
+        {
+            if (event.mods.isPopupMenu())
+                owner.showBackgroundMenu();
+        }
+
         void paintOverChildren (juce::Graphics& g) override   // drop indicator
         {
             auto& dragState = owner.drag;
@@ -178,7 +184,7 @@ private:
         void mouseUp (const juce::MouseEvent& event) override
         {
             if (! event.mods.isPopupMenu())
-                owner.finishRowDrag();
+                owner.finishRowDrag (channelId);
         }
 
         void paint (juce::Graphics& g) override
@@ -368,7 +374,8 @@ private:
             y += heightOfItem (items[i]);
         }
 
-        rowContainer.setSize (width, juce::jmax (1, y));
+        // At least viewport height, so right-clicking the empty area reaches the container
+        rowContainer.setSize (width, juce::jmax (1, y, viewport.getHeight()));
     }
 
     void refreshSoon()   // deferred refresh, safe from row callbacks
@@ -425,10 +432,12 @@ private:
         }
         else
         {
+            // Clicking an already-selected row must not re-select it (that would
+            // steal the group drag); it resolves on mouse-up if no drag happened.
             if (multiSelection.count (channelId))
-                clearSelectionOnMouseUp = true;   // keep the group for a possible drag
+                clearSelectionOnMouseUp = true;
             else
-                multiSelection.clear();
+                multiSelection = { channelId };
 
             shiftAnchor = channelId;
         }
@@ -540,7 +549,7 @@ private:
         drag.indicatorY = before ? rowY : rowY + height;
     }
 
-    bool finishRowDrag()
+    bool finishRowDrag (int id = 0)
     {
         const auto wasDragging = drag.active;
 
@@ -558,7 +567,11 @@ private:
         }
         else if (! wasDragging && clearSelectionOnMouseUp)
         {
+            // The deferred plain click on a selected row: it becomes the selection
             multiSelection.clear();
+
+            if (id != 0)
+                multiSelection.insert (id);
         }
 
         clearSelectionOnMouseUp = false;
@@ -569,6 +582,25 @@ private:
     }
 
     //==========================================================================
+    void showBackgroundMenu()
+    {
+        const auto safe = juce::Component::SafePointer<AudioChannelList> (this);
+        juce::PopupMenu menu;
+
+        // Channels themselves come from instruments (Instruments view), so the
+        // background menu only offers folders here.
+        menu.addItem ("Add folder", [safe]
+        {
+            if (safe != nullptr)
+            {
+                safe->engine.addFolder (false);
+                safe->refresh();
+            }
+        });
+
+        menu.showMenuAsync (juce::PopupMenu::Options());
+    }
+
     void showFolderMenu (AudioEngine::FolderId folderId)
     {
         const auto safe = juce::Component::SafePointer<AudioChannelList> (this);

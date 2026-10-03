@@ -24,6 +24,7 @@ public:
 
     std::function<void (AudioEngine::TrackId)> onSelect, onArm, onOpenEditor, onOpenInstrument, onShowContextMenu;
     std::function<void()> onAddTrack;
+    std::function<void (AudioEngine::FolderId)> onAddTrackInFolder;   // folder menu "New track inside"
 
     void resized() override;
     void paint (juce::Graphics&) override;
@@ -36,6 +37,7 @@ private:
     {
         explicit RowContainer (TrackList& o) : owner (o) {}
         void paintOverChildren (juce::Graphics&) override;   // drop indicator
+        void mouseDown (const juce::MouseEvent&) override;   // background context menu
         TrackList& owner;
     };
 
@@ -43,6 +45,7 @@ private:
     void layoutRows();
     void refreshSoon();                   // deferred refresh, safe from row callbacks
     void showFolderMenu (AudioEngine::FolderId);
+    void showBackgroundMenu();            // right-click on the empty area
 
     static int heightOfItem (const AudioEngine::SidebarItem&);
 

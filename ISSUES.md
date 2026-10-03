@@ -52,8 +52,14 @@ Claude is unsure of an issue they will pose a question.
 
 # Timeline bar
 
-- [ ] Right-click menu for enabling, disabling the different rows. At the bottom of the menu, add "Preferences", which opens a sub-UI for the global "Settings".
-- [ ] Move bar to the top by default.
+- [x] Right-click menu for enabling, disabling the different rows. At the bottom of the menu, add "Preferences", which opens a sub-UI for the global "Settings".
+      (right-click anywhere in the bar: marker items when on the timeline,
+      then Show Bars/Time/Tempo/Time signature/Markers toggles, then
+      "Preferences..." opening Settings; visibility persists in settings and
+      the bar's height adapts to the visible rows)
+- [x] Move bar to the top by default.
+      (the bars row is now the top row: Bars, Time, Tempo, Time signature,
+      Markers)
 - [x] Update UI when edited. Time is not updated when editing tempo.
       (fixed by the global state-revision mechanism: tempo edits now redraw
       the time row, and tempo set over the API updates the topbar bpm label)
@@ -71,8 +77,18 @@ Claude is unsure of an issue they will pose a question.
 
 # Sidebar
 
-- [ ] right menu everywhere in the right panel. Contextualize.
-  - [ ] Option to add a channel anywhere. If right-clicking on a channel, add the new channel after. If clicking on a folder, add it inside the folder.
+- [x] Dragging a group of selected channels is re-selecting the selected channel that is clicked on. Re-selecting should only work on channels that are not selected.
+      (clicking an already-selected row no longer re-selects on mouse-down;
+      it keeps the group for the drag and only becomes the single selection
+      on mouse-up when no drag happened - both sidebars)
+- [x] right menu everywhere in the right panel. Contextualize.
+      (right-clicking the empty sidebar area offers Add track / Add folder
+      in the track list, Add folder in the audio list - channels themselves
+      come from instruments)
+  - [x] Option to add a channel anywhere. If right-clicking on a channel, add the new channel after. If clicking on a folder, add it inside the folder.
+        (track row menu gains "New track below" - the new track lands right
+        after it among its siblings; folder menu gains "New track inside";
+        both select the new track and ask for its output as usual)
 - [x] Drag channels to re-order them. Select multiple channels by holding Shift or Ctrl (the usual functionality) and drag those together. Multiple will be put in order (as one group) once moved out of the current position. Moving only happens when mouse moves outside of the channel being dragged, and move is complete only after dropping.
       (both sidebars: explicit ordering model in the engine; Ctrl toggles,
       Shift range-selects; dragging any selected row moves the group in

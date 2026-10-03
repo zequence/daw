@@ -362,7 +362,8 @@ void TrackList::layoutRows()
         y += heightOfItem (items[i]);
     }
 
-    rowContainer.setSize (width, juce::jmax (1, y));
+    // At least viewport height, so right-clicking the empty area reaches the container
+    rowContainer.setSize (width, juce::jmax (1, y, viewport.getHeight()));
 }
 
 //==============================================================================
@@ -414,15 +415,21 @@ void TrackList::rowMouseDown (juce::Component*, bool isFolder, int id, const juc
     }
     else
     {
+        // Clicking an already-selected row must not re-select it (that would steal
+        // the group drag); it resolves on mouse-up if no drag happened.
         if (multiSelection.count (trackId))
-            clearSelectionOnMouseUp = true;   // keep the group for a possible drag
+        {
+            clearSelectionOnMouseUp = true;
+        }
         else
+        {
             multiSelection.clear();
 
-        shiftAnchor = trackId;
+            if (onSelect)
+                onSelect (trackId);
+        }
 
-        if (onSelect)
-            onSelect (trackId);
+        shiftAnchor = trackId;
     }
 
     refresh();
@@ -525,7 +532,7 @@ void TrackList::computeDropTarget (int y)
     drag.indicatorY = before ? rowY : rowY + height;
 }
 
-bool TrackList::finishRowDrag (int)
+bool TrackList::finishRowDrag (int id)
 {
     const auto wasDragging = drag.active;
 
@@ -543,7 +550,11 @@ bool TrackList::finishRowDrag (int)
     }
     else if (! wasDragging && clearSelectionOnMouseUp)
     {
+        // The deferred plain click on a selected row: now it becomes the selection
         multiSelection.clear();
+
+        if (onSelect)
+            onSelect (id);
     }
 
     clearSelectionOnMouseUp = false;
@@ -570,6 +581,12 @@ std::vector<AudioEngine::TrackId> TrackList::selectionInVisualOrder() const
     return ordered;
 }
 
+void TrackList::RowContainer::mouseDown (const juce::MouseEvent& event)
+{
+    if (event.mods.isPopupMenu())
+        owner.showBackgroundMenu();
+}
+
 void TrackList::RowContainer::paintOverChildren (juce::Graphics& g)
 {
     auto& dragState = owner.drag;
@@ -586,10 +603,34 @@ void TrackList::RowContainer::paintOverChildren (juce::Graphics& g)
 }
 
 //==============================================================================
+void TrackList::showBackgroundMenu()
+{
+    const auto safe = juce::Component::SafePointer<TrackList> (this);
+    juce::PopupMenu menu;
+
+    menu.addItem ("Add track", [safe] { if (safe != nullptr && safe->onAddTrack) safe->onAddTrack(); });
+    menu.addItem ("Add folder", [safe]
+    {
+        if (safe != nullptr)
+        {
+            safe->engine.addFolder (true);
+            safe->refresh();
+        }
+    });
+
+    menu.showMenuAsync (juce::PopupMenu::Options());
+}
+
 void TrackList::showFolderMenu (AudioEngine::FolderId folderId)
 {
     const auto safe = juce::Component::SafePointer<TrackList> (this);
     juce::PopupMenu menu;
+
+    menu.addItem ("New track inside", [safe, folderId]
+    {
+        if (safe != nullptr && safe->onAddTrackInFolder)
+            safe->onAddTrackInFolder (folderId);
+    });
 
     menu.addItem ("New subfolder", [safe, folderId]
     {

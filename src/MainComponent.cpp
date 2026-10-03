@@ -109,6 +109,10 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     perfButton.setClickingTogglesState (true);
     perfButton.onClick = [this] { togglePerfPanel(); };
 
+    // --- Timeline bar ---
+    timelineBar.onHeightChanged = [this] { resized(); };
+    timelineBar.onOpenSettings = [this] { openSettings(); };
+
     // --- Sidebar ---
     collapseButton.setTooltip ("Collapse/expand the track list");
     collapseButton.onClick = [this]
@@ -120,6 +124,15 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     };
 
     trackList.onAddTrack = [this] { addTrack(); };
+    trackList.onAddTrackInFolder = [this] (auto folderId)
+    {
+        const auto id = engine.addTrack();
+        engine.setTrackFolder (id, folderId);
+        engine.setFolderCollapsed (folderId, false);
+        selectTrack (id, false);
+        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), id]
+                                         { if (safe != nullptr) safe->chooseTrackOutput (id); });
+    };
     trackList.onSelect = [this] (auto id) { selectTrack (id, false); };
     trackList.onArm = [this] (auto id) { selectTrack (id, true); };
     trackList.onOpenEditor = [this] (auto id)
@@ -354,6 +367,31 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     juce::PopupMenu menu;
 
     menu.addItem ("Set output...", [safe, id] { if (safe != nullptr) safe->chooseTrackOutput (id); });
+    menu.addSeparator();
+
+    // Contextual add (ISSUES.md "Sidebar"): the new track lands right below this one
+    menu.addItem ("New track below", [safe, id]
+    {
+        if (safe == nullptr)
+            return;
+
+        const auto parent = safe->engine.getTrackFolder (id);
+        int index = 0;
+
+        for (auto& item : safe->engine.getSidebarItems (true, false))
+        {
+            if (item.parent == parent)
+                ++index;
+
+            if (item.member == id)
+                break;
+        }
+
+        const auto newId = safe->engine.addTrack();
+        safe->engine.moveSidebarItems (true, {}, { newId }, parent, index);
+        safe->selectTrack (newId, false);
+        juce::MessageManager::callAsync ([safe, newId] { if (safe != nullptr) safe->chooseTrackOutput (newId); });
+    });
 
     // Folders (Cubase-style grouping in the sidebar)
     juce::PopupMenu moveTo;
@@ -1058,7 +1096,7 @@ void MainComponent::resized()
     // Timeline bar + content container. The bar spans exactly the content area, so
     // its local x coordinates (and the shared TimeAxis gutter) line up with the
     // arrangement lanes and the piano roll grid below it.
-    timelineBar.setBounds (area.removeFromTop (TimelineBar::barHeight));
+    timelineBar.setBounds (area.removeFromTop (timelineBar.getPreferredHeight()));
 
     for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView, &audioRegionsView,
                                                                 &instrumentsView, &instrumentEditorView, &historyView })

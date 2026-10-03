@@ -41,6 +41,82 @@ TimelineBar::TimelineBar (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
 
 TimelineBar::~TimelineBar() = default;
 
+//==============================================================================
+const char* TimelineBar::settingsKeyFor (RowKind kind)
+{
+    switch (kind)
+    {
+        case RowKind::bars:      return "timelineRowBars";
+        case RowKind::time:      return "timelineRowTime";
+        case RowKind::tempo:     return "timelineRowTempo";
+        case RowKind::signature: return "timelineRowSignature";
+        case RowKind::markers:   return "timelineRowMarkers";
+    }
+
+    return "";
+}
+
+const char* TimelineBar::nameFor (RowKind kind)
+{
+    switch (kind)
+    {
+        case RowKind::bars:      return "Bars";
+        case RowKind::time:      return "Time";
+        case RowKind::tempo:     return "Tempo";
+        case RowKind::signature: return "Time signature";
+        case RowKind::markers:   return "Markers";
+    }
+
+    return "";
+}
+
+bool TimelineBar::isRowVisible (RowKind kind) const
+{
+    return engine.getSettingsFile().getBoolValue (settingsKeyFor (kind), true);
+}
+
+void TimelineBar::setRowVisible (RowKind kind, bool visible)
+{
+    engine.getSettingsFile().setValue (settingsKeyFor (kind), visible);
+    engine.saveSettings();
+
+    if (onHeightChanged)
+        onHeightChanged();
+
+    repaint();
+}
+
+int TimelineBar::rowY (RowKind kind) const
+{
+    int y = 0;
+
+    for (auto row : rowOrder)
+    {
+        if (! isRowVisible (row))
+            continue;
+
+        if (row == kind)
+            return y;
+
+        y += rowHeight;
+    }
+
+    return -1;
+}
+
+int TimelineBar::getPreferredHeight() const
+{
+    int rows = 0;
+
+    for (auto row : rowOrder)
+        if (isRowVisible (row))
+            ++rows;
+
+    // The readout panel needs two lines even when most rows are hidden
+    return juce::jmax (52, rows * rowHeight + 1);
+}
+
+//==============================================================================
 juce::Rectangle<int> TimelineBar::lanesArea() const
 {
     return getLocalBounds().withTrimmedRight (readoutWidth);
@@ -78,12 +154,17 @@ void TimelineBar::locateAt (int x)
 
 void TimelineBar::mouseDown (const juce::MouseEvent& event)
 {
-    if (! lanesArea().contains (event.getPosition()) || event.x < TimeAxis::gutter)
-        return;
-
     if (event.mods.isPopupMenu())
-        showContextMenu (nearestBar (axis.xToTick (event.x)));
-    else
+    {
+        if (event.x >= TimeAxis::gutter && lanesArea().contains (event.getPosition()))
+            showContextMenu (nearestBar (axis.xToTick (event.x)));
+        else
+            showContextMenu (-1);   // gutter/readout: row toggles and Preferences only
+
+        return;
+    }
+
+    if (event.x >= TimeAxis::gutter && lanesArea().contains (event.getPosition()))
         locateAt (event.x);
 }
 
@@ -102,65 +183,79 @@ void TimelineBar::mouseWheelMove (const juce::MouseEvent& event, const juce::Mou
 void TimelineBar::showContextMenu (juce::int64 tick)
 {
     const auto safe = juce::Component::SafePointer<TimelineBar> (this);
-
-    // A marker near the click (within half a bar)?
-    const AudioEngine::Marker* nearby = nullptr;
-    const auto map = engine.getTransport().getTempoMap();
-    const auto tolerance = map->getTicksPerBar (tick) / 2;
-
-    for (auto& marker : engine.getMarkers())
-        if (std::abs (marker.tick - tick) <= tolerance)
-            nearby = &marker;
-
     juce::PopupMenu menu;
 
-    if (nearby != nullptr)
+    // --- Marker section (contextual: only for clicks on the timeline itself) ---
+    if (tick >= 0)
     {
-        const auto markerTick = nearby->tick;
-        const auto markerName = nearby->name;
+        const AudioEngine::Marker* nearby = nullptr;
+        const auto map = engine.getTransport().getTempoMap();
+        const auto tolerance = map->getTicksPerBar (tick) / 2;
 
-        menu.addItem ("Rename \"" + markerName + "\"...", [safe, markerTick, markerName]
+        for (auto& marker : engine.getMarkers())
+            if (std::abs (marker.tick - tick) <= tolerance)
+                nearby = &marker;
+
+        if (nearby != nullptr)
         {
-            if (safe != nullptr)
-                safe->promptForMarker (markerTick, markerName);
-        });
+            const auto markerTick = nearby->tick;
+            const auto markerName = nearby->name;
 
-        menu.addItem ("Remove \"" + markerName + "\"", [safe, markerTick]
-        {
-            if (safe == nullptr)
-                return;
+            menu.addItem ("Rename \"" + markerName + "\"...", [safe, markerTick, markerName]
+            {
+                if (safe != nullptr)
+                    safe->promptForMarker (markerTick, markerName);
+            });
 
-            auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
-            params->setProperty ("tick", markerTick);
-            safe->runCommand ("marker.remove", params);
-        });
+            menu.addItem ("Remove \"" + markerName + "\"", [safe, markerTick]
+            {
+                if (safe == nullptr)
+                    return;
 
-        menu.addItem ("Loop part (to next marker)", [safe, markerTick]
-        {
-            if (safe == nullptr)
-                return;
+                auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
+                params->setProperty ("tick", markerTick);
+                safe->runCommand ("marker.remove", params);
+            });
 
-            juce::int64 partEnd = -1;
+            menu.addItem ("Loop part (to next marker)", [safe, markerTick]
+            {
+                if (safe == nullptr)
+                    return;
 
-            for (auto& marker : safe->engine.getMarkers())
-                if (marker.tick > markerTick && (partEnd < 0 || marker.tick < partEnd))
-                    partEnd = marker.tick;
+                juce::int64 partEnd = -1;
 
-            if (partEnd < 0)
-                partEnd = juce::jmax (safe->engine.getLoopEndTicks(),
-                                      markerTick + safe->engine.getTransport().getTempoMap()->getTicksPerBar (markerTick));
+                for (auto& marker : safe->engine.getMarkers())
+                    if (marker.tick > markerTick && (partEnd < 0 || marker.tick < partEnd))
+                        partEnd = marker.tick;
 
-            auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
-            params->setProperty ("enabled", true);
-            params->setProperty ("startTick", markerTick);
-            params->setProperty ("endTick", partEnd);
-            safe->runCommand ("transport.setLoop", params);
-        });
+                if (partEnd < 0)
+                    partEnd = juce::jmax (safe->engine.getLoopEndTicks(),
+                                          markerTick + safe->engine.getTransport().getTempoMap()->getTicksPerBar (markerTick));
 
+                auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
+                params->setProperty ("enabled", true);
+                params->setProperty ("startTick", markerTick);
+                params->setProperty ("endTick", partEnd);
+                safe->runCommand ("transport.setLoop", params);
+            });
+
+            menu.addSeparator();
+        }
+
+        menu.addItem ("Add marker here...", [safe, tick] { if (safe != nullptr) safe->promptForMarker (tick, {}); });
         menu.addSeparator();
     }
 
-    menu.addItem ("Add marker here...", [safe, tick] { if (safe != nullptr) safe->promptForMarker (tick, {}); });
+    // --- Row visibility (ISSUES.md "Timeline bar") ---
+    for (auto row : rowOrder)
+    {
+        const auto visible = isRowVisible (row);
+        menu.addItem (juce::String ("Show ") + nameFor (row), true, visible,
+                      [safe, row, visible] { if (safe != nullptr) safe->setRowVisible (row, ! visible); });
+    }
+
+    menu.addSeparator();
+    menu.addItem ("Preferences...", [safe] { if (safe != nullptr && safe->onOpenSettings) safe->onOpenSettings(); });
 
     menu.showMenuAsync (juce::PopupMenu::Options());
 }
@@ -214,31 +309,51 @@ void TimelineBar::paint (juce::Graphics& g)
     const auto map = transport.getTempoMap();
     const auto endTick = axis.xToTick (lanes.getRight());
 
-    // --- Row separators + gutter labels (top to bottom: time, tempo, sig, markers, bars) ---
+    const auto barsY = rowY (RowKind::bars);
+    const auto timeY = rowY (RowKind::time);
+    const auto tempoY = rowY (RowKind::tempo);
+    const auto sigY = rowY (RowKind::signature);
+    const auto markerY = rowY (RowKind::markers);
+
+    // --- Row separators + gutter labels ---
     g.setColour (juce::Colour (0xff2e3136));
 
-    for (auto y : { tempoRow, sigRow, markerRow, barRow })
-        g.fillRect (0, y, lanes.getWidth(), 1);
+    for (auto y : { barsY, timeY, tempoY, sigY, markerY })
+        if (y > 0)
+            g.fillRect (0, y, lanes.getWidth(), 1);
 
     g.setColour (juce::Colours::grey.withAlpha (0.6f));
     g.setFont (juce::FontOptions (9.0f));
-    g.drawText ("TIME",  2, timeRow + 2,   TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
-    g.drawText ("TEMPO", 2, tempoRow + 2,  TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
-    g.drawText ("SIG",   2, sigRow + 2,    TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
-    g.drawText ("MARK",  2, markerRow + 2, TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
-    g.drawText ("BARS",  2, barRow + 3,    TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
+
+    const auto shortNameFor = [] (RowKind kind)
+    {
+        switch (kind)
+        {
+            case RowKind::bars:      return "BARS";
+            case RowKind::time:      return "TIME";
+            case RowKind::tempo:     return "TEMPO";
+            case RowKind::signature: return "SIG";
+            case RowKind::markers:   return "MARK";
+        }
+
+        return "";
+    };
+
+    for (auto row : rowOrder)
+        if (const auto y = rowY (row); y >= 0)
+            g.drawText (shortNameFor (row), 2, y + 2, TimeAxis::gutter - 6, 11, juce::Justification::centredRight);
 
     // --- Loop band (on the bars row) ---
-    if (transport.isLooping() && transport.getLoopEnd() > transport.getLoopStart())
+    if (barsY >= 0 && transport.isLooping() && transport.getLoopEnd() > transport.getLoopStart())
     {
         const auto x1 = juce::jmax (TimeAxis::gutter, axis.tickToX (transport.getLoopStart()));
         const auto x2 = axis.tickToX (transport.getLoopEnd());
         g.setColour (juce::Colours::steelblue.withAlpha (0.35f));
-        g.fillRect (x1, barRow + 1, juce::jmax (2, x2 - x1), getHeight() - barRow - 1);
+        g.fillRect (x1, barsY + 1, juce::jmax (2, x2 - x1), rowHeight - 1);
     }
 
-    // --- Bars: full-height lines, numbers at the bottom, wall-clock time at the top
-    //     (computed per bar from the tempo and signature timelines) ---
+    // --- Bars: full-height lines; numbers on the bars row, wall-clock time on the
+    //     time row (computed per bar from the tempo and signature timelines) ---
     auto barTick = map->getBarStart (axis.scrollTick);
     int guard = 0, lastTimeLabelRight = -1;
 
@@ -251,18 +366,21 @@ void TimelineBar::paint (juce::Graphics& g)
             g.setColour (juce::Colour (0xff45494f));
             g.fillRect (x, 0, 1, getHeight());
 
-            g.setColour (juce::Colours::lightgrey);
-            g.setFont (juce::FontOptions (11.0f));
-            g.drawText (juce::String (map->ticksToBarsBeats (barTick).bar),
-                        x + 3, barRow + 2, 44, 13, juce::Justification::left);
+            if (barsY >= 0)
+            {
+                g.setColour (juce::Colours::lightgrey);
+                g.setFont (juce::FontOptions (11.0f));
+                g.drawText (juce::String (map->ticksToBarsBeats (barTick).bar),
+                            x + 3, barsY + 2, 44, 13, juce::Justification::left);
+            }
 
             // Skip time labels that would overlap the previous one.
-            if (x + 2 > lastTimeLabelRight)
+            if (timeY >= 0 && x + 2 > lastTimeLabelRight)
             {
                 g.setColour (juce::Colours::grey);
                 g.setFont (juce::FontOptions (10.0f));
                 g.drawText (formatBarTime (map->ticksToSeconds (barTick)),
-                            x + 3, timeRow + 2, 52, 12, juce::Justification::left);
+                            x + 3, timeY + 2, 52, 12, juce::Justification::left);
                 lastTimeLabelRight = x + 3 + 52;
             }
         }
@@ -271,46 +389,57 @@ void TimelineBar::paint (juce::Graphics& g)
     }
 
     // --- Markers ---
-    for (auto& marker : engine.getMarkers())
+    if (markerY >= 0)
     {
-        const auto x = axis.tickToX (marker.tick);
+        for (auto& marker : engine.getMarkers())
+        {
+            const auto x = axis.tickToX (marker.tick);
 
-        if (x < TimeAxis::gutter - 2 || x > lanes.getRight())
-            continue;
+            if (x < TimeAxis::gutter - 2 || x > lanes.getRight())
+                continue;
 
-        g.setColour (juce::Colours::gold.withAlpha (0.9f));
-        g.fillRect (x, markerRow, 1, getHeight() - markerRow);
-        g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
-        g.drawText (marker.name, x + 3, markerRow + 2, 120, 12, juce::Justification::left);
+            g.setColour (juce::Colours::gold.withAlpha (0.9f));
+            g.fillRect (x, 0, 1, getHeight());
+            g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
+            g.drawText (marker.name, x + 3, markerY + 2, 120, 12, juce::Justification::left);
+        }
     }
 
     // --- Tempo track ---
-    g.setFont (juce::FontOptions (10.0f));
-
-    for (auto& tempo : map->getTempoChanges())
+    if (tempoY >= 0)
     {
-        const auto x = axis.tickToX (tempo.tick);
+        g.setFont (juce::FontOptions (10.0f));
 
-        if (x < TimeAxis::gutter - 2 || x > lanes.getRight())
-            continue;
+        for (auto& tempo : map->getTempoChanges())
+        {
+            const auto x = axis.tickToX (tempo.tick);
 
-        g.setColour (juce::Colours::skyblue.withAlpha (0.9f));
-        g.fillEllipse ((float) x - 1.5f, (float) tempoRow + 3.0f, 3.0f, 3.0f);
-        g.drawText (juce::String (tempo.bpm, tempo.bpm == (int) tempo.bpm ? 0 : 1),
-                    x + 4, tempoRow + 1, 48, 12, juce::Justification::left);
+            if (x < TimeAxis::gutter - 2 || x > lanes.getRight())
+                continue;
+
+            g.setColour (juce::Colours::skyblue.withAlpha (0.9f));
+            g.fillEllipse ((float) x - 1.5f, (float) tempoY + 3.0f, 3.0f, 3.0f);
+            g.drawText (juce::String (tempo.bpm, tempo.bpm == (int) tempo.bpm ? 0 : 1),
+                        x + 4, tempoY + 1, 48, 12, juce::Justification::left);
+        }
     }
 
     // --- Time signature track ---
-    for (auto& meter : map->getMeterChanges())
+    if (sigY >= 0)
     {
-        const auto x = axis.tickToX (meter.tick);
+        g.setFont (juce::FontOptions (10.0f));
 
-        if (x < TimeAxis::gutter - 2 || x > lanes.getRight())
-            continue;
+        for (auto& meter : map->getMeterChanges())
+        {
+            const auto x = axis.tickToX (meter.tick);
 
-        g.setColour (juce::Colours::mediumpurple.withAlpha (0.95f));
-        g.drawText (juce::String (meter.numerator) + "/" + juce::String (meter.denominator),
-                    x + 2, sigRow + 1, 44, 12, juce::Justification::left);
+            if (x < TimeAxis::gutter - 2 || x > lanes.getRight())
+                continue;
+
+            g.setColour (juce::Colours::mediumpurple.withAlpha (0.95f));
+            g.drawText (juce::String (meter.numerator) + "/" + juce::String (meter.denominator),
+                        x + 2, sigY + 1, 44, 12, juce::Justification::left);
+        }
     }
 
     // --- Playhead ---
