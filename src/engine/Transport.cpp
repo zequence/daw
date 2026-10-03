@@ -59,8 +59,9 @@ void Transport::beginBlock (int numSamples)
         const auto loopEndS = m->ticksToSamples (loopEndT, sampleRate);
         const bool loopValid = looping.load() && loopEndS > loopStartS;
 
-        // The previous block may have ended exactly on the loop end.
-        if (loopValid && position == loopEndS)
+        // The previous block may have landed exactly on the loop end, or the playhead
+        // may sit beyond the loop (loop enabled late): wrap to the loop start either way.
+        if (loopValid && position >= loopEndS)
         {
             position = loopStartS;
             block.killAtStart = true;

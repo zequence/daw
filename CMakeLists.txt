@@ -77,15 +77,25 @@ juce_add_console_app(OrchestralDAWTests
 target_sources(OrchestralDAWTests PRIVATE
     tests/TempoMapTests.cpp
     tests/TransportTests.cpp
+    tests/GraphIntegrationTests.cpp
+    tests/EndToEndTests.cpp
+    src/AudioEngine.cpp
     src/model/TempoMap.cpp
     src/engine/Transport.cpp)
 
 target_compile_definitions(OrchestralDAWTests PRIVATE
     JUCE_WEB_BROWSER=0
-    JUCE_USE_CURL=0)
+    JUCE_USE_CURL=0
+    JUCE_PLUGINHOST_VST3=1
+    JUCE_PLUGINHOST_VST=0
+    JUCE_PLUGINHOST_AU=0
+    JUCE_PLUGINHOST_LADSPA=0
+    JUCE_PLUGINHOST_LV2=0
+    JUCE_MODAL_LOOPS_PERMITTED=1)   # tests pump the message loop to let the graph rebuild
 
 target_link_libraries(OrchestralDAWTests
     PRIVATE
+        juce::juce_audio_utils
         juce::juce_audio_processors
     PUBLIC
         juce::juce_recommended_config_flags

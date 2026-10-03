@@ -219,7 +219,10 @@ void AudioEngine::connectInstrument (const Track& track)
         return;
 
     const auto midiChannel = juce::AudioProcessorGraph::midiChannelIndex;
-    graph.addConnection ({ { track.midiSourceNode, midiChannel }, { track.instrumentNode, midiChannel } });
+    const auto sequencerLinked = graph.addConnection ({ { track.midiSourceNode, midiChannel },
+                                                        { track.instrumentNode, midiChannel } });
+    if (! sequencerLinked)
+        juce::Logger::writeToLog ("WARNING: sequencer MIDI connection was refused by the graph");
 
     // Only the first stereo pair for now; multi-output routing comes later.
     const auto numOuts = node->getProcessor()->getTotalNumOutputChannels();
@@ -272,9 +275,16 @@ void AudioEngine::setTrackSequence (TrackId id, MidiSequence::Ptr sequence)
     {
         track->sequence = sequence;
 
-        if (auto* node = graph.getNodeForId (track->midiSourceNode))
-            if (auto* source = dynamic_cast<MidiSourceProcessor*> (node->getProcessor()))
-                source->setSequence (std::move (sequence));
+        auto* node = graph.getNodeForId (track->midiSourceNode);
+        auto* source = node != nullptr ? dynamic_cast<MidiSourceProcessor*> (node->getProcessor()) : nullptr;
+
+        juce::Logger::writeToLog ("Track " + juce::String (id)
+                                  + (sequence != nullptr ? ": sequence set (" + juce::String ((int) sequence->getNotes().size()) + " notes)"
+                                                         : ": sequence cleared")
+                                  + (source == nullptr ? " - NO SOURCE NODE!" : ""));
+
+        if (source != nullptr)
+            source->setSequence (std::move (sequence));
     }
 }
 

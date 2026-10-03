@@ -1,4 +1,5 @@
 #include <juce_core/juce_core.h>
+#include <juce_events/juce_events.h>
 #include <cstdio>
 
 #include "../src/model/TempoMap.h"
@@ -155,6 +156,8 @@ static TempoMapTests tempoMapTests;
 //==============================================================================
 int main()
 {
+    juce::ScopedJuceInitialiser_GUI juceInit;   // the graph tests need a message manager
+
     struct ConsoleRunner final : juce::UnitTestRunner
     {
         void logMessage (const juce::String& message) override

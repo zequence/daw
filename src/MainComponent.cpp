@@ -129,6 +129,10 @@ void MainComponent::addTrack()
     row->onDemoToggled   = [this] (auto trackId, bool enabled)
     {
         engine.setTrackSequence (trackId, enabled ? makeDemoSequence() : nullptr);
+
+        // The clip starts at bar 1; make sure the playhead isn't already beyond it.
+        if (enabled && ! engine.getTransport().isPlaying())
+            engine.getTransport().returnToZero();
     };
     row->onRemoveClicked = [this] (auto trackId)
     {
