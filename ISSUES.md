@@ -9,18 +9,25 @@ If Claude is unsure of an issue they will pose a question.
 # Global
 
 - [ ] history UI. Button for it at the top bar. Show all actions there. Ability to time-travel backwards to an earlier edit.
+      (MILESTONE, scoped 2026-10-03: global history showing all actions, with a
+      filter to switch between scopes - all / clip edits per track / categories.
+      Requires global undo built on the command layer.)
 - [x] Closing the app should ask if wanting to save first
       (asks only when there are unsaved changes: Save / Discard / Cancel; the
       untouched startup state doesn't count as unsaved)
 
 # Timeline bar
 
-- Create timeline bar that sits under the menu, on top of the different non-full-window gui modes. Has:
-    - time (hours:min:sec:ms) (hours only when non-zero)
-    - Tempo track
-    - time signature
-    - markers
-    - bars (already implemented)
+- [ ] Create timeline bar that sits under the menu, on top of the different
+      non-full-window gui modes. Has:
+      - time (hours:min:sec:ms) (hours only when non-zero)
+      - Tempo track
+      - time signature
+      - markers
+      - bars (already implemented)
+      (MILESTONE, scoped 2026-10-03: one shared time axis - the bar owns
+      scroll/zoom, arrangement and piano roll align to it and lose their own
+      rulers; markers/tempo/signature displayed and later edited here.)
 
 # Midi record
 
