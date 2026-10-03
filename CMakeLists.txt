@@ -67,6 +67,27 @@ target_link_libraries(OrchestralDAWScanner
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)
 
+#==============================================================================
+# Unit tests (console app; returns non-zero on failure).
+juce_add_console_app(OrchestralDAWTests
+    PRODUCT_NAME "OrchestralDAWTests")
+
+target_sources(OrchestralDAWTests PRIVATE
+    tests/TempoMapTests.cpp
+    src/model/TempoMap.cpp)
+
+target_compile_definitions(OrchestralDAWTests PRIVATE
+    JUCE_WEB_BROWSER=0
+    JUCE_USE_CURL=0)
+
+target_link_libraries(OrchestralDAWTests
+    PRIVATE
+        juce::juce_core
+    PUBLIC
+        juce::juce_recommended_config_flags
+        juce::juce_recommended_warning_flags)
+
+#==============================================================================
 # Ship the scanner next to the app so the app can launch it.
 add_dependencies(OrchestralDAW OrchestralDAWScanner)
 add_custom_command(TARGET OrchestralDAW POST_BUILD
