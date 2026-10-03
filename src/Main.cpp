@@ -3,6 +3,8 @@
 #include "UserData.h"
 #include "api/CommandDispatcher.h"
 #include "api/ApiServer.h"
+#include "api/McpProcess.h"
+#include "ui/SettingsView.h"
 
 class OrchestralDAWApplication final : public juce::JUCEApplication
 {
@@ -25,7 +27,12 @@ public:
 
         engine = std::make_unique<AudioEngine> (*settings);
         dispatcher = std::make_unique<CommandDispatcher> (*engine);
-        mainWindow = std::make_unique<MainWindow> (getApplicationName(), *engine, *dispatcher);
+        mcpProcess = std::make_unique<McpProcess>();
+
+        if (settings->getBoolValue (SettingsView::mcpEnabledKey, false))
+            mcpProcess->start (settings->getIntValue (SettingsView::mcpPortKey, 53218));
+
+        mainWindow = std::make_unique<MainWindow> (getApplicationName(), *engine, *dispatcher, *mcpProcess);
 
         if (settings->getBoolValue ("apiEnabled", true))
         {
@@ -42,7 +49,8 @@ public:
 
     void shutdown() override
     {
-        apiServer.reset();    // stop accepting commands first
+        mcpProcess.reset();   // the adapter talks to the API server: kill it first
+        apiServer.reset();    // stop accepting commands
         mainWindow.reset();   // UI (and plugin editors) before the engine
         dispatcher.reset();
         engine.reset();
@@ -59,11 +67,11 @@ private:
     class MainWindow final : public juce::DocumentWindow
     {
     public:
-        MainWindow (const juce::String& name, AudioEngine& engine, CommandDispatcher& dispatcher)
+        MainWindow (const juce::String& name, AudioEngine& engine, CommandDispatcher& dispatcher, McpProcess& mcp)
             : DocumentWindow (name, juce::Colour (0xff1d1f23), DocumentWindow::allButtons)
         {
             setUsingNativeTitleBar (true);
-            setContentOwned (new MainComponent (engine, dispatcher), true);
+            setContentOwned (new MainComponent (engine, dispatcher, mcp), true);
             setResizable (true, true);
             setResizeLimits (900, 500, 10000, 10000);
             centreWithSize (getWidth(), getHeight());
@@ -85,6 +93,7 @@ private:
     std::unique_ptr<AudioEngine> engine;
     std::unique_ptr<CommandDispatcher> dispatcher;
     std::unique_ptr<ApiServer> apiServer;
+    std::unique_ptr<McpProcess> mcpProcess;
     std::unique_ptr<MainWindow> mainWindow;
 };
 

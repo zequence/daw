@@ -2,6 +2,7 @@
 #include "UserData.h"
 #include "model/DemoSequence.h"
 #include "api/CommandDispatcher.h"
+#include "api/McpProcess.h"
 
 namespace
 {
@@ -11,8 +12,8 @@ namespace
     constexpr int collapsedSidebarWidth = 26;
 }
 
-MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher)
-    : engine (e), commandDispatcher (dispatcher)
+MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, McpProcess& mcp)
+    : engine (e), commandDispatcher (dispatcher), mcpProcess (mcp)
 {
     // Keep the window state sane when projects change through the API.
     dispatcher.onBeforeProjectChange = [safe = juce::Component::SafePointer<MainComponent> (this)]
@@ -150,6 +151,24 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher)
         for (auto& [id, window] : pluginWindows)
             window->setAlwaysOnTop (onTop);
     };
+
+    settingsView.onMcpToggled = [this] (bool enabled)
+    {
+        if (enabled)
+        {
+            const auto port = engine.getSettingsFile().getIntValue (SettingsView::mcpPortKey, 53218);
+            settingsView.setMcpStatus (mcpProcess.start (port)
+                                           ? "Running at " + mcpProcess.getUrl()
+                                           : "Failed to start - is Python on PATH and the script in tools/mcp?");
+        }
+        else
+        {
+            mcpProcess.stop();
+            settingsView.setMcpStatus ("Off");
+        }
+    };
+
+    settingsView.setMcpStatus (mcpProcess.isRunning() ? "Running at " + mcpProcess.getUrl() : "Off");
 
     // --- Bottom ---
     statusLabel.setJustificationType (juce::Justification::centredLeft);

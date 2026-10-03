@@ -17,6 +17,7 @@
 //   topbar (menu, domain buttons, transport) / sidebar + content container / status + keyboard.
 // Settings overlays the whole UI; everything else swaps inside the content container.
 class CommandDispatcher;
+class McpProcess;
 
 class MainComponent final : public juce::Component,
                             private juce::MidiKeyboardState::Listener,
@@ -24,7 +25,7 @@ class MainComponent final : public juce::Component,
                             private juce::Timer
 {
 public:
-    MainComponent (AudioEngine&, CommandDispatcher&);
+    MainComponent (AudioEngine&, CommandDispatcher&, McpProcess&);
     ~MainComponent() override;
 
     void paint (juce::Graphics&) override;
@@ -69,6 +70,7 @@ private:
     //==============================================================================
     AudioEngine& engine;
     CommandDispatcher& commandDispatcher;
+    McpProcess& mcpProcess;
 
     // Topbar
     juce::TextButton menuButton { "Menu" }, midiDomainButton { "Midi" }, audioDomainButton { "Audio" },

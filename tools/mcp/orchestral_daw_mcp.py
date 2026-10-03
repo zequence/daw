@@ -3,10 +3,14 @@
 
 A thin bridge: it asks the running app for its command surface (`describe`) and
 exposes one MCP tool per command, so new commands appear here automatically.
-No dependencies - speaks MCP's stdio JSON-RPC directly.
+No dependencies - speaks MCP JSON-RPC directly.
 
-Usage (Claude Code):
-    claude mcp add orchestral-daw -- python path/to/orchestral_daw_mcp.py
+Two transports:
+    stdio (default)      the MCP client spawns this script:
+                             claude mcp add orchestral-daw -- python path/to/orchestral_daw_mcp.py
+    --http PORT          long-lived local HTTP server (streamable HTTP transport);
+                         the app itself runs this when MCP is enabled in Settings:
+                             claude mcp add --transport http orchestral-daw http://127.0.0.1:PORT/mcp
 
 Environment:
     DAW_API_PORT   TCP port of the app's control API (default 53217)
@@ -16,7 +20,9 @@ import json
 import os
 import socket
 import sys
+import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HOST = "127.0.0.1"
 PORT = int(os.environ.get("DAW_API_PORT", "53217"))
@@ -99,6 +105,7 @@ class DawClient:
 
 
 daw = DawClient()
+daw_lock = threading.Lock()   # the HTTP transport serves from worker threads
 
 # ---------------------------------------------------------------------------
 # Tool catalogue, generated from the app's own `describe`
@@ -123,6 +130,11 @@ tool_cache: dict = {"tools": None, "name_to_cmd": {}, "fetched": 0.0}
 
 
 def build_tools() -> list:
+    with daw_lock:
+        return build_tools_locked()
+
+
+def build_tools_locked() -> list:
     now = time.monotonic()
     if tool_cache["tools"] is not None and now - tool_cache["fetched"] < 15.0:
         return tool_cache["tools"]
@@ -164,12 +176,17 @@ def build_tools() -> list:
 
 
 def call_tool(name: str, arguments: dict) -> dict:
+    with daw_lock:
+        return call_tool_locked(name, arguments)
+
+
+def call_tool_locked(name: str, arguments: dict) -> dict:
     if name == "daw_command":
         cmd = arguments.get("cmd", "")
         params = arguments.get("params", {}) or {}
     else:
         if name not in tool_cache["name_to_cmd"]:
-            build_tools()  # refresh; maybe the app just started
+            build_tools_locked()  # refresh; maybe the app just started
         cmd = tool_cache["name_to_cmd"].get(name, "")
         params = dict(arguments)
 
@@ -193,20 +210,41 @@ def error_content(message: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# MCP stdio loop (JSON-RPC 2.0, one message per line)
+# Transport-independent message handling (JSON-RPC 2.0)
 
-def respond(message_id, result=None, error=None) -> None:
-    reply: dict = {"jsonrpc": "2.0", "id": message_id}
-    if error is not None:
-        reply["error"] = error
+def handle_message(message: dict):
+    """Returns a response dict, or None for notifications."""
+    method = message.get("method", "")
+    message_id = message.get("id")
+    params = message.get("params", {}) or {}
+
+    if message_id is None:   # notification
+        return None
+
+    if method == "initialize":
+        result = {
+            "protocolVersion": params.get("protocolVersion", FALLBACK_PROTOCOL),
+            "capabilities": {"tools": {}},
+            "serverInfo": SERVER_INFO,
+        }
+    elif method == "tools/list":
+        result = {"tools": build_tools()}
+    elif method == "tools/call":
+        result = call_tool(params.get("name", ""), params.get("arguments", {}) or {})
+    elif method == "ping":
+        result = {}
     else:
-        reply["result"] = result
-    sys.stdout.write(json.dumps(reply) + "\n")
-    sys.stdout.flush()
+        return {"jsonrpc": "2.0", "id": message_id,
+                "error": {"code": -32601, "message": f"method not found: {method}"}}
+
+    return {"jsonrpc": "2.0", "id": message_id, "result": result}
 
 
-def main() -> None:
-    log(f"ready; forwarding to {HOST}:{PORT}")
+# ---------------------------------------------------------------------------
+# stdio transport (one JSON message per line)
+
+def run_stdio() -> None:
+    log(f"stdio transport ready; forwarding to {HOST}:{PORT}")
 
     for line in sys.stdin:
         line = line.strip()
@@ -218,26 +256,79 @@ def main() -> None:
         except json.JSONDecodeError:
             continue
 
-        method = message.get("method", "")
-        message_id = message.get("id")
-        params = message.get("params", {}) or {}
+        response = handle_message(message)
 
-        if method == "initialize":
-            respond(message_id, {
-                "protocolVersion": params.get("protocolVersion", FALLBACK_PROTOCOL),
-                "capabilities": {"tools": {}},
-                "serverInfo": SERVER_INFO,
-            })
-        elif method == "tools/list":
-            respond(message_id, {"tools": build_tools()})
-        elif method == "tools/call":
-            respond(message_id, call_tool(params.get("name", ""), params.get("arguments", {}) or {}))
-        elif method == "ping":
-            respond(message_id, {})
-        elif message_id is not None:  # unknown request (notifications are ignored)
-            respond(message_id, error={"code": -32601, "message": f"method not found: {method}"})
+        if response is not None:
+            sys.stdout.write(json.dumps(response) + "\n")
+            sys.stdout.flush()
 
     daw.close()
+
+
+# ---------------------------------------------------------------------------
+# Streamable HTTP transport (stateless: plain JSON responses, no sessions)
+
+class McpHttpHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, fmt, *args):   # keep stderr quiet
+        pass
+
+    def _reply(self, status: int, body: bytes = b"", content_type: str = "application/json"):
+        self.send_response(status)
+        if body:
+            self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+
+    def do_POST(self):
+        if self.path.rstrip("/") != "/mcp":
+            return self._reply(404)
+
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length) or b"null")
+        except (ValueError, json.JSONDecodeError):
+            return self._reply(400)
+
+        messages = body if isinstance(body, list) else [body]
+        responses = [r for m in messages if isinstance(m, dict) and (r := handle_message(m)) is not None]
+
+        if not responses:
+            return self._reply(202)   # notification(s) only
+
+        payload = responses[0] if not isinstance(body, list) else responses
+        self._reply(200, json.dumps(payload).encode("utf-8"))
+
+    def do_GET(self):
+        # No server-initiated stream; clients fall back to plain request/response.
+        self._reply(405)
+
+    def do_DELETE(self):
+        self._reply(200)   # session teardown: nothing to tear down, we're stateless
+
+
+def run_http(port: int) -> None:
+    server = ThreadingHTTPServer((HOST, port), McpHttpHandler)
+    log(f"http transport on http://{HOST}:{port}/mcp; forwarding to {HOST}:{PORT}")
+
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        daw.close()
+
+
+def main() -> None:
+    if "--http" in sys.argv:
+        index = sys.argv.index("--http")
+        port = int(sys.argv[index + 1]) if index + 1 < len(sys.argv) else 53218
+        run_http(port)
+    else:
+        run_stdio()
 
 
 if __name__ == "__main__":

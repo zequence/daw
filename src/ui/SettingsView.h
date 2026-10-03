@@ -9,6 +9,8 @@ class SettingsView final : public juce::Component
 public:
     static constexpr auto autoRecordOnSelectKey = "autoRecordOnSelect";
     static constexpr auto pluginWindowsOnTopKey = "pluginWindowsOnTop";
+    static constexpr auto mcpEnabledKey = "mcpEnabled";
+    static constexpr auto mcpPortKey = "mcpPort";
 
     explicit SettingsView (AudioEngine& e) : engine (e)
     {
@@ -59,8 +61,31 @@ public:
             engine.getSettingsFile().saveIfNeeded();
         };
 
+        // --- Agents (MCP) ---
+        mcpToggle.setToggleState (settings.getBoolValue (mcpEnabledKey, false), juce::dontSendNotification);
+        mcpToggle.onClick = [this]
+        {
+            engine.getSettingsFile().setValue (mcpEnabledKey, mcpToggle.getToggleState());
+            engine.getSettingsFile().saveIfNeeded();
+
+            if (onMcpToggled)
+                onMcpToggled (mcpToggle.getToggleState());
+        };
+
+        mcpStatus.setColour (juce::Label::textColourId, juce::Colours::grey);
+        mcpStatus.setFont (juce::FontOptions (12.0f));
+        page.addAndMakeVisible (mcpStatus);
+
+        mcpRegisterHint.setReadOnly (true);
+        mcpRegisterHint.setMultiLine (false);
+        mcpRegisterHint.setScrollbarsShown (false);
+        mcpRegisterHint.setCaretVisible (false);
+        mcpRegisterHint.setText ("claude mcp add --transport http orchestral-daw http://127.0.0.1:"
+                                 + juce::String (settings.getIntValue (mcpPortKey, 53218)) + "/mcp");
+        page.addAndMakeVisible (mcpRegisterHint);
+
         for (auto* c : std::initializer_list<juce::Component*> { &scanButton, &retryButton, &rescanButton,
-                                                                 &onTopToggle, &autoRecordToggle })
+                                                                 &onTopToggle, &autoRecordToggle, &mcpToggle })
         {
             c->setWantsKeyboardFocus (false);
             page.addAndMakeVisible (c);
@@ -70,6 +95,12 @@ public:
     std::function<void()> onClose;
     std::function<void (juce::StringArray)> onStartScan;
     std::function<void (bool)> onPluginOnTopChanged;
+    std::function<void (bool)> onMcpToggled;
+
+    void setMcpStatus (const juce::String& status)
+    {
+        mcpStatus.setText (status, juce::dontSendNotification);
+    }
 
     void resized() override
     {
@@ -110,6 +141,16 @@ public:
         sectionBounds.push_back ({ "Tracks", { 0, y, width, sectionHeaderHeight } });
         y += sectionHeaderHeight;
         autoRecordToggle.setBounds (12, y, 320, 24);
+        y += 32;
+
+        // Agents (MCP)
+        sectionBounds.push_back ({ "Agents (MCP)", { 0, y, width, sectionHeaderHeight } });
+        y += sectionHeaderHeight;
+        mcpToggle.setBounds (12, y, 420, 24);
+        y += 28;
+        mcpStatus.setBounds (12, y, width - 24, 18);
+        y += 22;
+        mcpRegisterHint.setBounds (12, y, juce::jmin (620, width - 24), 24);
         y += 32;
 
         // Key commands
@@ -170,6 +211,9 @@ private:
                      rescanButton { "Rescan everything" };
     juce::ToggleButton onTopToggle { "Plugin windows stay on top" };
     juce::ToggleButton autoRecordToggle { "Arm track on select (auto-record)" };
+    juce::ToggleButton mcpToggle { "Run the MCP server for AI agents (starts with the app)" };
+    juce::Label mcpStatus;
+    juce::TextEditor mcpRegisterHint;
 
     std::vector<std::pair<juce::String, juce::Rectangle<int>>> sectionBounds;
     juce::Rectangle<int> keyCommandsBounds;
