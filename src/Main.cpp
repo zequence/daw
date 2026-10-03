@@ -48,9 +48,10 @@ private:
             setUsingNativeTitleBar (true);
             setContentOwned (new MainComponent (engine), true);
             setResizable (true, true);
-            setResizeLimits (900, 400, 10000, 10000);
+            setResizeLimits (900, 500, 10000, 10000);
             centreWithSize (getWidth(), getHeight());
             setVisible (true);
+            setFullScreen (true);   // maximized by default (see GUI_DESIGN.md)
         }
 
         void closeButtonPressed() override

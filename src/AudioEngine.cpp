@@ -322,6 +322,7 @@ AudioEngine::TrackId AudioEngine::addTrack()
     const auto id = nextTrackId++;
 
     Track track;
+    track.name = "Track " + juce::String (id);
     track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport))->nodeID;
     tracks[id] = track;
 
@@ -348,6 +349,57 @@ void AudioEngine::removeTrack (TrackId id)
         setArmedTrack (tracks.empty() ? 0 : tracks.begin()->first);
 
     applyMuteAndSolo();
+}
+
+std::vector<AudioEngine::TrackId> AudioEngine::getTrackIds() const
+{
+    std::vector<TrackId> result;
+
+    for (auto& [id, track] : tracks)
+        result.push_back (id);
+
+    return result;
+}
+
+juce::String AudioEngine::getTrackName (TrackId id) const
+{
+    if (auto* track = findTrack (id))
+        return track->name;
+
+    return {};
+}
+
+void AudioEngine::setTrackName (TrackId id, const juce::String& name)
+{
+    if (auto* track = findTrack (id))
+        if (name.isNotEmpty())
+            track->name = name;
+}
+
+std::vector<AudioEngine::AudioChannelId> AudioEngine::getAudioChannelIds() const
+{
+    std::vector<AudioChannelId> result;
+
+    for (auto& [id, channel] : audioChannels)
+        result.push_back (id);
+
+    return result;
+}
+
+juce::String AudioEngine::getAudioChannelName (AudioChannelId id) const
+{
+    if (auto it = audioChannels.find (id); it != audioChannels.end())
+        return it->second.name;
+
+    return {};
+}
+
+AudioEngine::InstrumentId AudioEngine::getAudioChannelInput (AudioChannelId id) const
+{
+    if (auto it = audioChannels.find (id); it != audioChannels.end())
+        return it->second.input;
+
+    return 0;
 }
 
 void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, int midiChannel)

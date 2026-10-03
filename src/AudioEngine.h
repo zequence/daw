@@ -62,11 +62,17 @@ public:
     // Audio channels (one per instrument for now; device inputs and summing later)
     AudioChannelProcessor* getAudioChannel (AudioChannelId) const;
     AudioChannelId getAudioChannelForInstrument (InstrumentId) const;          // 0 if none
+    std::vector<AudioChannelId> getAudioChannelIds() const;
+    juce::String getAudioChannelName (AudioChannelId) const;
+    InstrumentId getAudioChannelInput (AudioChannelId) const;                  // 0 = none
 
     //==============================================================================
     // MIDI tracks
     TrackId addTrack();
     void removeTrack (TrackId);
+    std::vector<TrackId> getTrackIds() const;
+    juce::String getTrackName (TrackId) const;
+    void setTrackName (TrackId, const juce::String&);
 
     struct TrackOutput
     {
@@ -106,6 +112,7 @@ public:
     void pollRecording();         // call regularly from a UI timer while the app runs
 
     void saveSettings();
+    juce::PropertiesFile& getSettingsFile()   { return settings; }
 
 private:
     struct Instrument
@@ -133,6 +140,7 @@ private:
     struct Track
     {
         NodeID midiSourceNode;
+        juce::String name;
         MidiSequence::Ptr sequence;                 // message-thread copy, for UI queries
         std::vector<Output> outputs;
         bool muted = false, soloed = false;

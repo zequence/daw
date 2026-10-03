@@ -15,7 +15,7 @@ target_sources(OrchestralDAW PRIVATE
     src/Main.cpp
     src/AudioEngine.cpp
     src/MainComponent.cpp
-    src/TrackRow.cpp
+    src/ui/TrackList.cpp
     src/model/TempoMap.cpp
     src/engine/Transport.cpp
     src/diagnostics/PerformanceMonitor.cpp

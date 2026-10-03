@@ -1,11 +1,19 @@
 #pragma once
 
 #include "AudioEngine.h"
-#include "TrackRow.h"
 #include "PluginWindow.h"
 #include "PluginScanProcess.h"
 #include "diagnostics/PerformancePanel.h"
+#include "ui/TrackList.h"
+#include "ui/AudioChannelList.h"
+#include "ui/InstrumentsView.h"
+#include "ui/InstrumentEditorView.h"
+#include "ui/SettingsView.h"
+#include "ui/PlaceholderView.h"
 
+// The single-window shell (see GUI_DESIGN.md):
+//   topbar (menu, domain buttons, transport) / sidebar + content container / status + keyboard.
+// Settings overlays the whole UI; everything else swaps inside the content container.
 class MainComponent final : public juce::Component,
                             private juce::MidiKeyboardState::Listener,
                             private juce::ChangeListener,
@@ -20,51 +28,97 @@ public:
     bool keyPressed (const juce::KeyPress&) override;
 
 private:
+    enum class ContentView { midiRegions, midiEditor, audioRegions, instruments, instrumentEditor };
+    enum class Domain { midi, audio };
+
+    //==============================================================================
     void addTrack();
     void removeTrack (AudioEngine::TrackId);
-    void armTrack (AudioEngine::TrackId);
+    void selectTrack (AudioEngine::TrackId, bool forceArm);
+    void showTrackContextMenu (AudioEngine::TrackId);
     void chooseTrackOutput (AudioEngine::TrackId);
     void chooseNewInstrumentFor (AudioEngine::TrackId);
-    void openInstrumentEditorForTrack (AudioEngine::TrackId);
-    void openInstrumentEditor (AudioEngine::InstrumentId);
-    TrackRow* findRow (AudioEngine::TrackId) const;
-    void showAudioSettings();
-    void showPluginsMenu();
-    void showPluginManager();
-    void startPluginScan (juce::StringArray args);
-    void layoutTracks();
+    void openPluginWindow (AudioEngine::InstrumentId);
+
+    void setDomain (Domain);
+    void showContent (ContentView);
+    void showMainMenu();
+    void openSettings();
+    void closeSettings();
+    void updateViewVisibility();
+    void updatePlaceholders();
     void togglePerfPanel();
+    void startPluginScan (juce::StringArray args);
 
     void handleNoteOn (juce::MidiKeyboardState*, int channel, int note, float velocity) override;
     void handleNoteOff (juce::MidiKeyboardState*, int channel, int note, float velocity) override;
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
     void timerCallback() override;
 
+    //==============================================================================
     AudioEngine& engine;
 
-    juce::TextButton audioButton { "Audio" }, pluginsButton { "Plugins" }, addTrackButton { "+ Track" },
+    // Topbar
+    juce::TextButton menuButton { "Menu" }, midiDomainButton { "Midi" }, audioDomainButton { "Audio" },
+                     instrumentsButton { "Instruments" };
+    juce::TextButton rtzButton { "|<" }, playButton { "Play" }, recordButton { "Rec" }, loopButton { "Loop" },
                      perfButton { "Perf" };
-    juce::TextButton rtzButton { "|<" }, playButton { "Play" }, recordButton { "Rec" }, loopButton { "Loop" };
     juce::Label bpmLabel, positionLabel;
 
+    // Sidebar
+    juce::TextButton collapseButton { "<<" };
+    TrackList trackList { engine };
+    AudioChannelList channelList { engine };
+    int sidebarWidth = 0;            // 0 = not yet computed (defaults to ~15% of the window)
+    bool sidebarCollapsed = false;
+
+    struct SidebarResizer final : juce::Component
+    {
+        explicit SidebarResizer (MainComponent& ownerToUse) : owner (ownerToUse)
+        {
+            setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+        }
+
+        void mouseDown (const juce::MouseEvent&) override { startWidth = owner.sidebarWidth; }
+
+        void mouseDrag (const juce::MouseEvent& event) override
+        {
+            owner.sidebarWidth = juce::jlimit (150, juce::jmax (200, owner.getWidth() / 2),
+                                               startWidth + event.getDistanceFromDragStartX());
+            owner.resized();
+        }
+
+        void paint (juce::Graphics& g) override { g.fillAll (juce::Colour (0xff17191c)); }
+
+        MainComponent& owner;
+        int startWidth = 0;
+    } sidebarResizer { *this };
+
+    // Content views
+    PlaceholderView midiRegionsView { "Arrangement" }, audioRegionsView { "Audio regions" },
+                    midiEditorView { "MIDI Editor" };
+    InstrumentsView instrumentsView { engine };
+    InstrumentEditorView instrumentEditorView { engine };
+    SettingsView settingsView { engine };
+
+    ContentView contentView = ContentView::midiRegions;
+    Domain domain = Domain::midi;
+    bool settingsOpen = false;
+
+    // Bottom
+    juce::Label statusLabel;
+    juce::MidiKeyboardState keyboardState;
+    juce::MidiKeyboardComponent keyboard { keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard };
     PerformanceTracker perfTracker { engine };
     PerformancePanel perfPanel { perfTracker };
-    juce::Label statusLabel;
+
+    //==============================================================================
+    AudioEngine::TrackId selectedTrack = 0;
+    std::map<AudioEngine::InstrumentId, std::unique_ptr<PluginWindow>> pluginWindows;
 
     std::unique_ptr<PluginScanProcess> pluginScan;
     juce::String scanStatus;
     bool reloadingPluginCache = false;
-
-    juce::Viewport trackViewport;
-    juce::Component trackContainer;
-    std::vector<std::unique_ptr<TrackRow>> trackRows;
-    std::map<AudioEngine::InstrumentId, std::unique_ptr<PluginWindow>> instrumentEditors;
-    int trackCounter = 0;
-
-    juce::MidiKeyboardState keyboardState;
-    juce::MidiKeyboardComponent keyboard { keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard };
-
-    juce::Component::SafePointer<juce::DialogWindow> audioDialog, pluginDialog;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

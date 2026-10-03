@@ -4,45 +4,26 @@
 
 namespace
 {
-    constexpr int toolbarHeight  = 44;
-    constexpr int trackRowHeight = 44;
+    constexpr int topbarHeight   = 44;
+    constexpr int statusHeight   = 22;
     constexpr int keyboardHeight = 90;
-
-    void launchDialog (juce::Component::SafePointer<juce::DialogWindow>& window,
-                       std::unique_ptr<juce::Component> content, const juce::String& title,
-                       juce::Component* parent)
-    {
-        if (window != nullptr)
-        {
-            window->toFront (true);
-            return;
-        }
-
-        juce::DialogWindow::LaunchOptions options;
-        options.content.setOwned (content.release());
-        options.dialogTitle = title;
-        options.dialogBackgroundColour = juce::Colour (0xff23262b);
-        options.componentToCentreAround = parent;
-        options.useNativeTitleBar = true;
-        options.resizable = true;
-        window = options.launchAsync();
-    }
+    constexpr int collapsedSidebarWidth = 26;
 }
 
 MainComponent::MainComponent (AudioEngine& e)
     : engine (e)
 {
-    audioButton.onClick    = [this] { showAudioSettings(); };
-    pluginsButton.onClick  = [this] { showPluginsMenu(); };
-    addTrackButton.onClick = [this] { addTrack(); };
+    // --- Topbar ---
+    menuButton.onClick = [this] { showMainMenu(); };
+    midiDomainButton.onClick = [this] { setDomain (Domain::midi); };
+    audioDomainButton.onClick = [this] { setDomain (Domain::audio); };
+    instrumentsButton.onClick = [this]
+    {
+        instrumentsView.focusTrack (selectedTrack);
+        showContent (ContentView::instruments);
+    };
 
-    perfButton.setTooltip ("Performance monitor (F12)");
-    perfButton.setClickingTogglesState (true);
-    perfButton.onClick = [this] { togglePerfPanel(); };
-    addChildComponent (perfPanel);
-    setWantsKeyboardFocus (true);
-
-    rtzButton.setTooltip ("Return to start");
+    rtzButton.setTooltip ("Return to start (Home)");
     rtzButton.onClick = [this] { engine.getTransport().returnToZero(); };
 
     playButton.setTooltip ("Play/Stop (space)");
@@ -83,32 +64,93 @@ MainComponent::MainComponent (AudioEngine& e)
     positionLabel.setJustificationType (juce::Justification::centredLeft);
     positionLabel.setColour (juce::Label::textColourId, juce::Colours::white);
 
-    // Keep keyboard focus on the main component so the space bar reaches the transport.
-    for (auto* b : std::initializer_list<juce::Component*> { &audioButton, &pluginsButton, &addTrackButton,
-                                                             &perfButton, &rtzButton, &playButton, &recordButton,
-                                                             &loopButton, &keyboard })
-        b->setWantsKeyboardFocus (false);
+    perfButton.setTooltip ("Performance monitor (F12)");
+    perfButton.setClickingTogglesState (true);
+    perfButton.onClick = [this] { togglePerfPanel(); };
 
-    statusLabel.setJustificationType (juce::Justification::centredRight);
+    // --- Sidebar ---
+    collapseButton.setTooltip ("Collapse/expand the track list");
+    collapseButton.onClick = [this]
+    {
+        sidebarCollapsed = ! sidebarCollapsed;
+        collapseButton.setButtonText (sidebarCollapsed ? ">>" : "<<");
+        updateViewVisibility();
+        resized();
+    };
+
+    trackList.onAddTrack = [this] { addTrack(); };
+    trackList.onSelect = [this] (auto id) { selectTrack (id, false); };
+    trackList.onArm = [this] (auto id) { selectTrack (id, true); };
+    trackList.onOpenEditor = [this] (auto id)
+    {
+        selectTrack (id, false);
+        showContent (ContentView::midiEditor);
+    };
+    trackList.onOpenInstrument = [this] (auto id)
+    {
+        selectTrack (id, false);
+
+        const auto outputs = engine.getTrackOutputs (id);
+
+        if (! outputs.empty())
+            openPluginWindow (outputs.front().instrument);
+
+        instrumentsView.focusTrack (id);
+        showContent (ContentView::instruments);
+    };
+    trackList.onShowContextMenu = [this] (auto id) { showTrackContextMenu (id); };
+
+    // --- Content views ---
+    instrumentsView.onOpenPluginGui = [this] (auto id) { openPluginWindow (id); };
+    instrumentsView.onEditInstrument = [this] (auto id)
+    {
+        instrumentEditorView.setInstrument (id);
+        showContent (ContentView::instrumentEditor);
+    };
+
+    instrumentEditorView.onBack = [this] { showContent (ContentView::instruments); };
+    instrumentEditorView.onOpenPluginGui = [this] (auto id) { openPluginWindow (id); };
+
+    settingsView.onClose = [this] { closeSettings(); };
+    settingsView.onStartScan = [this] (auto args) { startPluginScan (std::move (args)); };
+    settingsView.onPluginOnTopChanged = [this] (bool onTop)
+    {
+        for (auto& [id, window] : pluginWindows)
+            window->setAlwaysOnTop (onTop);
+    };
+
+    // --- Bottom ---
+    statusLabel.setJustificationType (juce::Justification::centredLeft);
     statusLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
+    statusLabel.setFont (juce::FontOptions (12.0f));
 
-    trackViewport.setViewedComponent (&trackContainer, false);
-    trackViewport.setScrollBarsShown (true, false);
-
-    keyboard.setAvailableRange (21, 108);   // 88-key range
+    keyboard.setAvailableRange (21, 108);
     keyboard.setLowestVisibleKey (36);
     keyboardState.addListener (this);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &audioButton, &pluginsButton, &addTrackButton, &perfButton,
-                                                             &rtzButton, &playButton, &recordButton, &loopButton,
-                                                             &bpmLabel, &positionLabel, &statusLabel,
-                                                             &trackViewport, &keyboard })
+    for (auto* c : std::initializer_list<juce::Component*> {
+             &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton,
+             &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &positionLabel, &perfButton,
+             &collapseButton, &trackList, &channelList, &sidebarResizer,
+             &midiRegionsView, &audioRegionsView, &midiEditorView,
+             &instrumentsView, &instrumentEditorView, &settingsView,
+             &statusLabel, &keyboard })
         addAndMakeVisible (c);
+
+    for (auto* b : std::initializer_list<juce::Component*> { &menuButton, &midiDomainButton, &audioDomainButton,
+                                                             &instrumentsButton, &rtzButton, &playButton,
+                                                             &recordButton, &loopButton, &perfButton,
+                                                             &collapseButton, &keyboard })
+        b->setWantsKeyboardFocus (false);
+
+    addChildComponent (perfPanel);
+    setWantsKeyboardFocus (true);
 
     engine.getDeviceManager().addChangeListener (this);
     engine.getKnownPlugins().addChangeListener (this);
 
-    setSize (1000, 640);
+    updateViewVisibility();
+    setSize (1100, 700);
     startTimerHz (30);
 }
 
@@ -119,70 +161,84 @@ MainComponent::~MainComponent()
     engine.getDeviceManager().removeChangeListener (this);
     engine.getKnownPlugins().removeChangeListener (this);
 
-    instrumentEditors.clear();
-
-    if (audioDialog != nullptr)  delete audioDialog.getComponent();
-    if (pluginDialog != nullptr) delete pluginDialog.getComponent();
-
-    for (auto& row : trackRows)
-        engine.removeTrack (row->getTrackId());
-
-    trackRows.clear();
+    pluginWindows.clear();
 }
 
 //==============================================================================
 void MainComponent::addTrack()
 {
     const auto id = engine.addTrack();
-
-    auto row = std::make_unique<TrackRow> (engine, id, "Track " + juce::String (++trackCounter));
-    row->onArmClicked      = [this] (auto trackId) { armTrack (trackId); };
-    row->onChooseOutput    = [this] (auto trackId) { chooseTrackOutput (trackId); };
-    row->onOpenInstrument  = [this] (auto trackId) { openInstrumentEditorForTrack (trackId); };
-    row->onSetDemo = [this] (auto trackId)
-    {
-        engine.setTrackSequence (trackId, makeDemoSequence());
-
-        // The clip starts at bar 1; make sure the playhead isn't already beyond it.
-        if (! engine.getTransport().isPlaying())
-            engine.getTransport().returnToZero();
-    };
-    row->onClearClip = [this] (auto trackId) { engine.setTrackSequence (trackId, nullptr); };
-    row->onRemoveClicked = [this] (auto trackId)
-    {
-        // Defer: the click came from a button inside the row we're about to delete.
-        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), trackId]
-                                         { if (safe != nullptr) safe->removeTrack (trackId); });
-    };
-
-    trackContainer.addAndMakeVisible (*row);
-    trackRows.push_back (std::move (row));
-
-    armTrack (engine.getArmedTrack());
-    layoutTracks();
+    selectTrack (id, false);
 
     // Ask where the new track should send its MIDI.
     juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), id]
                                      { if (safe != nullptr) safe->chooseTrackOutput (id); });
 }
 
-TrackRow* MainComponent::findRow (AudioEngine::TrackId id) const
+void MainComponent::removeTrack (AudioEngine::TrackId id)
 {
-    for (auto& row : trackRows)
-        if (row->getTrackId() == id)
-            return row.get();
+    engine.removeTrack (id);
 
-    return nullptr;
+    if (selectedTrack == id)
+    {
+        const auto remaining = engine.getTrackIds();
+        selectTrack (remaining.empty() ? 0 : remaining.front(), false);
+    }
+
+    trackList.refresh();
 }
 
-//==============================================================================
+void MainComponent::selectTrack (AudioEngine::TrackId id, bool forceArm)
+{
+    selectedTrack = id;
+    trackList.setSelectedTrack (id);
+
+    const auto autoArm = engine.getSettingsFile().getBoolValue (SettingsView::autoRecordOnSelectKey, true);
+
+    if (id != 0 && (autoArm || forceArm) && engine.getArmedTrack() != id)
+    {
+        keyboardState.allNotesOff (0);   // release on-screen keys aimed at the old instrument
+        engine.setArmedTrack (id);
+    }
+
+    if (contentView == ContentView::instruments)
+        instrumentsView.focusTrack (id);
+
+    updatePlaceholders();
+}
+
+void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
+{
+    selectTrack (id, false);
+
+    const auto safe = juce::Component::SafePointer<MainComponent> (this);
+    juce::PopupMenu menu;
+
+    menu.addItem ("Set output...", [safe, id] { if (safe != nullptr) safe->chooseTrackOutput (id); });
+    menu.addSeparator();
+    menu.addItem ("Demo clip", [safe, id]
+    {
+        if (safe == nullptr)
+            return;
+
+        safe->engine.setTrackSequence (id, makeDemoSequence());
+
+        if (! safe->engine.getTransport().isPlaying())
+            safe->engine.getTransport().returnToZero();
+    });
+    menu.addItem ("Clear clip", engine.getTrackSequence (id) != nullptr, false,
+                  [safe, id] { if (safe != nullptr) safe->engine.setTrackSequence (id, nullptr); });
+    menu.addSeparator();
+    menu.addItem ("Remove track", [safe, id]
+    {
+        juce::MessageManager::callAsync ([safe, id] { if (safe != nullptr) safe->removeTrack (id); });
+    });
+
+    menu.showMenuAsync (juce::PopupMenu::Options());
+}
+
 void MainComponent::chooseTrackOutput (AudioEngine::TrackId trackId)
 {
-    auto* row = findRow (trackId);
-
-    if (row == nullptr)
-        return;
-
     const auto outputs = engine.getTrackOutputs (trackId);
     const auto safe = juce::Component::SafePointer<MainComponent> (this);
 
@@ -222,7 +278,7 @@ void MainComponent::chooseTrackOutput (AudioEngine::TrackId trackId)
     if (! outputs.empty())
         menu.addItem ("No output", [safe, trackId] { if (safe != nullptr) safe->engine.clearTrackOutputs (trackId); });
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (row));
+    menu.showMenuAsync (juce::PopupMenu::Options());
 }
 
 void MainComponent::chooseNewInstrumentFor (AudioEngine::TrackId trackId)
@@ -232,7 +288,7 @@ void MainComponent::chooseNewInstrumentFor (AudioEngine::TrackId trackId)
     juce::PopupMenu menu;
 
     if (types.isEmpty())
-        menu.addItem (1, "No instruments found - use Plugins > Scan first", false, false);
+        menu.addItem (1, "No instruments found - scan in Settings > Plugins first", false, false);
     else
         juce::KnownPluginList::addToMenu (menu, types, juce::KnownPluginList::sortByManufacturer);
 
@@ -267,22 +323,14 @@ void MainComponent::chooseNewInstrumentFor (AudioEngine::TrackId trackId)
 
                                     safe->engine.clearTrackOutputs (trackId);
                                     safe->engine.addTrackOutput (trackId, instrumentId, 1);
-                                    safe->openInstrumentEditor (instrumentId);
+                                    safe->openPluginWindow (instrumentId);
                                 });
                         });
 }
 
-void MainComponent::openInstrumentEditorForTrack (AudioEngine::TrackId trackId)
+void MainComponent::openPluginWindow (AudioEngine::InstrumentId instrumentId)
 {
-    const auto outputs = engine.getTrackOutputs (trackId);
-
-    if (! outputs.empty())
-        openInstrumentEditor (outputs.front().instrument);
-}
-
-void MainComponent::openInstrumentEditor (AudioEngine::InstrumentId instrumentId)
-{
-    auto& window = instrumentEditors[instrumentId];
+    auto& window = pluginWindows[instrumentId];
 
     if (window != nullptr)
     {
@@ -295,82 +343,130 @@ void MainComponent::openInstrumentEditor (AudioEngine::InstrumentId instrumentId
 
     if (plugin == nullptr)
     {
-        instrumentEditors.erase (instrumentId);
+        pluginWindows.erase (instrumentId);
         return;
     }
 
-    window = std::make_unique<PluginWindow> (*plugin, engine.getInstrumentName (instrumentId));
+    const auto onTop = engine.getSettingsFile().getBoolValue (SettingsView::pluginWindowsOnTopKey, true);
+
+    window = std::make_unique<PluginWindow> (*plugin, engine.getInstrumentName (instrumentId), onTop);
     window->onClose = [safe = juce::Component::SafePointer<MainComponent> (this), instrumentId]
     {
         // Defer deletion: we're inside the window's own callback.
         juce::MessageManager::callAsync ([safe, instrumentId]
-                                         { if (safe != nullptr) safe->instrumentEditors.erase (instrumentId); });
+                                         { if (safe != nullptr) safe->pluginWindows.erase (instrumentId); });
     };
 }
 
-void MainComponent::removeTrack (AudioEngine::TrackId id)
+//==============================================================================
+void MainComponent::setDomain (Domain newDomain)
 {
-    auto it = std::find_if (trackRows.begin(), trackRows.end(), [id] (auto& r) { return r->getTrackId() == id; });
-
-    if (it == trackRows.end())
-        return;
-
-    trackRows.erase (it);   // closes the editor before the plugin is destroyed
-    engine.removeTrack (id);
-    armTrack (engine.getArmedTrack());
-    layoutTracks();
+    domain = newDomain;
+    showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
 }
 
-void MainComponent::armTrack (AudioEngine::TrackId id)
+void MainComponent::showContent (ContentView view)
 {
-    // Release held on-screen keys so the previously armed instrument doesn't hang.
-    keyboardState.allNotesOff (0);
-
-    engine.setArmedTrack (id);
-
-    for (auto& row : trackRows)
-        row->setArmed (row->getTrackId() == id);
+    contentView = view;
+    updatePlaceholders();
+    updateViewVisibility();
 }
 
-void MainComponent::layoutTracks()
+void MainComponent::showMainMenu()
 {
-    const auto width = trackViewport.getMaximumVisibleWidth();
-    trackContainer.setSize (width, juce::jmax (1, (int) trackRows.size() * trackRowHeight));
+    const auto safe = juce::Component::SafePointer<MainComponent> (this);
+    juce::PopupMenu menu;
 
-    for (size_t i = 0; i < trackRows.size(); ++i)
-        trackRows[i]->setBounds (0, (int) i * trackRowHeight, width, trackRowHeight);
+    menu.addItem (1, "New project", false);
+    menu.addItem (2, "Load project...", false);
+    menu.addItem (3, "Save project", false);
+    menu.addSeparator();
+    menu.addItem ("Settings...", [safe] { if (safe != nullptr) safe->openSettings(); });
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (menuButton));
+}
+
+void MainComponent::openSettings()
+{
+    settingsOpen = true;
+    updateViewVisibility();
+}
+
+void MainComponent::closeSettings()
+{
+    settingsOpen = false;
+    engine.saveSettings();
+    updateViewVisibility();
+}
+
+void MainComponent::updateViewVisibility()
+{
+    midiRegionsView.setVisible (contentView == ContentView::midiRegions);
+    midiEditorView.setVisible (contentView == ContentView::midiEditor);
+    audioRegionsView.setVisible (contentView == ContentView::audioRegions);
+    instrumentsView.setVisible (contentView == ContentView::instruments);
+    instrumentEditorView.setVisible (contentView == ContentView::instrumentEditor);
+
+    trackList.setVisible (! sidebarCollapsed && domain == Domain::midi);
+    channelList.setVisible (! sidebarCollapsed && domain == Domain::audio);
+
+    midiDomainButton.setToggleState (domain == Domain::midi, juce::dontSendNotification);
+    audioDomainButton.setToggleState (domain == Domain::audio, juce::dontSendNotification);
+    instrumentsButton.setToggleState (contentView == ContentView::instruments
+                                        || contentView == ContentView::instrumentEditor, juce::dontSendNotification);
+
+    settingsView.setVisible (settingsOpen);
+
+    if (settingsOpen)
+        settingsView.toFront (false);
+}
+
+void MainComponent::updatePlaceholders()
+{
+    const auto trackCount = (int) engine.getTrackIds().size();
+
+    midiRegionsView.setDetails ({ juce::String (trackCount) + (trackCount == 1 ? " track" : " tracks"),
+                                  "",
+                                  "This area will show clips on a timeline.",
+                                  "Right-click a track for its clip and output options.",
+                                  "Press E on a track to open the MIDI editor." });
+
+    juce::StringArray editorLines;
+
+    if (selectedTrack != 0)
+    {
+        editorLines.add ("Track: " + engine.getTrackName (selectedTrack));
+
+        if (auto sequence = engine.getTrackSequence (selectedTrack))
+            editorLines.add (juce::String ((int) sequence->getNotes().size()) + " notes, "
+                             + juce::String ((int) sequence->getControls().size()) + " control events");
+        else
+            editorLines.add ("No clip yet - record something or add the demo clip.");
+    }
+    else
+    {
+        editorLines.add ("No track selected.");
+    }
+
+    editorLines.add ("");
+    editorLines.add ("The piano roll lands here in the next milestone.");
+    midiEditorView.setDetails (editorLines);
+
+    const auto channelCount = (int) engine.getAudioChannelIds().size();
+    audioRegionsView.setDetails ({ juce::String (channelCount) + (channelCount == 1 ? " audio channel" : " audio channels")
+                                     + " - strips are in the sidebar.",
+                                   "",
+                                   "Audio regions and editing arrive later." });
+}
+
+void MainComponent::togglePerfPanel()
+{
+    perfPanel.setVisible (! perfPanel.isVisible());
+    perfButton.setToggleState (perfPanel.isVisible(), juce::dontSendNotification);
+    resized();
 }
 
 //==============================================================================
-void MainComponent::showAudioSettings()
-{
-    auto selector = std::make_unique<juce::AudioDeviceSelectorComponent> (engine.getDeviceManager(),
-                                                                          0, 0,     // audio inputs
-                                                                          2, 64,    // audio outputs
-                                                                          true,     // MIDI inputs
-                                                                          false,    // MIDI output
-                                                                          true,     // stereo pairs
-                                                                          false);   // advanced options
-    selector->setSize (520, 480);
-    launchDialog (audioDialog, std::move (selector), "Audio & MIDI Settings", this);
-}
-
-void MainComponent::showPluginsMenu()
-{
-    const auto scanning = pluginScan != nullptr && pluginScan->isScanning();
-
-    juce::PopupMenu menu;
-    menu.addItem ("Scan for new plugins", ! scanning, false, [this] { startPluginScan ({}); });
-    menu.addItem ("Retry failed plugins", ! scanning, false, [this] { startPluginScan ({ "--retry-failed" }); });
-    menu.addItem ("Rescan everything", ! scanning, false, [this] { startPluginScan ({ "--rescan-all" }); });
-    menu.addSeparator();
-    menu.addItem ("Plugin list...", [this] { showPluginManager(); });
-    menu.addItem ("Show scan log", [] { UserData::getPluginScanLog().startAsProcess(); });
-    menu.addItem ("Open user data folder", [] { UserData::getDir().startAsProcess(); });
-
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (pluginsButton));
-}
-
 void MainComponent::startPluginScan (juce::StringArray args)
 {
     const auto exe = AudioEngine::getScannerExecutable();
@@ -400,7 +496,7 @@ void MainComponent::startPluginScan (juce::StringArray args)
 
         const auto numInstruments = engine.getInstrumentTypes().size();
         scanStatus = success ? "Plugin scan finished: " + juce::String (numInstruments) + " instruments available"
-                             : "Plugin scan failed - see Plugins > Show scan log";
+                             : "Plugin scan failed - see the scan log in the user data folder";
 
         juce::Timer::callAfterDelay (8000, [safe = juce::Component::SafePointer<MainComponent> (this)]
         {
@@ -410,17 +506,6 @@ void MainComponent::startPluginScan (juce::StringArray args)
     };
 
     pluginScan->start();
-}
-
-void MainComponent::showPluginManager()
-{
-    auto list = std::make_unique<juce::PluginListComponent> (engine.getFormatManager(),
-                                                             engine.getKnownPlugins(),
-                                                             engine.getDeadMansPedalFile(),
-                                                             nullptr,
-                                                             true);
-    list->setSize (760, 520);
-    launchDialog (pluginDialog, std::move (list), "Plugins", this);
 }
 
 //==============================================================================
@@ -442,7 +527,7 @@ void MainComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
 {
     if (source == &engine.getKnownPlugins())
     {
-        // Edits made in the plugin list window (removals etc.), not our own reloads.
+        // Edits made in the plugin list (removals etc.), not our own reloads.
         if (! reloadingPluginCache)
             engine.savePluginCache();
     }
@@ -454,9 +539,6 @@ void MainComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
 
 void MainComponent::timerCallback()
 {
-    for (auto& row : trackRows)
-        row->refresh();
-
     engine.pollRecording();
 
     auto& transport = engine.getTransport();
@@ -474,6 +556,22 @@ void MainComponent::timerCallback()
                              + ":" + juce::String (seconds - minutes * 60.0, 1).paddedLeft ('0', 4),
                            juce::dontSendNotification);
 
+    if (trackList.isShowing())
+        trackList.refresh();
+
+    if (channelList.isShowing())
+        channelList.refresh();
+
+    if (instrumentsView.isShowing())
+        instrumentsView.refresh();
+
+    if (instrumentEditorView.isShowing())
+        instrumentEditorView.refresh();
+
+    if (midiRegionsView.isShowing() || midiEditorView.isShowing() || audioRegionsView.isShowing())
+        updatePlaceholders();
+
+    // Status line
     auto& dm = engine.getDeviceManager();
 
     if (scanStatus.isNotEmpty())
@@ -496,20 +594,36 @@ void MainComponent::timerCallback()
     }
     else
     {
-        statusLabel.setText ("No audio device - open Audio Settings", juce::dontSendNotification);
+        statusLabel.setText ("No audio device - open Settings", juce::dontSendNotification);
     }
 }
 
 //==============================================================================
-void MainComponent::togglePerfPanel()
-{
-    perfPanel.setVisible (! perfPanel.isVisible());
-    perfButton.setToggleState (perfPanel.isVisible(), juce::dontSendNotification);
-    resized();
-}
-
 bool MainComponent::keyPressed (const juce::KeyPress& key)
 {
+    if (key == juce::KeyPress::escapeKey)
+    {
+        if (settingsOpen)
+        {
+            closeSettings();
+            return true;
+        }
+
+        if (contentView == ContentView::instrumentEditor)
+        {
+            showContent (ContentView::instruments);
+            return true;
+        }
+
+        if (contentView == ContentView::midiEditor || contentView == ContentView::instruments)
+        {
+            showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
+            return true;
+        }
+
+        return false;
+    }
+
     if (key == juce::KeyPress::F12Key)
     {
         togglePerfPanel();
@@ -531,24 +645,32 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     return false;
 }
 
+//==============================================================================
 void MainComponent::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (0xff1d1f23));
 
     g.setColour (juce::Colour (0xff2a2d33));
-    g.fillRect (getLocalBounds().removeFromTop (toolbarHeight));
+    g.fillRect (getLocalBounds().removeFromTop (topbarHeight));
+
+    g.setColour (juce::Colour (0xff17191c));
+    auto bottom = getLocalBounds().removeFromBottom (statusHeight + keyboardHeight);
+    g.fillRect (bottom.removeFromBottom (statusHeight));
 }
 
 void MainComponent::resized()
 {
     auto area = getLocalBounds();
 
-    auto toolbar = area.removeFromTop (toolbarHeight).reduced (8, 7);
-    audioButton.setBounds (toolbar.removeFromLeft (60));
-    toolbar.removeFromLeft (6);
-    pluginsButton.setBounds (toolbar.removeFromLeft (70));
-    toolbar.removeFromLeft (6);
-    addTrackButton.setBounds (toolbar.removeFromLeft (70));
+    // Topbar
+    auto toolbar = area.removeFromTop (topbarHeight).reduced (8, 7);
+    menuButton.setBounds (toolbar.removeFromLeft (56));
+    toolbar.removeFromLeft (10);
+    midiDomainButton.setBounds (toolbar.removeFromLeft (52));
+    toolbar.removeFromLeft (4);
+    audioDomainButton.setBounds (toolbar.removeFromLeft (56));
+    toolbar.removeFromLeft (4);
+    instrumentsButton.setBounds (toolbar.removeFromLeft (94));
     toolbar.removeFromLeft (14);
     rtzButton.setBounds (toolbar.removeFromLeft (34));
     toolbar.removeFromLeft (4);
@@ -557,20 +679,40 @@ void MainComponent::resized()
     recordButton.setBounds (toolbar.removeFromLeft (46));
     toolbar.removeFromLeft (4);
     loopButton.setBounds (toolbar.removeFromLeft (48));
-    toolbar.removeFromLeft (6);
+    toolbar.removeFromLeft (8);
     bpmLabel.setBounds (toolbar.removeFromLeft (56));
-    toolbar.removeFromLeft (6);
-    positionLabel.setBounds (toolbar.removeFromLeft (150));
-    toolbar.removeFromLeft (6);
+    toolbar.removeFromLeft (8);
     perfButton.setBounds (toolbar.removeFromRight (50));
     toolbar.removeFromRight (6);
-    statusLabel.setBounds (toolbar);
+    positionLabel.setBounds (toolbar);
 
+    // Bottom
+    statusLabel.setBounds (area.removeFromBottom (statusHeight).reduced (8, 1));
     keyboard.setBounds (area.removeFromBottom (keyboardHeight));
 
     if (perfPanel.isVisible())
         perfPanel.setBounds (area.removeFromBottom (160));
 
-    trackViewport.setBounds (area.reduced (4));
-    layoutTracks();
+    // Sidebar + content
+    if (sidebarWidth == 0)
+        sidebarWidth = juce::jmax (180, getWidth() * 15 / 100);
+
+    const auto currentSidebarWidth = sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth;
+    auto sidebar = area.removeFromLeft (currentSidebarWidth);
+
+    collapseButton.setBounds (sidebar.removeFromTop (24).reduced (2, 1));
+
+    trackList.setBounds (sidebar);
+    channelList.setBounds (sidebar);
+
+    sidebarResizer.setBounds (area.removeFromLeft (6));
+    sidebarResizer.setVisible (! sidebarCollapsed);
+
+    // Content container
+    for (auto* view : std::initializer_list<juce::Component*> { &midiRegionsView, &midiEditorView, &audioRegionsView,
+                                                                &instrumentsView, &instrumentEditorView })
+        view->setBounds (area);
+
+    // Settings replaces the whole UI
+    settingsView.setBounds (getLocalBounds());
 }

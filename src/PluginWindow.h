@@ -7,7 +7,7 @@
 class PluginWindow final : public juce::DocumentWindow
 {
 public:
-    PluginWindow (juce::AudioPluginInstance& plugin, const juce::String& title)
+    PluginWindow (juce::AudioPluginInstance& plugin, const juce::String& title, bool onTop = true)
         : DocumentWindow (title,
                           juce::LookAndFeel::getDefaultLookAndFeel().findColour (juce::ResizableWindow::backgroundColourId),
                           juce::DocumentWindow::minimiseButton | juce::DocumentWindow::closeButton)
@@ -18,7 +18,7 @@ public:
             editor = new juce::GenericAudioProcessorEditor (plugin);
 
         setUsingNativeTitleBar (true);
-        setAlwaysOnTop (true);   // see GUI_DESIGN.md; becomes a setting later
+        setAlwaysOnTop (onTop);
         setContentOwned (editor, true);
         setResizable (editor->isResizable(), false);
         centreWithSize (getWidth(), getHeight());
