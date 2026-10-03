@@ -24,16 +24,22 @@ public:
     void setRouteEnabled (bool shouldPass)   { routeEnabled.store (shouldPass); }
     bool isRouteEnabled() const              { return routeEnabled.load(); }
 
+    // Release whatever is sounding on the next block (e.g. the track just lost
+    // its live-input arming while keys were held).
+    void killHeldNotes()                     { killRequest.store (true); }
+
     //==============================================================================
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer& midi) override
     {
         const auto channel = targetChannel.load();
         const auto enabled = routeEnabled.load();
+        const auto kill = killRequest.exchange (false);
 
         scratch.clear();
 
-        // Release held notes when the gate closes or the destination channel changes.
-        if ((! enabled || channel != lastChannel) && heldKeys.any())
+        // Release held notes when the gate closes, the destination channel changes,
+        // or a kill was requested (the track lost its arming mid-note).
+        if ((! enabled || channel != lastChannel || kill) && heldKeys.any())
         {
             for (int key = 0; key < 128; ++key)
                 if (heldKeys[(size_t) key])
@@ -84,6 +90,7 @@ public:
 private:
     std::atomic<int> targetChannel { 1 };
     std::atomic<bool> routeEnabled { true };
+    std::atomic<bool> killRequest { false };
 
     // Audio-thread state
     std::bitset<128> heldKeys;

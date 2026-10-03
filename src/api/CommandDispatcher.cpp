@@ -1816,6 +1816,52 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
         // report tracks pointing at players that no longer exist - never delete.
         const auto trackIds = engine.getTrackIds();
 
+        // Where do new tracks land? Next to this instrument's existing tracks, so
+        // the user's re-organisation is honoured. Only a brand-new instrument gets
+        // the created structure: "VE Pro Server" > instance folder (ISSUES.md
+        // "Integrations"; these are ordinary folders - renamable, movable).
+        AudioEngine::FolderId newTrackFolder = 0;
+        bool haveExistingTracks = false;
+
+        for (auto trackId : trackIds)
+        {
+            for (auto& output : engine.getTrackOutputs (trackId))
+            {
+                if (output.instrument == instrumentId)
+                {
+                    newTrackFolder = engine.getTrackFolder (trackId);
+                    haveExistingTracks = true;
+                    break;
+                }
+            }
+
+            if (haveExistingTracks)
+                break;
+        }
+
+        if (! haveExistingTracks && ! instance.players.empty())
+        {
+            AudioEngine::FolderId serverFolder = 0;
+
+            for (auto folderId : engine.getFolderIds (true))
+                if (engine.getFolderParent (folderId) == 0 && engine.getFolderName (folderId) == "VE Pro Server")
+                    serverFolder = folderId;
+
+            if (serverFolder == 0)
+                serverFolder = engine.addFolder (true, "VE Pro Server");
+
+            AudioEngine::FolderId instanceFolder = 0;
+
+            for (auto folderId : engine.getFolderIds (true))
+                if (engine.getFolderParent (folderId) == serverFolder && engine.getFolderName (folderId) == instance.name)
+                    instanceFolder = folderId;
+
+            if (instanceFolder == 0)
+                instanceFolder = engine.addFolder (true, instance.name, serverFolder);
+
+            newTrackFolder = instanceFolder;
+        }
+
         for (auto& player : instance.players)
         {
             bool exists = false;
@@ -1830,6 +1876,10 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
             {
                 const auto trackId = engine.addTrack (player.name);
                 engine.addTrackOutput (trackId, instrumentId, player.midiChannel, player.midiPort);
+
+                if (newTrackFolder != 0)
+                    engine.setTrackFolder (trackId, newTrackFolder);
+
                 ++state->tracksCreated;
 
                 if (player.midiPort > 1)

@@ -1795,6 +1795,14 @@ void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std:
 //==============================================================================
 void AudioEngine::setArmedTrack (TrackId id)
 {
+    // Un-arming a track must not leave its live-played notes ringing (ISSUES.md
+    // "Sidebar"): release whatever the old armed track's outputs still hold.
+    if (armedTrack != id)
+        if (auto* previous = findTrack (armedTrack))
+            for (auto& output : previous->outputs)
+                if (auto* route = getRoute (output))
+                    route->killHeldNotes();
+
     armedTrack = id;
     updateMidiRouting();
 

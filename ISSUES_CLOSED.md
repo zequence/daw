@@ -94,6 +94,10 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Sidebar
 
+- [x] When Rec is disabled (for example when selecting another channel) any playing notes on that channel should be stopped.
+      (un-arming releases held notes: the previously armed track's routes get
+      a kill request and emit note-offs on the next block, so switching
+      channels mid-note never leaves notes ringing)
 - [x] Dragging a group of selected channels is re-selecting the selected channel that is clicked on. Re-selecting should only work on channels that are not selected.
       (clicking an already-selected row no longer re-selects on mouse-down;
       it keeps the group for the drag and only becomes the single selection
@@ -123,6 +127,17 @@ resolution notes. Newest additions go at the top of each chapter.
       menus to move/rename/remove, gold indent guides; arrangement lane order
       follows the tree and collapsed folders hide their lanes; folder.* API
       commands; saved in the project and covered by history time-travel)
+
+# Integrations
+
+- [x] When syncing create renamable folders: one for VE Pro Server, and inside
+      it, one folder for each instance; inside those, the midi channels whose
+      names are immutable. Folders stay freely renamable and movable.
+      (first sync of an instance creates "VE Pro Server" > <instance> and puts
+      the player tracks inside; later syncs place NEW tracks next to the
+      instrument's existing ones - wherever the user moved them - so
+      re-organisation and renames are never fought. Only the synced channel
+      NAMES are immutable; folders and tracks are ordinary.)
 
 # Midi record
 
