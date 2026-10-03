@@ -49,6 +49,16 @@ MainComponent::MainComponent (AudioEngine& e)
     playButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::darkgreen);
     playButton.onClick = [this] { engine.getTransport().togglePlayStop(); };
 
+    recordButton.setTooltip ("Record live MIDI onto the armed track (starts playback if stopped)");
+    recordButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::darkred);
+    recordButton.onClick = [this]
+    {
+        if (engine.isRecording())
+            engine.stopRecording();
+        else if (! engine.startRecording())
+            statusLabel.setText ("Add a track before recording", juce::dontSendNotification);
+    };
+
     loopButton.setTooltip ("Loop from the start to the end of the last clip");
     loopButton.setClickingTogglesState (true);
     loopButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::steelblue);
@@ -75,8 +85,8 @@ MainComponent::MainComponent (AudioEngine& e)
 
     // Keep keyboard focus on the main component so the space bar reaches the transport.
     for (auto* b : std::initializer_list<juce::Component*> { &audioButton, &pluginsButton, &addTrackButton,
-                                                             &perfButton, &rtzButton, &playButton, &loopButton,
-                                                             &keyboard })
+                                                             &perfButton, &rtzButton, &playButton, &recordButton,
+                                                             &loopButton, &keyboard })
         b->setWantsKeyboardFocus (false);
 
     statusLabel.setJustificationType (juce::Justification::centredRight);
@@ -90,8 +100,9 @@ MainComponent::MainComponent (AudioEngine& e)
     keyboardState.addListener (this);
 
     for (auto* c : std::initializer_list<juce::Component*> { &audioButton, &pluginsButton, &addTrackButton, &perfButton,
-                                                             &rtzButton, &playButton, &loopButton, &bpmLabel,
-                                                             &positionLabel, &statusLabel, &trackViewport, &keyboard })
+                                                             &rtzButton, &playButton, &recordButton, &loopButton,
+                                                             &bpmLabel, &positionLabel, &statusLabel,
+                                                             &trackViewport, &keyboard })
         addAndMakeVisible (c);
 
     engine.getDeviceManager().addChangeListener (this);
@@ -126,14 +137,15 @@ void MainComponent::addTrack()
 
     auto row = std::make_unique<TrackRow> (engine, id, "Track " + juce::String (++trackCounter));
     row->onArmClicked    = [this] (auto trackId) { armTrack (trackId); };
-    row->onDemoToggled   = [this] (auto trackId, bool enabled)
+    row->onSetDemo = [this] (auto trackId)
     {
-        engine.setTrackSequence (trackId, enabled ? makeDemoSequence() : nullptr);
+        engine.setTrackSequence (trackId, makeDemoSequence());
 
         // The clip starts at bar 1; make sure the playhead isn't already beyond it.
-        if (enabled && ! engine.getTransport().isPlaying())
+        if (! engine.getTransport().isPlaying())
             engine.getTransport().returnToZero();
     };
+    row->onClearClip = [this] (auto trackId) { engine.setTrackSequence (trackId, nullptr); };
     row->onRemoveClicked = [this] (auto trackId)
     {
         // Defer: the click came from a button inside the row we're about to delete.
@@ -297,9 +309,12 @@ void MainComponent::timerCallback()
     for (auto& row : trackRows)
         row->updateMeter();
 
+    engine.pollRecording();
+
     auto& transport = engine.getTransport();
     playButton.setToggleState (transport.isPlaying(), juce::dontSendNotification);
     playButton.setButtonText (transport.isPlaying() ? "Stop" : "Play");
+    recordButton.setToggleState (engine.isRecording(), juce::dontSendNotification);
 
     const auto map = transport.getTempoMap();
     const auto position = map->ticksToBarsBeats (transport.getPositionTicks());
@@ -390,6 +405,8 @@ void MainComponent::resized()
     rtzButton.setBounds (toolbar.removeFromLeft (34));
     toolbar.removeFromLeft (4);
     playButton.setBounds (toolbar.removeFromLeft (54));
+    toolbar.removeFromLeft (4);
+    recordButton.setBounds (toolbar.removeFromLeft (46));
     toolbar.removeFromLeft (4);
     loopButton.setBounds (toolbar.removeFromLeft (48));
     toolbar.removeFromLeft (6);

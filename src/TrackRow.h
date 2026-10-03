@@ -15,8 +15,7 @@ public:
     void setArmed (bool);
     void updateMeter();
 
-    std::function<void (AudioEngine::TrackId)> onArmClicked, onRemoveClicked;
-    std::function<void (AudioEngine::TrackId, bool)> onDemoToggled;
+    std::function<void (AudioEngine::TrackId)> onArmClicked, onRemoveClicked, onSetDemo, onClearClip;
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -32,7 +31,7 @@ private:
     const AudioEngine::TrackId trackId;
 
     juce::TextButton armButton { "R" }, instrumentButton { "(no instrument)" }, editButton { "Edit" },
-                     demoButton { "Demo" }, muteButton { "M" }, removeButton { "X" };
+                     demoButton { "Demo" }, clearButton { "Clear" }, muteButton { "M" }, removeButton { "X" };
     juce::Label nameLabel;
     juce::Slider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
     float meterLevel = 0.0f;

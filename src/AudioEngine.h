@@ -3,6 +3,7 @@
 #include <juce_audio_utils/juce_audio_utils.h>
 
 #include "engine/Transport.h"
+#include "engine/MidiRecorder.h"
 #include "model/MidiSequence.h"
 
 class TrackChannelProcessor;
@@ -55,6 +56,13 @@ public:
     double getTempoBpm() const;
     void setTempoBpm (double bpm);
 
+    //==============================================================================
+    // Recording captures live MIDI onto the armed track, merging with any existing clip.
+    bool startRecording();        // starts the transport too, if stopped
+    void stopRecording();         // finalizes and merges; playback continues
+    bool isRecording() const      { return recorder != nullptr && recorder->isRecording(); }
+    void pollRecording();         // call regularly from a UI timer while the app runs
+
     // End of the bar containing the last event of any track's sequence (used as the loop end).
     juce::int64 getLoopEndTicks() const;
 
@@ -98,6 +106,7 @@ private:
 
     Track* findTrack (TrackId);
     const Track* findTrack (TrackId) const;
+    void mergeIntoTrack (TrackId, const MidiRecorder::Result&);
     void connectInstrument (const Track&);
     void updateMidiRouting();
     void enableAllMidiInputsIfFirstRun (bool hadSavedState);
@@ -112,7 +121,9 @@ private:
     Transport transport;
     IOCallback ioCallback { *this };
 
-    NodeID audioOutNode, midiInNode;
+    NodeID audioOutNode, midiInNode, recorderNode;
+    std::unique_ptr<MidiRecorder> recorder;
+    bool recordingSawPlayback = false;
     std::map<TrackId, Track> tracks;
     TrackId nextTrackId = 1, armedTrack = 0;
 

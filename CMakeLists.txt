@@ -78,6 +78,7 @@ target_sources(OrchestralDAWTests PRIVATE
     tests/TempoMapTests.cpp
     tests/TransportTests.cpp
     tests/GraphIntegrationTests.cpp
+    tests/RecordingTests.cpp
     tests/EndToEndTests.cpp
     src/AudioEngine.cpp
     src/model/TempoMap.cpp

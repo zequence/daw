@@ -26,14 +26,12 @@ TrackRow::TrackRow (AudioEngine& e, AudioEngine::TrackId id, const juce::String&
     editButton.setEnabled (false);
     editButton.onClick = [this] { openEditor(); };
 
-    demoButton.setTooltip ("Give this track a two-bar demo clip to play back");
-    demoButton.setClickingTogglesState (true);
-    demoButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::seagreen);
-    demoButton.onClick = [this]
-    {
-        if (onDemoToggled)
-            onDemoToggled (trackId, demoButton.getToggleState());
-    };
+    demoButton.setTooltip ("Replace this track's clip with a two-bar demo clip");
+    demoButton.onClick = [this] { if (onSetDemo) onSetDemo (trackId); };
+
+    clearButton.setTooltip ("Delete this track's clip");
+    clearButton.setEnabled (false);
+    clearButton.onClick = [this] { if (onClearClip) onClearClip (trackId); };
 
     muteButton.setClickingTogglesState (true);
     muteButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::orange.darker (0.3f));
@@ -59,7 +57,8 @@ TrackRow::TrackRow (AudioEngine& e, AudioEngine::TrackId id, const juce::String&
     removeButton.onClick = [this] { if (onRemoveClicked) onRemoveClicked (trackId); };
 
     for (auto* c : std::initializer_list<juce::Component*> { &armButton, &nameLabel, &instrumentButton, &editButton,
-                                                             &demoButton, &muteButton, &volumeSlider, &removeButton })
+                                                             &demoButton, &clearButton, &muteButton, &volumeSlider,
+                                                             &removeButton })
     {
         c->setWantsKeyboardFocus (false);
         addAndMakeVisible (c);
@@ -80,6 +79,8 @@ void TrackRow::setArmed (bool shouldBeArmed)
 
 void TrackRow::updateMeter()
 {
+    clearButton.setEnabled (engine.getTrackSequence (trackId) != nullptr);
+
     if (auto* channel = engine.getChannel (trackId))
     {
         const auto peak = channel->takePeak();
@@ -227,6 +228,8 @@ void TrackRow::resized()
     volumeSlider.setBounds (area.removeFromRight (140));
     area.removeFromRight (6);
     muteButton.setBounds (area.removeFromRight (28));
+    area.removeFromRight (6);
+    clearButton.setBounds (area.removeFromRight (50));
     area.removeFromRight (6);
     demoButton.setBounds (area.removeFromRight (52));
     area.removeFromRight (6);

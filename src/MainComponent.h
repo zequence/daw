@@ -38,7 +38,7 @@ private:
 
     juce::TextButton audioButton { "Audio" }, pluginsButton { "Plugins" }, addTrackButton { "+ Track" },
                      perfButton { "Perf" };
-    juce::TextButton rtzButton { "|<" }, playButton { "Play" }, loopButton { "Loop" };
+    juce::TextButton rtzButton { "|<" }, playButton { "Play" }, recordButton { "Rec" }, loopButton { "Loop" };
     juce::Label bpmLabel, positionLabel;
 
     PerformanceTracker perfTracker { engine };

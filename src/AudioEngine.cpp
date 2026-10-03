@@ -25,6 +25,13 @@ AudioEngine::AudioEngine (juce::PropertiesFile& settingsToUse)
     audioOutNode = graph.addNode (std::make_unique<IOProcessor> (IOProcessor::audioOutputNode))->nodeID;
     midiInNode   = graph.addNode (std::make_unique<IOProcessor> (IOProcessor::midiInputNode))->nodeID;
 
+    // Permanent tap on the live MIDI input for recording.
+    auto recorderNodePtr = graph.addNode (std::make_unique<MidiRecorderProcessor> (transport));
+    recorderNode = recorderNodePtr->nodeID;
+    graph.addConnection ({ { midiInNode, juce::AudioProcessorGraph::midiChannelIndex },
+                           { recorderNode, juce::AudioProcessorGraph::midiChannelIndex } });
+    recorder = std::make_unique<MidiRecorder> (static_cast<MidiRecorderProcessor&> (*recorderNodePtr->getProcessor()));
+
     player.setProcessor (&graph);
     deviceManager.addAudioCallback (&ioCallback);
     deviceManager.addMidiInputDeviceCallback ({}, &player);
@@ -308,6 +315,76 @@ void AudioEngine::setTempoBpm (double bpm)
     masterTempoMap = masterTempoMap->withTempoChange (0, bpm);
     transport.setTempoMap (masterTempoMap);
     transport.locate (tick);
+}
+
+bool AudioEngine::startRecording()
+{
+    if (findTrack (armedTrack) == nullptr || isRecording())
+        return false;
+
+    recordingSawPlayback = false;
+    recorder->start (armedTrack);
+    juce::Logger::writeToLog ("Recording started on track " + juce::String (armedTrack));
+
+    if (! transport.isPlaying())
+        transport.play();
+
+    return true;
+}
+
+void AudioEngine::stopRecording()
+{
+    if (! isRecording())
+        return;
+
+    const auto trackId = recorder->getTrackId();
+    const auto result = recorder->finish (transport.getPositionTicks());
+
+    juce::Logger::writeToLog ("Recording stopped on track " + juce::String (trackId) + ": "
+                              + juce::String ((int) result.notes.size()) + " notes, "
+                              + juce::String ((int) result.controls.size()) + " control events");
+    mergeIntoTrack (trackId, result);
+}
+
+void AudioEngine::pollRecording()
+{
+    if (! isRecording())
+        return;
+
+    recorder->poll();
+
+    // Commit each loop pass so it's audible on the next one.
+    if (recorder->consumeWrapFlag())
+        mergeIntoTrack (recorder->getTrackId(), recorder->takePending());
+
+    // The transport reports playing only once the audio thread has confirmed it.
+    if (transport.isPlaying())
+        recordingSawPlayback = true;
+    else if (recordingSawPlayback)
+        stopRecording();
+}
+
+void AudioEngine::mergeIntoTrack (TrackId id, const MidiRecorder::Result& result)
+{
+    if (result.isEmpty())
+        return;
+
+    auto* track = findTrack (id);
+
+    if (track == nullptr)
+        return;
+
+    auto notes = result.notes;
+    auto controls = result.controls;
+
+    if (track->sequence != nullptr)
+    {
+        const auto& existing = *track->sequence;
+        notes.insert (notes.end(), existing.getNotes().begin(), existing.getNotes().end());
+        controls.insert (controls.end(), existing.getControls().begin(), existing.getControls().end());
+    }
+
+    setTrackSequence (id, MidiSequence::create (std::move (notes), std::move (controls)));
 }
 
 juce::int64 AudioEngine::getLoopEndTicks() const
