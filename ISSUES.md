@@ -21,18 +21,11 @@ Claude is unsure of an issue they will pose a question.
 
 # Sidebar
 
+- [ ] Colored tracks (and regions). Selectable colors on top of the tracks in a dropdown for selected channels.
+
 # Integrations
 
-- [x] Syncing to VE Pro with host 127.0.0.1 froze both the app and the VE Pro
-      server.
-      (three defenses added: the VSL CLI call gets a hard 15 s timeout and is
-      killed if it hangs; vepro.sync refuses to run twice at once; and sync
-      never force-connects to an instance the server reports as already
-      connected - VSL can block inside such a connect, which is the likely
-      freeze, since the killed app had left both instances flagged connected.
-      Those instances are now reported in the sync notes instead: disconnect
-      them on the server, then re-sync. Connect steps are logged for
-      diagnosis if it ever happens again.)
+- [ ] Syncing should fetch colors from the server. Use the instance colors for instance folders and player colors for midi tracks.
 
 # Midi record
 
