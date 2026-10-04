@@ -8,6 +8,7 @@
 #include "engine/HistoryManager.h"
 #include "ui/SettingsView.h"
 #include "ui/ThemedLookAndFeel.h"
+#include "ui/SystemTitleBar.h"
 
 class OrchestralDAWApplication final : public juce::JUCEApplication
 {
@@ -110,6 +111,7 @@ private:
             centreWithSize (getWidth(), getHeight());
             setVisible (true);
             setFullScreen (true);   // maximized by default (user requirement)
+            titleBar.apply();       // dark title bar when Windows is in dark mode
         }
 
         void closeButtonPressed() override
@@ -121,6 +123,8 @@ private:
         }
 
     private:
+        SystemTitleBar titleBar { *this };
+
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainWindow)
     };
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_utils/juce_audio_utils.h>
+#include "ui/SystemTitleBar.h"
 
 // Floating window showing a plugin's own editor.
 // The owner is responsible for deleting it; onClose is called when the user closes it.
@@ -23,6 +24,7 @@ public:
         setResizable (editor->isResizable(), false);
         centreWithSize (getWidth(), getHeight());
         setVisible (true);
+        titleBar.apply();
     }
 
     ~PluginWindow() override
@@ -41,5 +43,7 @@ public:
     std::function<void()> onClose;
 
 private:
+    SystemTitleBar titleBar { *this };
+
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PluginWindow)
 };
