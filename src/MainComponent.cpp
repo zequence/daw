@@ -1015,19 +1015,28 @@ void MainComponent::startPluginScan (juce::StringArray args)
 
     args.insert (0, "--scan");
     juce::Logger::writeToLog ("Plugin scan started: " + exe.getFullPathName() + " " + args.joinIntoString (" "));
+    // Replacing a running scan abandons its onFinished, so close its overlay here
+    if (pluginScan != nullptr && pluginScan->isScanning())
+        engine.getBusyStatus().end();
+
     pluginScan = std::make_unique<PluginScanProcess> (exe, std::move (args));
     scanStatus = "Scanning plugins...";
+    engine.getBusyStatus().begin ("Scanning plugins");
+    engine.getBusyStatus().update ("Starting the scanner...");
 
     pluginScan->onOutput = [this] (const juce::String& line)
     {
         scanStatus = "Plugin scan: " + line;
+        engine.getBusyStatus().update (line);
     };
 
     pluginScan->onFinished = [this] (bool success)
     {
+        engine.getBusyStatus().update ("Reading the plugin list...");
         reloadingPluginCache = true;
         engine.reloadPluginCache();
         reloadingPluginCache = false;
+        engine.getBusyStatus().end();
 
         const auto numInstruments = engine.getInstrumentTypes().size();
         scanStatus = success ? "Plugin scan finished: " + juce::String (numInstruments) + " instruments available"

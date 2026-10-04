@@ -251,10 +251,15 @@ public:
     void beginGraphBatch();
     void endGraphBatch();
 
-    // Long operations (project loads, VE Pro syncs) report here so the UI can
-    // show a busy overlay explaining why the app isn't responding. onChanged
-    // fires synchronously on every change (the UI paints immediately - the
-    // message thread may be about to block). progress: 0..1, or < 0 = unknown.
+    // Long operations (project loads, VE Pro syncs, plugin scans, instrument
+    // loads) report here so the UI can show a busy overlay explaining why the
+    // app isn't responding. onChanged fires synchronously on every change (the
+    // UI paints immediately - the message thread may be about to block).
+    // progress: 0..1, or < 0 = unknown.
+    //
+    // begin/end nest: an inner operation (an instrument load inside a project
+    // load) leaves the outer one's title and detail alone, and the overlay
+    // closes when the outermost end() arrives. Every begin needs exactly one end.
     struct BusyStatus
     {
         bool active = false;
@@ -264,6 +269,9 @@ public:
 
         void begin (const juce::String& newTitle)
         {
+            if (depth++ > 0)
+                return;
+
             active = true;
             title = newTitle;
             detail.clear();
@@ -280,9 +288,15 @@ public:
 
         void end()
         {
+            if (depth == 0 || --depth > 0)
+                return;
+
             active = false;
             if (onChanged) onChanged();
         }
+
+    private:
+        int depth = 0;
     };
 
     BusyStatus& getBusyStatus() noexcept    { return busyStatus; }

@@ -259,12 +259,22 @@ void AudioEngine::addInstrument (const juce::PluginDescription& description, Ins
     const auto startMs = juce::Time::getMillisecondCounterHiRes();
     juce::Logger::writeToLog ("Loading instrument: " + description.name + " (" + description.fileOrIdentifier + ")");
 
+    // Nests inside a project load / VE Pro sync, which own the title and detail
+    busyStatus.begin ("Loading " + description.name);
+
     formatManager.createPluginInstanceAsync (description, sampleRate, blockSize,
         [this, alive, callback, startMs, name = description.name]
         (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error)
         {
             if (alive.expired())
                 return;
+
+            // Closes the overlay on every exit below (failure, success, throw)
+            struct BusyEnd
+            {
+                BusyStatus& status;
+                ~BusyEnd()   { status.end(); }
+            } busyEnd { busyStatus };
 
             juce::Logger::writeToLog ((instance != nullptr ? "Loaded instrument: " : "FAILED to load instrument: ") + name
                                       + " in " + juce::String (juce::roundToInt (juce::Time::getMillisecondCounterHiRes() - startMs)) + " ms"
