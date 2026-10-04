@@ -89,6 +89,51 @@ public:
         expect (engine.undoTrackSequence (track), "nothing to undo");
         const auto restored = engine.getTrackSequence (track);
         expect (restored != nullptr && restored->getNotes().size() == 3, "undo didn't restore the pre-take clip");
+
+        //======================================================================
+        // Multi-selection with auto-record arms several tracks: one take records
+        // into all of them, each by its own record mode.
+        beginTest ("a take records into every armed track by its own mode");
+
+        const auto replaceTrack = engine.addTrack();
+        const auto addTrack = engine.addTrack();
+
+        for (auto t : { replaceTrack, addTrack })
+            engine.setTrackSequence (t, MidiSequence::create ({ { 8 * Q, Q, 1, 64, 100 } }, {}));   // under the take
+
+        engine.setTrackRecordReplace (replaceTrack, true);
+        engine.setTrackRecordReplace (addTrack, false);
+        engine.setArmedTracks ({ replaceTrack, addTrack }, replaceTrack);
+        expect (engine.isTrackArmed (replaceTrack) && engine.isTrackArmed (addTrack));
+
+        engine.getTransport().locate (4 * Q);
+        expect (engine.startRecording(), "multi-track recording didn't start");
+
+        pumpUntil ([&] { return engine.getTransport().getPositionTicks() >= 5 * Q; }, 4000);
+        engine.getLiveMidiCollector().addMessageToQueue (stamp (juce::MidiMessage::noteOn (1, 74, (juce::uint8) 90)));
+        pumpUntil ([&] { return engine.getTransport().getPositionTicks() >= 6 * Q; }, 3000);
+        engine.getLiveMidiCollector().addMessageToQueue (stamp (juce::MidiMessage::noteOff (1, 74)));
+        pumpUntil ([&] { return engine.getTransport().getPositionTicks() >= 13 * Q; }, 6000);
+        engine.stopRecording();
+        engine.getTransport().stop();
+        pump (300);
+
+        const auto keysOf = [&engine] (AudioEngine::TrackId t)
+        {
+            std::set<int> keys;
+
+            if (auto seq = engine.getTrackSequence (t))
+                for (auto& note : seq->getNotes())
+                    keys.insert (note.key);
+
+            return keys;
+        };
+
+        const auto replaceKeys = keysOf (replaceTrack), addKeys = keysOf (addTrack);
+        expect (replaceKeys.count (74) == 1, "replace-mode track is missing the take");
+        expect (replaceKeys.count (64) == 0, "replace-mode track kept the note under the take");
+        expect (addKeys.count (74) == 1, "add-mode track is missing the take");
+        expect (addKeys.count (64) == 1, "add-mode track lost its existing note");
     }
 
 private:

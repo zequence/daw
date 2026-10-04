@@ -556,9 +556,15 @@ void AudioEngine::removeTrack (TrackId id)
 
     graph.removeNode (track->midiSourceNode, updateKind());
     tracks.erase (id);
+    armedTracks.erase (id);
 
     if (armedTrack == id)
-        setArmedTrack (tracks.empty() ? 0 : tracks.begin()->first);
+    {
+        if (! armedTracks.empty())
+            setArmedTracks (armedTracks, *armedTracks.begin());
+        else
+            setArmedTrack (tracks.empty() ? 0 : tracks.begin()->first);
+    }
 
     applyMuteAndSolo();
 
@@ -1450,28 +1456,41 @@ std::vector<AudioEngine::TrackId> AudioEngine::getArrangeTrackOrder() const
 }
 
 //==============================================================================
+bool AudioEngine::anyReplaceTarget() const
+{
+    return std::any_of (takeTargets.begin(), takeTargets.end(), [] (const TakeTarget& t) { return t.replace; });
+}
+
 bool AudioEngine::startRecording()
 {
-    auto* track = findTrack (armedTrack);
-
-    if (track == nullptr || isRecording())
+    if (findTrack (armedTrack) == nullptr || isRecording())
         return false;
 
-    takeIsReplace = track->recordReplace;
-    preTakeSequence = track->sequence;
+    // Every armed track receives the take, each by its own record mode
+    takeTargets.clear();
+    takeStash = {};
     replaceFromTick = -1;
 
-    // Replace mode: the track's own material is silent for the whole take.
-    if (takeIsReplace)
-        if (auto* source = getSource (armedTrack))
-            source->setSuppressed (true);
+    for (auto trackId : armedTracks)
+    {
+        if (auto* track = findTrack (trackId))
+        {
+            takeTargets.push_back ({ trackId, track->recordReplace, track->sequence });
+
+            // Replace mode: the track's own material is silent for the whole take.
+            if (track->recordReplace)
+                if (auto* source = getSource (trackId))
+                    source->setSuppressed (true);
+        }
+    }
 
     recordingSawPlayback = false;
     recorder->start (armedTrack);
-    juce::Logger::writeToLog ("Recording started on track " + juce::String (armedTrack));
+    juce::Logger::writeToLog ("Recording started on " + juce::String ((int) takeTargets.size()) + " track(s)");
 
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
     data->setProperty ("trackId", armedTrack);
+    data->setProperty ("trackCount", (int) takeTargets.size());
     emitEvent ("recordingStarted", data);
 
     if (! transport.isPlaying())
@@ -1485,55 +1504,64 @@ void AudioEngine::stopRecording()
     if (! isRecording())
         return;
 
-    const auto trackId = recorder->getTrackId();
     const auto stopTick = transport.getPositionTicks();
     const auto result = recorder->finish (stopTick);
 
-    if (auto* source = getSource (trackId))
-        source->setSuppressed (false);
+    for (auto& target : takeTargets)
+        if (auto* source = getSource (target.trackId))
+            source->setSuppressed (false);
 
     // finish() drains the FIFO, so the first input may only be known now.
-    if (takeIsReplace && replaceFromTick < 0 && recorder->getFirstEventTick() >= 0)
+    if (replaceFromTick < 0 && recorder->getFirstEventTick() >= 0)
         replaceFromTick = recorder->getFirstEventTick();
 
-    juce::Logger::writeToLog ("Recording stopped on track " + juce::String (trackId) + ": "
-                              + juce::String ((int) result.notes.size()) + " notes, "
-                              + juce::String ((int) result.controls.size()) + " control events"
-                              + (takeIsReplace ? " (replace mode)" : ""));
+    juce::Logger::writeToLog ("Recording stopped on " + juce::String ((int) takeTargets.size()) + " track(s): "
+                              + juce::String ((int) (takeStash.notes.size() + result.notes.size())) + " notes, "
+                              + juce::String ((int) (takeStash.controls.size() + result.controls.size()))
+                              + " control events");
 
-    if (takeIsReplace && replaceFromTick >= 0)
+    for (auto& target : takeTargets)
     {
-        // One undoable step: pre-take material erased from first input to stop, plus the take.
-        auto base = eraseRangeFrom (preTakeSequence, replaceFromTick, juce::jmax (replaceFromTick + 1, stopTick));
-
-        auto notes = result.notes;
-        auto controls = result.controls;
-
-        if (base != nullptr)
+        if (target.replace && replaceFromTick >= 0)
         {
-            notes.insert (notes.end(), base->getNotes().begin(), base->getNotes().end());
-            controls.insert (controls.end(), base->getControls().begin(), base->getControls().end());
+            // One undoable step: pre-take material erased from first input to stop,
+            // plus the WHOLE take (loop-pass commits stashed + the final part).
+            auto base = eraseRangeFrom (target.preTakeSequence, replaceFromTick,
+                                        juce::jmax (replaceFromTick + 1, stopTick));
+
+            auto notes = takeStash.notes;
+            auto controls = takeStash.controls;
+            notes.insert (notes.end(), result.notes.begin(), result.notes.end());
+            controls.insert (controls.end(), result.controls.begin(), result.controls.end());
+
+            if (base != nullptr)
+            {
+                notes.insert (notes.end(), base->getNotes().begin(), base->getNotes().end());
+                controls.insert (controls.end(), base->getControls().begin(), base->getControls().end());
+            }
+
+            if (auto* track = findTrack (target.trackId))
+                applySequence (*track, target.preTakeSequence);   // so the undo snapshot is the pre-take state
+
+            setTrackSequence (target.trackId, notes.empty() && controls.empty()
+                                                  ? nullptr
+                                                  : MidiSequence::create (std::move (notes), std::move (controls)));
         }
-
-        if (auto* track = findTrack (trackId))
-            applySequence (*track, preTakeSequence);   // so the undo snapshot is the pre-take state
-
-        setTrackSequence (trackId, notes.empty() && controls.empty()
-                                       ? nullptr
-                                       : MidiSequence::create (std::move (notes), std::move (controls)));
+        else if (! target.replace)
+        {
+            mergeIntoTrack (target.trackId, result);   // earlier loop passes were committed already
+        }
     }
-    else
-    {
-        mergeIntoTrack (trackId, result);
-    }
-
-    takeIsReplace = false;
-    preTakeSequence = nullptr;
 
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
-    data->setProperty ("trackId", trackId);
-    data->setProperty ("notes", (int) result.notes.size());
-    data->setProperty ("controls", (int) result.controls.size());
+    data->setProperty ("trackId", armedTrack);
+    data->setProperty ("trackCount", (int) takeTargets.size());
+    data->setProperty ("notes", (int) (takeStash.notes.size() + result.notes.size()));
+    data->setProperty ("controls", (int) (takeStash.controls.size() + result.controls.size()));
+
+    takeTargets.clear();
+    takeStash = {};
+
     emitEvent ("recordingFinished", data);
 }
 
@@ -1544,17 +1572,24 @@ void AudioEngine::pollRecording()
 
     recorder->poll();
 
-    if (takeIsReplace)
-    {
-        recorder->consumeWrapFlag();   // replace mode commits once, at stop
+    if (replaceFromTick < 0 && recorder->getFirstEventTick() >= 0)
+        replaceFromTick = recorder->getFirstEventTick();
 
-        if (replaceFromTick < 0 && recorder->getFirstEventTick() >= 0)
-            replaceFromTick = recorder->getFirstEventTick();
-    }
-    else if (recorder->consumeWrapFlag())
+    if (recorder->consumeWrapFlag())
     {
-        // Add mode: commit each loop pass so it's audible on the next one.
-        mergeIntoTrack (recorder->getTrackId(), recorder->takePending());
+        // Add-mode targets commit each loop pass so it's audible on the next one;
+        // replace-mode targets commit once at stop, so stash what passes here.
+        const auto pass = recorder->takePending();
+
+        for (auto& target : takeTargets)
+            if (! target.replace)
+                mergeIntoTrack (target.trackId, pass);
+
+        if (anyReplaceTarget())
+        {
+            takeStash.notes.insert (takeStash.notes.end(), pass.notes.begin(), pass.notes.end());
+            takeStash.controls.insert (takeStash.controls.end(), pass.controls.begin(), pass.controls.end());
+        }
     }
 
     // The transport reports playing only once the audio thread has confirmed it.
@@ -1673,7 +1708,8 @@ bool AudioEngine::saveProject (const juce::File& file)
         e->setAttribute ("name", track.name);
         e->setAttribute ("muted", track.muted);
         e->setAttribute ("soloed", track.soloed);
-        e->setAttribute ("armed", id == armedTrack);
+        e->setAttribute ("armed", isTrackArmed (id));
+        e->setAttribute ("primary", id == armedTrack);
         e->setAttribute ("recordReplace", track.recordReplace);
         e->setAttribute ("folder", getTrackFolder (id));
         e->setAttribute ("position", track.position);
@@ -1737,6 +1773,7 @@ void AudioEngine::clearProject()
     audioChannels.clear();
 
     armedTrack = 0;
+    armedTracks.clear();
     markers.clear();
     folders.clear();
     masterTempoMap = TempoMap::create (120.0);
@@ -1921,6 +1958,9 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std::map<int, InstrumentId>& instrumentIds,
                                         const std::map<int, FolderId>& folderIds, juce::StringArray& warnings)
 {
+    std::set<TrackId> loadedArmed;
+    TrackId loadedPrimary = 0;
+
     for (auto* e : root.getChildWithTagNameIterator ("TRACK"))
     {
         const auto trackId = addTrack();
@@ -1951,8 +1991,17 @@ void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std:
             setTrackSequence (trackId, MidiSequence::fromXml (*sequenceXml));
 
         if (e->getBoolAttribute ("armed"))
-            setArmedTrack (trackId);
+        {
+            loadedArmed.insert (trackId);
+
+            // Older projects have no "primary": the (single) armed track is it
+            if (e->getBoolAttribute ("primary", true))
+                loadedPrimary = trackId;
+        }
     }
+
+    if (! loadedArmed.empty())
+        setArmedTracks (loadedArmed, loadedPrimary);
 
     // A freshly loaded project starts with clean clip histories.
     for (auto& [id, track] : tracks)
@@ -1965,26 +2014,45 @@ void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std:
 //==============================================================================
 void AudioEngine::setArmedTrack (TrackId id)
 {
-    // Un-arming a track must not leave its live-played notes ringing (ISSUES.md
-    // "Sidebar"): release whatever the old armed track's outputs still hold.
-    if (armedTrack != id)
-        if (auto* previous = findTrack (armedTrack))
-            for (auto& output : previous->outputs)
-                if (auto* route = getRoute (output))
-                    route->killHeldNotes();
+    setArmedTracks (id != 0 ? std::set<TrackId> { id } : std::set<TrackId>(), id);
+}
 
-    armedTrack = id;
+void AudioEngine::setArmedTracks (const std::set<TrackId>& ids, TrackId primary)
+{
+    std::set<TrackId> next;
+
+    for (auto id : ids)
+        if (findTrack (id) != nullptr)
+            next.insert (id);
+
+    if (primary != 0 && findTrack (primary) != nullptr)
+        next.insert (primary);
+    else
+        primary = next.empty() ? 0 : *next.begin();
+
+    // Un-arming must not leave live-played notes ringing (ISSUES.md "Sidebar"):
+    // release whatever the outputs of tracks LEAVING the armed set still hold.
+    for (auto id : armedTracks)
+        if (next.count (id) == 0)
+            if (auto* previous = findTrack (id))
+                for (auto& output : previous->outputs)
+                    if (auto* route = getRoute (output))
+                        route->killHeldNotes();
+
+    const auto changed = next != armedTracks || primary != armedTrack;
+    armedTracks = std::move (next);
+    armedTrack = primary;
     updateMidiRouting();
 
-    if (id != 0)
-        emitTrackChanged (id, "armed");
+    if (changed && primary != 0)
+        emitTrackChanged (primary, "armed");
 }
 
 void AudioEngine::updateMidiRouting()
 {
-    // Live input reaches every track's source permanently; only the armed one
-    // passes it on. Flags only - no graph change, no render-sequence rebuild.
+    // Live input reaches every track's source permanently; armed ones pass it
+    // on. Flags only - no graph change, no render-sequence rebuild.
     for (auto& [id, track] : tracks)
         if (auto* source = getSource (id))
-            source->setLiveEnabled (id == armedTrack);
+            source->setLiveEnabled (armedTracks.count (id) > 0);
 }

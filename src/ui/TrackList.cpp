@@ -298,7 +298,7 @@ TrackList::TrackList (AudioEngine& e, sidebar::VerticalScroll& v) : engine (e), 
     // Adding tracks/folders lives in the right-click menus (ISSUES.md: header
     // buttons removed)
     viewport.setViewedComponent (&rowContainer, false);
-    viewport.setScrollBarsShown (true, false);
+    viewport.setScrollBarsShown (false, false, true, false);   // no scrollbar; the wheel still scrolls (ISSUES.md)
     addAndMakeVisible (viewport);
 }
 
@@ -340,15 +340,15 @@ void TrackList::refresh()
         std::erase_if (multiSelection, [&existing] (auto id) { return existing.count (id) == 0; });
     }
 
-    // Only live (near-visible) rows refresh
-    const auto armed = engine.getArmedTrack();
-
+    // Only live (near-visible) rows refresh. A selected folder takes the
+    // selection highlight away from tracks (ISSUES.md).
     for (auto& [key, component] : liveRows)
     {
         if (auto* trackRow = dynamic_cast<Row*> (component.get()))
-            trackRow->refresh (trackRow->getTrackId() == selectedTrack
-                                 || multiSelection.count (trackRow->getTrackId()) > 0,
-                               trackRow->getTrackId() == armed);
+            trackRow->refresh (selectedFolder == 0
+                                 && (multiSelection.empty() ? trackRow->getTrackId() == selectedTrack
+                                                            : multiSelection.count (trackRow->getTrackId()) > 0),
+                               engine.isTrackArmed (trackRow->getTrackId()));
         else if (auto* folderRow = dynamic_cast<FolderRow*> (component.get()))
         {
             folderRow->setSelected (folderRow->getFolderId() == selectedFolder);
@@ -359,9 +359,14 @@ void TrackList::refresh()
 
 void TrackList::selectFolder (AudioEngine::FolderId folderId)
 {
-    // Only the folder itself is selected (ISSUES.md: no auto-selecting its tracks)
+    // Only the folder itself is selected (ISSUES.md: no auto-selecting its
+    // tracks, and any track selection goes away)
     selectedFolder = folderId;
     multiSelection.clear();
+
+    if (onSelectionChanged)
+        onSelectionChanged (multiSelection);
+
     refreshSoon();
 }
 
@@ -492,6 +497,10 @@ void TrackList::rowMouseDown (juce::Component*, bool isFolder, int id, const juc
 
     if (event.mods.isCtrlDown())
     {
+        // The current single selection becomes the first member of the group
+        if (multiSelection.empty() && selectedTrack != 0)
+            multiSelection.insert (selectedTrack);
+
         if (multiSelection.count (trackId))
             multiSelection.erase (trackId);
         else
@@ -542,6 +551,10 @@ void TrackList::rowMouseDown (juce::Component*, bool isFolder, int id, const juc
 
         shiftAnchor = trackId;
     }
+
+    // Ctrl/Shift changed the multi-selection: the shell arms it (auto-record)
+    if ((event.mods.isCtrlDown() || event.mods.isShiftDown()) && onSelectionChanged)
+        onSelectionChanged (multiSelection);
 
     refresh();
 }

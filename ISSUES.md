@@ -23,6 +23,8 @@ Claude is unsure of an issue they will pose a question.
 
 # Integrations
 
+- [ ] Can we find out about a vsl players keyboard range? If so, the midi editor should show which keys are disabled.
+
 # Midi record
 
 - [ ] New mode for record: punch in/out - needs fine-grained settings, not

@@ -236,7 +236,8 @@ void CommandDispatcher::registerCommands()
                  t->setProperty ("name", engine.getTrackName (id));
                  t->setProperty ("muted", engine.isTrackMuted (id));
                  t->setProperty ("soloed", engine.isTrackSoloed (id));
-                 t->setProperty ("armed", id == engine.getArmedTrack());
+                 t->setProperty ("armed", engine.isTrackArmed (id));
+                 t->setProperty ("primaryArmed", id == engine.getArmedTrack());
                  t->setProperty ("recordMode", engine.isTrackRecordReplace (id) ? "replace" : "add");
                  t->setProperty ("folderId", engine.getTrackFolder (id));
                  t->setProperty ("color", engine.getTrackColour (id));
@@ -384,9 +385,34 @@ void CommandDispatcher::registerCommands()
              respond (ok());
          });
 
-    add ("track.arm", "Arm a track for live input and recording", "trackId:int",
+    add ("track.arm", "Arm tracks for live input and recording: one (trackId), or several at once "
+                      "(trackIds; live input plays through all, a take records into all, each by its own "
+                      "record mode). The primary is trackId, or the first of trackIds",
+         "trackId:int | trackIds:[int]",
          [this, requireTrack] (const juce::var& params, Respond respond)
          {
+             if (auto* list = params.getProperty ("trackIds", {}).getArray())
+             {
+                 std::set<AudioEngine::TrackId> ids;
+                 const auto existing = engine.getTrackIds();
+
+                 for (auto& value : *list)
+                 {
+                     const auto id = (int) value;
+
+                     if (std::find (existing.begin(), existing.end(), id) == existing.end())
+                         return respond (fail ("no track with id " + juce::String (id) + " (see track.list)"));
+
+                     ids.insert (id);
+                 }
+
+                 if (ids.empty())
+                     return respond (fail ("'trackIds' is empty"));
+
+                 engine.setArmedTracks (ids, (int) (*list)[0]);
+                 return respond (ok());
+             }
+
              int id = 0;
              if (! requireTrack (params, respond, id)) return;
              engine.setArmedTrack (id);

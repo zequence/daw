@@ -142,8 +142,14 @@ public:
     bool canUndoClip (TrackId) const;
     bool canRedoClip (TrackId) const;
 
-    void setArmedTrack (TrackId);             // live MIDI follows the armed track's outputs
-    TrackId getArmedTrack() const noexcept    { return armedTrack; }
+    void setArmedTrack (TrackId);             // arms just this track (live MIDI follows its outputs)
+    TrackId getArmedTrack() const noexcept    { return armedTrack; }   // the primary armed track
+
+    // Several tracks can be armed at once (multi-selection with auto-record):
+    // live input plays through all of them and a take records into all of them,
+    // each by its own record mode. 'primary' is the one the editor follows.
+    void setArmedTracks (const std::set<TrackId>&, TrackId primary);
+    bool isTrackArmed (TrackId id) const      { return armedTracks.count (id) > 0; }
 
     //==============================================================================
     // Folders group channels in the sidebars, Cubase-style. Two independent trees:
@@ -459,10 +465,18 @@ private:
     std::unique_ptr<MidiRecorder> recorder;
     bool recordingSawPlayback = false;
 
-    // Replace-recording state for the active take
-    bool takeIsReplace = false;
-    MidiSequence::Ptr preTakeSequence;
-    juce::int64 replaceFromTick = -1;
+    // The active take records into every armed track, each by its own mode
+    struct TakeTarget
+    {
+        TrackId trackId = 0;
+        bool replace = false;
+        MidiSequence::Ptr preTakeSequence;     // replace mode: the state before the take
+    };
+
+    std::vector<TakeTarget> takeTargets;
+    MidiRecorder::Result takeStash;            // loop-pass commits, kept for replace targets
+    juce::int64 replaceFromTick = -1;          // first played event (shared: one input stream)
+    bool anyReplaceTarget() const;
 
     bool projectDirty = false;
     int stateRevision = 0;          // bumped by every emitEvent; polled by the UI
@@ -480,7 +494,8 @@ private:
     InstrumentId nextInstrumentId = 1;
     AudioChannelId nextAudioChannelId = 1;
     FolderId nextFolderId = 1;
-    TrackId armedTrack = 0;
+    TrackId armedTrack = 0;                   // primary
+    std::set<TrackId> armedTracks;            // all armed (contains the primary)
 
     // Async plugin-creation callbacks hold a weak_ptr to this so they can detect engine destruction.
     std::shared_ptr<int> lifetimeToken = std::make_shared<int>();

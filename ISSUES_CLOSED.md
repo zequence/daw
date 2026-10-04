@@ -94,6 +94,20 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Sidebar
 
+- [x] Selecting a folder should unselect any channels
+      (selecting a folder clears the track multi-selection and removes the
+      track highlight)
+- [x] Selecting multiple channels should put them all in record mode if we
+      have the auto-record settings on
+      (the engine has an armed SET now: Ctrl/Shift-selecting arms every
+      selected track; live input plays through all of them and a take records
+      into all of them, each by its own Add/Replace mode - replace targets
+      also keep notes committed on loop passes. Ctrl-click keeps the current
+      track as the first group member. Agents: track.arm takes trackIds;
+      track.list reports armed + primaryArmed. Covered by a new recording
+      test with one Add and one Replace track.)
+- [x] Remove the scrollbar. Scrolling is unaffected.
+      (both sidebar lists hide the scrollbar; the wheel still scrolls)
 - [x] Switching tracks took over a second in a big project (reported in chat,
       1032-track VE Pro sync).
       (arming used to rewire live MIDI in the graph, and any connection change

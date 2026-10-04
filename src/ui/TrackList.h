@@ -24,6 +24,10 @@ public:
     AudioEngine::TrackId getSelectedTrack() const noexcept { return selectedTrack; }
 
     std::function<void (AudioEngine::TrackId)> onSelect, onArm, onOpenEditor, onOpenInstrument, onShowContextMenu;
+
+    // The multi-selection changed (Ctrl/Shift clicks, folder selection clears it).
+    // Receives every selected track; empty = just the primary selection.
+    std::function<void (const std::set<AudioEngine::TrackId>&)> onSelectionChanged;
     std::function<void()> onAddTrack;
     std::function<void (AudioEngine::FolderId)> onAddTrackInFolder;   // folder menu "New track inside"
 

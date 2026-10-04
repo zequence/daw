@@ -184,6 +184,20 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
                                          { if (safe != nullptr) safe->chooseTrackOutput (id); });
     };
     trackList.onSelect = [this] (auto id) { selectTrack (id, false); };
+
+    // Multi-selection arms every selected track when auto-record is on (ISSUES.md)
+    trackList.onSelectionChanged = [this] (const std::set<AudioEngine::TrackId>& selection)
+    {
+        if (! engine.getSettingsFile().getBoolValue (SettingsView::autoRecordOnSelectKey, true))
+            return;
+
+        keyboardState.allNotesOff (0);
+
+        if (selection.empty())
+            engine.setArmedTrack (selectedTrack);
+        else
+            engine.setArmedTracks (selection, selection.count (selectedTrack) ? selectedTrack : *selection.begin());
+    };
     trackList.onArm = [this] (auto id) { selectTrack (id, true); };
     trackList.onOpenEditor = [this] (auto id)
     {

@@ -21,7 +21,7 @@ public:
     {
         // Adding folders lives in the right-click menu (ISSUES.md: header button removed)
         viewport.setViewedComponent (&rowContainer, false);
-        viewport.setScrollBarsShown (true, false);
+        viewport.setScrollBarsShown (false, false, true, false);   // no scrollbar; the wheel still scrolls
         addAndMakeVisible (viewport);
     }
 
