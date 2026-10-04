@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../AudioEngine.h"
+#include "NativeBusyWindow.h"
 
 // The loading overlay: while a long operation runs (VE Pro sync, project load)
 // it dims the window, blocks clicks and says what's going on, with a progress
@@ -24,6 +25,10 @@ public:
     // Call from BusyStatus::onChanged
     void statusChanged()
     {
+        // The card itself lives in a native window on its own thread (smooth
+        // even while this thread is blocked); this component dims + blocks clicks
+        native.update (status.title, status.detail, status.progress);
+
         if (status.active != isVisible())
         {
             setVisible (status.active);
@@ -31,7 +36,19 @@ public:
             if (status.active)
             {
                 toFront (false);
-                startTimerHz (40);
+
+                if (native.isAvailable())
+                {
+                    auto& displays = juce::Desktop::getInstance().getDisplays();
+                    const auto logical = getTopLevelComponent()->getScreenBounds();
+                    const auto* display = displays.getDisplayForRect (logical);
+                    native.show (displays.logicalToPhysical (logical),
+                                 display != nullptr ? (float) display->scale : 1.0f);
+                }
+                else
+                {
+                    startTimerHz (40);   // fallback: animate the JUCE-drawn card
+                }
                 frames = 0;
                 longestGapMs = 0.0;
                 shownAt = lastFrameAt = juce::Time::getMillisecondCounterHiRes();
@@ -39,8 +56,10 @@ public:
             else
             {
                 stopTimer();
+                native.hide();
 
                 // Smoothness report: how often we managed to draw, and where it froze
+                // (JUCE-drawn frames; the native card animates independently)
                 const auto nowMs = juce::Time::getMillisecondCounterHiRes();
                 noteGap (nowMs - lastFrameAt, lastDetail + " (until done)");
 
@@ -77,6 +96,9 @@ public:
         const auto seconds = nowMs * 0.001;
 
         g.fillAll (juce::Colours::black.withAlpha (0.55f));
+
+        if (native.isAvailable())
+            return;   // the native window draws the card
 
         auto card = getLocalBounds().withSizeKeepingCentre (juce::jmin (480, getWidth() - 32), 130);
 
@@ -145,6 +167,7 @@ private:
     }
 
     AudioEngine::BusyStatus& status;
+    NativeBusyWindow native;
 
     void noteGap (double gapMs, const juce::String& during)
     {

@@ -19,6 +19,7 @@ target_sources(OrchestralDAW PRIVATE
     src/ui/PianoRollView.cpp
     src/ui/ArrangementView.cpp
     src/ui/TimelineBar.cpp
+    src/ui/NativeBusyWindow.cpp
     src/api/CommandDispatcher.cpp
     src/model/TempoMap.cpp
     src/engine/Transport.cpp
