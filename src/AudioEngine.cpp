@@ -1768,8 +1768,8 @@ bool AudioEngine::saveProject (const juce::File& file)
 
             if (channel.keyLow >= 0)
             {
-                c->setAttribute ("keyLow", channel.keyLow);
-                c->setAttribute ("keyHigh", channel.keyHigh);
+                c->setAttribute ("slotKeyLow", channel.keyLow);   // "keyLow" held the old union over all slots
+                c->setAttribute ("slotKeyHigh", channel.keyHigh);
             }
         }
 
@@ -2016,8 +2016,8 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
                         channel.veproInstanceId = c->getStringAttribute ("veproInstance");
                         channel.veproChannelAddress = c->getStringAttribute ("veproChannel");
                         channel.veproPluginId = c->getStringAttribute ("veproPlugin");
-                        channel.keyLow = c->getIntAttribute ("keyLow", -1);
-                        channel.keyHigh = c->getIntAttribute ("keyHigh", -1);
+                        channel.keyLow = c->getIntAttribute ("slotKeyLow", -1);
+                        channel.keyHigh = c->getIntAttribute ("slotKeyHigh", -1);
                         loadedInstrument->midiChannels.push_back (channel);
                     }
 

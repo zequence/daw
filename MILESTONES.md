@@ -52,8 +52,9 @@ orchestral feature.
 
 Key ranges must follow articulation changes. Each Synchron sound slot and
 articulation node has its own rangeFrom/rangeTo (vepro.keyRange reads them
-from the player's state on the server; today it caches only the union over
-all of them, fetched once). When our keyswitches or program changes switch
+from the player's state on the server; today it caches only the range of the
+first loaded slot, fetched once; empty "Custom" slots report 0-127 and are
+skipped). When our keyswitches or program changes switch
 the player's slot, the editor's greyed-out keys should match the active
 slot. The likely approach: fetch the whole tree once and cache a range per
 slot and articulation path, mapped to the expression map's entries. Then

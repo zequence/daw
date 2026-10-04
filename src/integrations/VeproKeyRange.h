@@ -6,7 +6,7 @@
 // A Synchron Player's playable key range, read from the server. Not a VST
 // parameter: channel/instrument/state/export returns the player's state, whose
 // core is zstd-compressed JSON. Its sampler tree carries rangeFrom/rangeTo per
-// articulation node; the playable range is their union. Other players (Pianos,
+// sound slot (the leaves); we read the first loaded slot's. Other players (Pianos,
 // third-party plugins) don't expose this.
 namespace vepro
 {
@@ -65,33 +65,45 @@ namespace vepro
         return ok ? out.toUTF8() : juce::String();
     }
 
-    // Union of rangeFrom/rangeTo over the sampler tree; false when it has none
+    // The playable range of the FIRST LOADED sound slot: the first leaf of the
+    // sampler tree (depth first) that has a patch loaded. Leaves are the sound
+    // slots; each has its own rangeFrom/rangeTo. Empty slots (the "Custom" ones a
+    // fresh player carries) have no patchEntry and report 0-127, so they are
+    // skipped - they would otherwise stretch the range over the whole keyboard.
+    // Later, with articulations, the range of the ACTIVE slot is what we want.
+    // false when there is no loaded slot.
     inline bool keyRangeFromStateJson (const juce::var& document, int& low, int& high)
     {
         const auto data = document.getProperty ("data", {}).isObject() ? document.getProperty ("data", {}) : document;
         const auto root = data.getProperty ("custom", {}).getProperty ("sampler", {}).getProperty ("rootNode", {});
 
-        low = 128;
-        high = -1;
+        if (! root.isObject())
+            return false;
 
-        std::function<void (const juce::var&)> walk = [&] (const juce::var& node)
+        std::function<bool (const juce::var&)> findFirstLoadedSlot = [&] (const juce::var& node)
         {
-            if (node.hasProperty ("rangeFrom") && node.hasProperty ("rangeTo"))
+            const auto* children = node.getProperty ("nodes", {}).getArray();
+
+            if (children != nullptr && ! children->isEmpty())
             {
-                low = juce::jmin (low, (int) node.getProperty ("rangeFrom", 128));
-                high = juce::jmax (high, (int) node.getProperty ("rangeTo", -1));
+                for (auto& child : *children)
+                    if (findFirstLoadedSlot (child))
+                        return true;
+
+                return false;
             }
 
-            if (auto* children = node.getProperty ("nodes", {}).getArray())
-                for (auto& child : *children)
-                    walk (child);
+            const auto emptySlot = node.hasProperty ("patchEntry") && node.getProperty ("patchEntry", {}).toString().isEmpty();
+
+            if (emptySlot || ! node.hasProperty ("rangeFrom") || ! node.hasProperty ("rangeTo"))
+                return false;
+
+            low = juce::jlimit (0, 127, (int) node.getProperty ("rangeFrom", 0));
+            high = juce::jlimit (0, 127, (int) node.getProperty ("rangeTo", 127));
+            return low <= high;
         };
 
-        walk (root);
-
-        low = juce::jlimit (0, 127, low);
-        high = juce::jlimit (0, 127, high);
-        return high >= 0 && low <= high && root.isObject();
+        return findFirstLoadedSlot (root);
     }
 
     inline bool keyRangeFromState (const juce::MemoryBlock& state, int& low, int& high)

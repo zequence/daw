@@ -76,9 +76,9 @@ public:
             expect (vepro::supportedVersions().contains (vepro::defaultVersion()));
         }
 
-        beginTest ("Synchron key range: zstd JSON inside the state, union over the sampler tree");
+        beginTest ("Synchron key range: zstd JSON inside the state, first loaded sound slot");
         {
-            // "HDR\0\1" + zstd(JSON: Stac 72-108 > x 74-109, Leg 73-100) + "TAIL"
+            // "HDR\0\1" + zstd(JSON: Stac 72-108 > x 74-109, Leg 73-100) + "TAIL"; the first leaf is x
             static constexpr unsigned char state[] = {
                 0x48, 0x44, 0x52, 0x00, 0x01, 0x28, 0xb5, 0x2f, 0xfd, 0x20, 0xf0, 0xf5, 0x03, 0x00, 0xa2, 0xc5,
                 0x14, 0x1b, 0x60, 0x8b, 0xda, 0x71, 0x15, 0x65, 0xa7, 0xdb, 0x73, 0x46, 0xb7, 0x63, 0xcb, 0xb6,
@@ -92,7 +92,7 @@ public:
 
             int low = -1, high = -1;
             expect (vepro::keyRangeFromState (juce::MemoryBlock (state, sizeof (state)), low, high));
-            expectEquals (low, 72);
+            expectEquals (low, 74);
             expectEquals (high, 109);
 
             // No zstd frame, or a truncated one: no range
@@ -101,6 +101,37 @@ public:
 
             expect (vepro::isSynchronPlayer ("Vienna Synchron Player"));
             expect (! vepro::isSynchronPlayer ("Vienna Synchron Pianos"));
+        }
+
+        beginTest ("Synchron key range: first loaded slot, empty Custom slots are skipped (real state shape)");
+        {
+            const auto doc = juce::JSON::parse (R"({"data":{"custom":{"sampler":{"rootNode":{"subTitle":"Articulation","nodes":[
+                {"subTitle":"Attack","nodes":[
+                    {"patchEntry":"vol://x/01P stac short.vsynpatch","rangeFrom":55,"rangeTo":103},
+                    {"patchEntry":"vol://x/02P stac agile.vsynpatch","rangeFrom":55,"rangeTo":103}]},
+                {"subTitle":"Type","nodes":[
+                    {"patchEntry":"vol://x/11P Long.vsynpatch","rangeFrom":58,"rangeTo":100}]},
+                {"subTitle":"Custom","nodes":[
+                    {"patchEntry":"","rangeFrom":0,"rangeTo":127},
+                    {"patchEntry":"","rangeFrom":0,"rangeTo":127}]}]}}}}})");
+
+            int low = -1, high = -1;
+            expect (vepro::keyRangeFromStateJson (doc, low, high));
+            expectEquals (low, 55);
+            expectEquals (high, 103);
+
+            // Empty slots come first: they are skipped, the first LOADED one wins
+            const auto emptyFirst = juce::JSON::parse (R"({"custom":{"sampler":{"rootNode":{"nodes":[
+                {"patchEntry":"","rangeFrom":0,"rangeTo":127},
+                {"patchEntry":"vol://x/a.vsynpatch","rangeFrom":36,"rangeTo":96}]}}}})");
+            expect (vepro::keyRangeFromStateJson (emptyFirst, low, high));
+            expectEquals (low, 36);
+            expectEquals (high, 96);
+
+            // Nothing loaded: no range (the editor shows every key)
+            const auto none = juce::JSON::parse (R"({"custom":{"sampler":{"rootNode":{"nodes":[
+                {"patchEntry":"","rangeFrom":0,"rangeTo":127}]}}}})");
+            expect (! vepro::keyRangeFromStateJson (none, low, high));
         }
     }
 };

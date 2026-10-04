@@ -1453,7 +1453,7 @@ void CommandDispatcher::registerCommands()
          });
 
     add ("vepro.keyRange",
-         "Playable key range of the Synchron Player behind a synced track (union over its articulations), "
+         "Playable key range of the Synchron Player behind a synced track (of its first loaded sound slot), "
          "fetched from the VE Pro server once and cached in the project. Replies {low, high} as MIDI notes "
          "(60 = middle C), or available=false for players that don't expose one",
          "trackId:int [refresh:bool]",
