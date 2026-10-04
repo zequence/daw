@@ -281,7 +281,12 @@ void AudioEngine::addInstrument (const juce::PluginDescription& description, Ins
 
             Instrument instrument;
             instrument.name = name;
-            instrument.pluginNode = graph.addNode (std::move (instance), std::nullopt, updateKind())->nodeID;
+            // Outside a batch the plugin is added SYNC: it gets prepared right away,
+            // before callers apply saved state - a plugin prepared after its state
+            // was restored can lose it (seen: a reloaded parameter reading 0)
+            instrument.pluginNode = graph.addNode (std::move (instance), std::nullopt,
+                                                   graphBatchDepth > 0 ? updateKind()
+                                                                       : juce::AudioProcessorGraph::UpdateKind::sync)->nodeID;
 
             // Give the instrument its audio channel strip.
             AudioChannel channel;
@@ -1755,7 +1760,6 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
     juce::Logger::writeToLog ("Loading project: " + file.getFullPathName());
     clearProject();
-    beginGraphBatch();   // one render-sequence rebuild for the whole load (ended in the final step)
     busyStatus.begin ("Loading " + file.getFileNameWithoutExtension());
 
     if (auto* tempoXml = xml->getChildByName ("TEMPOMAP"))
@@ -1818,6 +1822,11 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
         if (state->next >= state->instrumentElements.size())
         {
             busyStatus.update ("Restoring tracks and building the audio graph...", 1.0);
+
+            // Batch only the track phase: instruments above load into a still-small
+            // graph synchronously (prepared before their state is applied); the
+            // many track nodes then cost ONE rebuild
+            beginGraphBatch();
             restoreProjectTracks (*state->xml, state->idMap, state->folderIdMap, state->warnings);
             endGraphBatch();
             busyStatus.end();
