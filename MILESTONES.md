@@ -50,6 +50,17 @@ Keyswitches, Spitfire UACC (CC32), VSL Synchron slot mapping; articulations
 attached per note in the editor, named per instrument channel. The deep
 orchestral feature.
 
+Key ranges must follow articulation changes. Each Synchron sound slot and
+articulation node has its own rangeFrom/rangeTo (vepro.keyRange reads them
+from the player's state on the server; today it caches only the union over
+all of them, fetched once). When our keyswitches or program changes switch
+the player's slot, the editor's greyed-out keys should match the active
+slot. The likely approach: fetch the whole tree once and cache a range per
+slot and articulation path, mapped to the expression map's entries. Then
+look up the range at the playhead or edit position instead of re-querying
+the server on each switch, and refresh the cache when the player's setup
+changes (e.g. on sync, or with `refresh`).
+
 ## Parameter automation lanes
 
 Curves over musical time targeting (instrument, parameter), (channel, gain)...
