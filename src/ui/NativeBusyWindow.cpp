@@ -33,6 +33,7 @@ struct NativeBusyWindow::Impl
     std::thread thread;
     std::atomic<HWND> hwnd { nullptr };
     std::atomic<bool> ready { false }, failed { false };
+    std::atomic<HWND> appWindow { nullptr };   // the card sits directly above this window
 
     // Shared state (written by the message thread, read by the card thread)
     std::mutex lock;
@@ -63,6 +64,64 @@ struct NativeBusyWindow::Impl
             thread.join();
     }
 
+    // Keeps the card centred on the app window and directly above it in the
+    // Z-order (not topmost over everything: other programs must be able to cover
+    // both). Follows the app when it is moved, resized or dragged to a display
+    // with another scale. The app can rise above us whenever it is activated, so
+    // this runs on every frame. Card thread only.
+    void placeAboveApp (HWND handle)
+    {
+        const auto app = appWindow.load();
+
+        if (app == nullptr || ! IsWindow (app))
+            return;
+
+        if (IsIconic (app) || ! IsWindowVisible (app))
+        {
+            if (IsWindowVisible (handle))
+                ShowWindow (handle, SW_HIDE);
+
+            return;
+        }
+
+        if (! IsWindowVisible (handle))
+            ShowWindow (handle, SW_SHOWNOACTIVATE);
+
+        // Target rectangle: the app's client area (what the UI draws in), centred
+        RECT client;
+        POINT origin { 0, 0 };
+        GetClientRect (app, &client);
+        ClientToScreen (app, &origin);
+
+        const auto dpi = GetDpiForWindow (app);
+        const auto s = dpi > 0 ? (float) dpi / 96.0f : scale;
+        const auto clientWidth = (int) (client.right - client.left), clientHeight = (int) (client.bottom - client.top);
+        const auto width = (int) std::lround (juce::jmin (480.0f * s, (float) clientWidth - 32.0f * s));
+        const auto height = (int) std::lround (130.0f * s);
+        const auto x = (int) origin.x + (clientWidth - width) / 2;
+        const auto y = (int) origin.y + (clientHeight - height) / 2;
+
+        RECT current;
+        GetWindowRect (handle, &current);
+        const auto above = GetWindow (app, GW_HWNDPREV);
+        const auto moved = current.left != x || current.top != y;
+        const auto resized = current.right - current.left != width || current.bottom - current.top != height;
+
+        if (resized)
+        {
+            {
+                std::lock_guard<std::mutex> guard (lock);
+                scale = s;
+            }
+
+            const auto corner = (int) std::lround (16.0f * s);
+            SetWindowRgn (handle, CreateRoundRectRgn (0, 0, width + 1, height + 1, corner, corner), FALSE);
+        }
+
+        if (moved || resized || above != handle)
+            SetWindowPos (handle, above != nullptr ? above : HWND_TOP, x, y, width, height, SWP_NOACTIVATE);
+    }
+
     //==========================================================================
     // The card thread: its own window and message loop
     void run()
@@ -76,7 +135,7 @@ struct NativeBusyWindow::Impl
         RegisterClassExW (&wc);   // failing because it exists already is fine
 
         // NOT owned by the app window (that would couple the threads' input queues)
-        auto* handle = CreateWindowExW (WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
+        auto* handle = CreateWindowExW (WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
                                         windowClassName, L"", WS_POPUP,
                                         0, 0, 10, 10, nullptr, nullptr, wc.hInstance, nullptr);
 
@@ -123,8 +182,9 @@ struct NativeBusyWindow::Impl
                     const auto width = r.right - r.left, height = r.bottom - r.top;
                     const auto corner = (int) std::lround (16.0f * self->scale);
                     SetWindowRgn (handle, CreateRoundRectRgn (0, 0, width + 1, height + 1, corner, corner), FALSE);
-                    SetWindowPos (handle, HWND_TOPMOST, r.left, r.top, width, height,
-                                  SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                    SetWindowPos (handle, nullptr, r.left, r.top, width, height,
+                                  SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                    self->placeAboveApp (handle);
                     SetTimer (handle, frameTimerId, 16, nullptr);   // ~60 fps
                     self->frames = 0;
                     self->longestGap = 0;
@@ -149,6 +209,9 @@ struct NativeBusyWindow::Impl
                 return 0;
 
             case WM_TIMER:
+                if (self != nullptr)
+                    self->placeAboveApp (handle);
+
                 InvalidateRect (handle, nullptr, FALSE);
                 return 0;
 
@@ -336,7 +399,7 @@ bool NativeBusyWindow::isAvailable() const noexcept
     return impl != nullptr && impl->ready.load() && impl->hwnd.load() != nullptr;
 }
 
-void NativeBusyWindow::show (juce::Rectangle<int> screenArea, float scale)
+void NativeBusyWindow::show (juce::Rectangle<int> screenArea, float scale, void* appWindow)
 {
     if (! isAvailable())
         return;
@@ -351,6 +414,7 @@ void NativeBusyWindow::show (juce::Rectangle<int> screenArea, float scale)
         impl->cardRect = { card.getX(), card.getY(), card.getRight(), card.getBottom() };
     }
 
+    impl->appWindow = (HWND) appWindow;
     PostMessageW (impl->hwnd.load(), msgShow, 0, 0);
 }
 
@@ -378,7 +442,7 @@ struct NativeBusyWindow::Impl {};
 NativeBusyWindow::NativeBusyWindow() {}
 NativeBusyWindow::~NativeBusyWindow() = default;
 bool NativeBusyWindow::isAvailable() const noexcept                       { return false; }
-void NativeBusyWindow::show (juce::Rectangle<int>, float)                 {}
+void NativeBusyWindow::show (juce::Rectangle<int>, float, void*)       {}
 void NativeBusyWindow::update (const juce::String&, const juce::String&, double) {}
 void NativeBusyWindow::hide()                                             {}
 

@@ -42,8 +42,10 @@ public:
                     auto& displays = juce::Desktop::getInstance().getDisplays();
                     const auto logical = getTopLevelComponent()->getScreenBounds();
                     const auto* display = displays.getDisplayForRect (logical);
+                    auto* peer = getPeer();
                     native.show (displays.logicalToPhysical (logical),
-                                 display != nullptr ? (float) display->scale : 1.0f);
+                                 display != nullptr ? (float) display->scale : 1.0f,
+                                 peer != nullptr ? peer->getNativeHandle() : nullptr);
                 }
                 else
                 {

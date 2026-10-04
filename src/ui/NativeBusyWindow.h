@@ -21,7 +21,9 @@ public:
     ~NativeBusyWindow();
 
     // Screen rectangle (physical pixels) to centre the card on, and the UI scale.
-    void show (juce::Rectangle<int> screenArea, float scale);
+    // appWindow: the app's native top-level window (HWND). The card stays directly
+    // above it in the Z-order, so it covers the app but not other programs.
+    void show (juce::Rectangle<int> screenArea, float scale, void* appWindow);
     void update (const juce::String& title, const juce::String& detail, double progress);
     void hide();
 
