@@ -1901,15 +1901,18 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
             newTrackFolder = instanceFolder;
         }
 
+        // (port, channel) pairs of this instrument that already have a track - one
+        // scan instead of one per player (big projects made this quadratic)
+        std::set<std::pair<int, int>> routed;
+
+        for (auto trackId : trackIds)
+            for (auto& output : engine.getTrackOutputs (trackId))
+                if (output.instrument == instrumentId)
+                    routed.insert ({ output.midiPort, output.midiChannel });
+
         for (auto& player : instance.players)
         {
-            bool exists = false;
-
-            for (auto trackId : trackIds)
-                for (auto& output : engine.getTrackOutputs (trackId))
-                    if (output.instrument == instrumentId && output.midiPort == player.midiPort
-                         && output.midiChannel == player.midiChannel)
-                        exists = true;
+            const auto exists = routed.count ({ player.midiPort, player.midiChannel }) > 0;
 
             if (! exists)
             {

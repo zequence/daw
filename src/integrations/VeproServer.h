@@ -197,6 +197,22 @@ namespace vepro
             if (routingError.isNotEmpty())
                 warnings.add (instance.name + ": couldn't read its MIDI routing - " + routingError);
 
+            // All channel colors of the instance in ONE call (per-player
+            // channel/color/get made big projects spawn a CLI per player).
+            std::map<juce::String, juce::String> colourByChannelId;
+            {
+                auto dataPayload = juce::DynamicObject::Ptr (new juce::DynamicObject());
+                dataPayload->setProperty ("cmd", "instance/channelsdata");
+                dataPayload->setProperty ("instanceId", instance.id);
+
+                juce::String dataError;
+                const auto channelsData = serverCall (cli, host, port, juce::var (dataPayload.get()), dataError);
+
+                if (auto* rows = channelsData.getArray())
+                    for (auto& row : *rows)
+                        colourByChannelId[row.getProperty ("id", {}).toString()] = row.getProperty ("color", {}).toString();
+            }
+
             if (routingError.isEmpty())
             {
                 if (auto* summaries = routing.getProperty ("instances", {}).getArray())
@@ -210,36 +226,23 @@ namespace vepro
                                 SyncPlayer player;
                                 player.midiPort = (int) pair.getProperty ("midiPort", 1);
                                 player.midiChannel = (int) pair.getProperty ("midiChannel", 1);
-                                juce::String channelAddress;
 
                                 if (auto* channels = pair.getProperty ("channels", {}).getArray())
                                 {
                                     if (! channels->isEmpty())
                                     {
                                         player.name = channels->getFirst().getProperty ("title", {}).toString();
-                                        channelAddress = channels->getFirst().getProperty ("channelAddress", {}).toString();
+
+                                        const auto channelId = channels->getFirst().getProperty ("id", {}).toString();
+
+                                        if (auto it = colourByChannelId.find (channelId); it != colourByChannelId.end())
+                                            player.colour = it->second;
                                     }
                                 }
 
                                 if (player.name.isEmpty())
                                     player.name = instance.name + " " + juce::String (player.midiPort)
                                                     + "." + juce::String (player.midiChannel);
-
-                                // The player's color (instance colors come with instance/list)
-                                if (channelAddress.isNotEmpty())
-                                {
-                                    auto colorPayload = juce::DynamicObject::Ptr (new juce::DynamicObject());
-                                    colorPayload->setProperty ("cmd", "channel/color/get");
-                                    colorPayload->setProperty ("instanceId", instance.id);
-                                    colorPayload->setProperty ("channelAddress", channelAddress);
-
-                                    juce::String colorError;
-                                    const auto color = serverCall (cli, host, port,
-                                                                   juce::var (colorPayload.get()), colorError);
-
-                                    if (colorError.isEmpty())
-                                        player.colour = color.toString();
-                                }
 
                                 instance.players.push_back (player);
                             }

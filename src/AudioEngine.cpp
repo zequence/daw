@@ -10,6 +10,12 @@ namespace
     constexpr auto audioStateKey = "audioDeviceState";
     constexpr auto midiChannelIndex = juce::AudioProcessorGraph::midiChannelIndex;
     using IOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
+
+    // Track-path graph edits are ASYNC: JUCE's default (sync) rebuilds the whole
+    // render sequence on every call, which made big syncs/loads quadratic
+    // (1000 tracks = ~4000 full rebuilds) and every arm change touch ~1000
+    // connections. Async edits coalesce into one rebuild on the message thread.
+    constexpr auto asyncUpdate = juce::AudioProcessorGraph::UpdateKind::async;
 }
 
 AudioEngine::AudioEngine (juce::PropertiesFile& settingsToUse)
@@ -304,7 +310,7 @@ void AudioEngine::removeInstrument (InstrumentId id)
         {
             if (it->instrument == id)
             {
-                graph.removeNode (it->routeNode);
+                graph.removeNode (it->routeNode, asyncUpdate);
                 it = track.outputs.erase (it);
             }
             else
@@ -480,7 +486,8 @@ AudioEngine::TrackId AudioEngine::addTrack (const juce::String& name)
 
     Track track;
     track.name = name.isNotEmpty() ? name : "Track " + juce::String (id);
-    track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport))->nodeID;
+    track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport),
+                                          std::nullopt, asyncUpdate)->nodeID;
     track.position = nextChildPosition (true, 0);
     tracks[id] = track;
 
@@ -503,9 +510,9 @@ void AudioEngine::removeTrack (TrackId id)
         return;
 
     for (auto& output : track->outputs)
-        graph.removeNode (output.routeNode);
+        graph.removeNode (output.routeNode, asyncUpdate);
 
-    graph.removeNode (track->midiSourceNode);
+    graph.removeNode (track->midiSourceNode, asyncUpdate);
     tracks.erase (id);
 
     if (armedTrack == id)
@@ -586,22 +593,27 @@ void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, in
     output.instrument = instrumentId;
     output.midiChannel = juce::jlimit (1, 16, midiChannel);
     output.midiPort = juce::jmax (1, midiPort);
-    output.routeNode = graph.addNode (std::make_unique<MidiRouteProcessor> (output.midiChannel))->nodeID;
+    output.routeNode = graph.addNode (std::make_unique<MidiRouteProcessor> (output.midiChannel),
+                                      std::nullopt, asyncUpdate)->nodeID;
 
-    graph.addConnection ({ { track->midiSourceNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } });
+    graph.addConnection ({ { track->midiSourceNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } },
+                         asyncUpdate);
 
     // Port 1 is the plugin itself; further ports route to their Event Input node
     // once multiport support lands (until then the output exists but is silent).
     if (output.midiPort == 1)
-        graph.addConnection ({ { output.routeNode, midiChannelIndex }, { instrument->pluginNode, midiChannelIndex } });
+        graph.addConnection ({ { output.routeNode, midiChannelIndex }, { instrument->pluginNode, midiChannelIndex } },
+                             asyncUpdate);
     else if (auto it = instrument->portNodes.find (output.midiPort); it != instrument->portNodes.end())
-        graph.addConnection ({ { output.routeNode, midiChannelIndex }, { it->second, midiChannelIndex } });
+        graph.addConnection ({ { output.routeNode, midiChannelIndex }, { it->second, midiChannelIndex } },
+                             asyncUpdate);
     else
         juce::Logger::writeToLog ("Track " + juce::String (trackId) + ": port " + juce::String (output.midiPort)
                                   + " of " + instrument->name + " has no Event Input node yet (silent)");
 
     if (trackId == armedTrack)
-        graph.addConnection ({ { midiInNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } });
+        graph.addConnection ({ { midiInNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } },
+                             asyncUpdate);
 
     track->outputs.push_back (output);
     applyMuteAndSolo();
@@ -617,7 +629,7 @@ void AudioEngine::clearTrackOutputs (TrackId id)
     if (auto* track = findTrack (id))
     {
         for (auto& output : track->outputs)
-            graph.removeNode (output.routeNode);
+            graph.removeNode (output.routeNode, asyncUpdate);
 
         track->outputs.clear();
         emitTrackChanged (id, "outputs");
@@ -850,7 +862,8 @@ void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
         {
             Track track;
             track.name = state.name;
-            track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport))->nodeID;
+            track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport),
+                                                  std::nullopt, asyncUpdate)->nodeID;
             tracks[state.id] = std::move (track);
             nextTrackId = juce::jmax (nextTrackId, state.id + 1);
         }
@@ -1610,9 +1623,9 @@ void AudioEngine::clearProject()
     for (auto& [id, track] : tracks)
     {
         for (auto& output : track.outputs)
-            graph.removeNode (output.routeNode);
+            graph.removeNode (output.routeNode, asyncUpdate);
 
-        graph.removeNode (track.midiSourceNode);
+        graph.removeNode (track.midiSourceNode, asyncUpdate);
     }
 
     tracks.clear();
@@ -1868,9 +1881,9 @@ void AudioEngine::updateMidiRouting()
                                                                      { output.routeNode, midiChannelIndex } };
 
             if (id == armedTrack)
-                graph.addConnection (connection);
+                graph.addConnection (connection, asyncUpdate);
             else
-                graph.removeConnection (connection);
+                graph.removeConnection (connection, asyncUpdate);
         }
     }
 }
