@@ -1812,6 +1812,7 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
 
         // Phase timing (reported in the reply): server fetch, plugin loads, building
         double fetchMs = 0, loadMs = 0, buildMs = 0, start = 0, loadStart = 0;
+        bool announcedRebuild = false;
     };
 
     auto state = std::make_shared<SyncState>();
@@ -1989,14 +1990,27 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
                                   + " MIDI ports (raise the port count on the VE Pro server)");
 
         state->buildMs += juce::Time::getMillisecondCounterHiRes() - buildStart;
-        (*step)();
+
+        // Breathe between instances: Windows only delivers paint and timer
+        // messages when the queue is EMPTY, so chaining the next step with
+        // callAsync starved the overlay (measured: a 5.4 s frozen frame). One
+        // short frame of idle per instance lets it animate.
+        juce::Timer::callAfterDelay (25, [step] { if (*step) (*step)(); });
     };
 
     *step = [this, state, step, finishInstance]
     {
+        if (state->next >= state->instances.size() && ! state->announcedRebuild)
+        {
+            // Show the last step on screen BEFORE the one unavoidable block
+            state->announcedRebuild = true;
+            engine.getBusyStatus().update ("Building the audio graph...", 1.0);
+            juce::Timer::callAfterDelay (40, [step] { if (*step) (*step)(); });
+            return;
+        }
+
         if (state->next >= state->instances.size())
         {
-            engine.getBusyStatus().update ("Building the audio graph...", 1.0);
             const auto rebuildStart = juce::Time::getMillisecondCounterHiRes();
             engine.endGraphBatch();
             const auto rebuildMs = juce::Time::getMillisecondCounterHiRes() - rebuildStart;
