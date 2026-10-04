@@ -191,6 +191,18 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Integrations
 
+- [x] Can we find out about a vsl players keyboard range? If so, the midi editor should show which keys are disabled.
+      (Not in the VST parameters: all 2369 were searched. It is available live
+      from the server. channel/instrument/state/export returns the Synchron
+      Player state, whose core is zstd-compressed JSON with rangeFrom/rangeTo
+      per articulation node. Done as the union range: when the editor opens a
+      synced Synchron track, vepro.keyRange fetches it in the background once
+      and caches it in the project. Keys and rows outside the range are greyed
+      out. Sync now records each player's server channel and plugin; tracks
+      synced before this change need one re-sync. Synchron Player only, since
+      Pianos and third-party players don't expose ranges. Per-articulation
+      ranges come with expression maps. The decoder is the vendored zstd 1.5.6
+      reference decoder (BSD, decompression only, external/zstd).)
 - [x] Syncing the huge VE Pro project still slow (chat, 2026-10-04; 20
       instances / 1032 players).
       (measured by phase: each plugin load waited behind an async rebuild of

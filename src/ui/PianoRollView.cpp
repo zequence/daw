@@ -178,6 +178,19 @@ void PianoRollView::setTrack (AudioEngine::TrackId id)
         selection.clear();
         drag = Drag::none;
         rebuildLaneBox();
+
+        // Synchron players: fetch the playable range once (cached in the
+        // project); it lands as an engine change, which repaints us
+        if (auto info = engine.getTrackChannelInfo (trackId);
+            info.has_value() && info->veproChannelAddress.isNotEmpty() && info->keyLow < 0)
+        {
+            auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
+            params->setProperty ("trackId", trackId);
+            auto message = juce::DynamicObject::Ptr (new juce::DynamicObject());
+            message->setProperty ("cmd", "vepro.keyRange");
+            message->setProperty ("params", juce::var (params.get()));
+            dispatcher.dispatchParsed (juce::var (message.get()), [] (const juce::var&) {});
+        }
     }
 
     trackLabel.setText (engine.getTrackName (trackId), juce::dontSendNotification);
@@ -919,6 +932,17 @@ void PianoRollView::paint (juce::Graphics& g)
     const auto seq = sequence();
     const auto map = engine.getTransport().getTempoMap();
 
+    // Playable range of the track's player (Synchron via VE Pro); unknown = all
+    int playableLow = 0, playableHigh = 127;
+
+    if (auto info = engine.getTrackChannelInfo (trackId); info.has_value() && info->keyLow >= 0)
+    {
+        playableLow = info->keyLow;
+        playableHigh = info->keyHigh;
+    }
+
+    const auto playable = [&] (int key) { return key >= playableLow && key <= playableHigh; };
+
     // --- Key rows ---
     for (int key = topKey; key >= 0; --key)
     {
@@ -927,7 +951,10 @@ void PianoRollView::paint (juce::Graphics& g)
         if (y > grid.getBottom())
             break;
 
-        g.setColour (isBlackKey (key) ? juce::Colour (0xff202327) : juce::Colour (0xff25282d));
+        if (! playable (key))
+            g.setColour (juce::Colour (0xff141518));
+        else
+            g.setColour (isBlackKey (key) ? juce::Colour (0xff202327) : juce::Colour (0xff25282d));
         g.fillRect (grid.getX(), y, grid.getWidth(), keyHeight);
 
         if (key % 12 == 0)
@@ -1122,7 +1149,11 @@ void PianoRollView::paint (juce::Graphics& g)
         if (y > keys.getBottom())
             break;
 
-        g.setColour (isBlackKey (key) ? juce::Colour (0xff17191c) : juce::Colour (0xffd8d8d8));
+        if (! playable (key))
+            g.setColour (isBlackKey (key) ? juce::Colour (0xff111214) : juce::Colour (0xff55585e));
+        else
+            g.setColour (isBlackKey (key) ? juce::Colour (0xff17191c) : juce::Colour (0xffd8d8d8));
+
         g.fillRect (keys.getX(), y, keys.getWidth() - 2, keyHeight - 1);
 
         if (key % 12 == 0)

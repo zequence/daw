@@ -1,6 +1,7 @@
 #include "CommandDispatcher.h"
 #include "../integrations/VeproState.h"
 #include "../integrations/VeproServer.h"
+#include "../integrations/VeproKeyRange.h"
 #include <AppVersion.h>
 #include "../engine/AudioChannelProcessor.h"
 #include "../engine/HistoryManager.h"
@@ -1005,6 +1006,16 @@ void CommandDispatcher::registerCommands()
                      c->setProperty ("channel", channel.midiChannel);
                      c->setProperty ("name", channel.name);
                      c->setProperty ("synced", channel.synced);
+
+                     if (channel.veproPluginId.isNotEmpty())
+                         c->setProperty ("veproPlugin", channel.veproPluginId);
+
+                     if (channel.keyLow >= 0)
+                     {
+                         c->setProperty ("keyLow", channel.keyLow);
+                         c->setProperty ("keyHigh", channel.keyHigh);
+                     }
+
                      channels.add (juce::var (c.get()));
                  }
 
@@ -1425,7 +1436,7 @@ void CommandDispatcher::registerCommands()
 
                  const auto fetchMs = juce::Time::getMillisecondCounterHiRes() - fetchStart;
 
-                 juce::MessageManager::callAsync ([weak, resolvedHost, version, respond, fetchMs,
+                 juce::MessageManager::callAsync ([weak, resolvedHost, resolvedPort, version, respond, fetchMs,
                                                    fetchError, fetchWarnings, instances = std::move (fetched)]
                  {
                      if (weak == nullptr)
@@ -1434,7 +1445,95 @@ void CommandDispatcher::registerCommands()
                      if (fetchError.isNotEmpty())
                          return respond (fail ("VE Pro server: " + fetchError));
 
+                     weak->veproResolvedHost = resolvedHost;
+                     weak->veproResolvedPort = resolvedPort;
                      weak->applyVeproSync (instances, resolvedHost, version, respond, fetchWarnings, fetchMs);
+                 });
+             });
+         });
+
+    add ("vepro.keyRange",
+         "Playable key range of the Synchron Player behind a synced track (union over its articulations), "
+         "fetched from the VE Pro server once and cached in the project. Replies {low, high} as MIDI notes "
+         "(60 = middle C), or available=false for players that don't expose one",
+         "trackId:int [refresh:bool]",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const auto trackId = (int) params.getProperty ("trackId", 0);
+             const auto info = engine.getTrackChannelInfo (trackId);
+
+             const auto reply = [] (int low, int high)
+             {
+                 auto o = juce::DynamicObject::Ptr (new juce::DynamicObject());
+                 o->setProperty ("available", low >= 0);
+
+                 if (low >= 0)
+                 {
+                     o->setProperty ("low", low);
+                     o->setProperty ("high", high);
+                 }
+
+                 return ok (juce::var (o.get()));
+             };
+
+             if (! info.has_value() || ! info->synced || info->veproChannelAddress.isEmpty()
+                  || ! vepro::isSynchronPlayer (info->veproPluginId))
+                 return respond (reply (-1, -1));
+
+             if (info->keyLow >= 0 && ! (bool) params.getProperty ("refresh", false))
+                 return respond (reply (info->keyLow, info->keyHigh));
+
+             const auto key = info->veproInstanceId + "/" + info->veproChannelAddress;
+
+             if (keyRangeFetches.count (key) > 0)
+                 return respond (fail ("a key range fetch for that player is already running"));
+
+             keyRangeFetches.insert (key);
+
+             auto& settings = engine.getSettingsFile();
+             const auto host = veproResolvedHost.isNotEmpty()
+                                   ? veproResolvedHost
+                                   : settings.getValue (vepro::serverHostKey, vepro::defaultServerHost());
+             const auto port = veproResolvedHost.isNotEmpty()
+                                   ? veproResolvedPort
+                                   : settings.getIntValue (vepro::serverPortKey, vepro::defaultServerPort);
+             const auto cli = juce::File (settings.getValue (vepro::cliPathKey,
+                                                             vepro::defaultCliPath().getFullPathName()));
+             const auto trackOutputs = engine.getTrackOutputs (trackId);
+             const auto output = trackOutputs.front();
+             const auto instanceId = info->veproInstanceId;
+             const auto address = info->veproChannelAddress;
+
+             juce::Thread::launch ([weak = juce::WeakReference<CommandDispatcher> (this),
+                                    host, port, cli, instanceId, address, key, output, respond, reply]
+             {
+                 juce::String error;
+                 auto resolvedHost = host;
+                 auto resolvedPort = port;
+                 int low = -1, high = -1;
+
+                 if (vepro::isAutoHost (resolvedHost))
+                     vepro::discoverServer (cli, resolvedHost, resolvedPort, error);
+
+                 if (error.isEmpty())
+                     vepro::fetchKeyRange (cli, resolvedHost, resolvedPort, instanceId, address, low, high, error);
+
+                 juce::MessageManager::callAsync ([weak, key, output, respond, reply, low, high, error,
+                                                   resolvedHost, resolvedPort]
+                 {
+                     if (weak == nullptr)
+                         return;
+
+                     weak->keyRangeFetches.erase (key);
+
+                     if (error.isNotEmpty())
+                         return respond (fail ("VE Pro server: " + error));
+
+                     weak->veproResolvedHost = resolvedHost;
+                     weak->veproResolvedPort = resolvedPort;
+                     weak->engine.setInstrumentChannelKeyRange (output.instrument, output.midiPort,
+                                                                output.midiChannel, low, high);
+                     respond (reply (low, high));
                  });
              });
          });
@@ -1904,7 +2003,13 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
         std::vector<AudioEngine::MidiChannelInfo> channels;
 
         for (auto& player : instance.players)
-            channels.push_back ({ player.midiPort, player.midiChannel, player.name, true });
+        {
+            AudioEngine::MidiChannelInfo channel { player.midiPort, player.midiChannel, player.name, true };
+            channel.veproInstanceId = instance.id;
+            channel.veproChannelAddress = player.channelAddress;
+            channel.veproPluginId = player.pluginId;
+            channels.push_back (channel);
+        }
 
         engine.setSyncedInstrumentChannels (instrumentId, channels);
         state->channelsSynced += (int) channels.size();

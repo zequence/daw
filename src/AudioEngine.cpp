@@ -476,11 +476,28 @@ void AudioEngine::setSyncedInstrumentChannels (InstrumentId id, std::vector<Midi
     if (instrument == nullptr)
         return;
 
-    // Replace the synced set wholesale; manual entries survive
+    // Replace the synced set wholesale; manual entries survive. A fetched key
+    // range stays while the same server channel sits on the same port/channel.
+    std::vector<MidiChannelInfo> previous;
+
+    for (auto& c : instrument->midiChannels)
+        if (c.synced)
+            previous.push_back (c);
+
     std::erase_if (instrument->midiChannels, [] (const MidiChannelInfo& c) { return c.synced; });
 
     for (auto& channel : channels)
     {
+        for (auto& old : previous)
+            if (old.midiPort == channel.midiPort && old.midiChannel == channel.midiChannel
+                 && old.veproInstanceId == channel.veproInstanceId
+                 && old.veproChannelAddress == channel.veproChannelAddress
+                 && old.veproPluginId == channel.veproPluginId)
+            {
+                channel.keyLow = old.keyLow;
+                channel.keyHigh = old.keyHigh;
+            }
+
         channel.synced = true;
         instrument->midiChannels.push_back (channel);
     }
@@ -493,6 +510,49 @@ void AudioEngine::setSyncedInstrumentChannels (InstrumentId id, std::vector<Midi
     data->setProperty ("id", id);
     data->setProperty ("change", "channels");
     emitEvent ("instrumentChanged", data);
+}
+
+void AudioEngine::setInstrumentChannelKeyRange (InstrumentId id, int midiPort, int midiChannel, int low, int high)
+{
+    auto* instrument = findInstrument (id);
+
+    if (instrument == nullptr)
+        return;
+
+    for (auto& channel : instrument->midiChannels)
+    {
+        if (channel.midiPort == midiPort && channel.midiChannel == midiChannel)
+        {
+            if (channel.keyLow == low && channel.keyHigh == high)
+                return;
+
+            channel.keyLow = low;
+            channel.keyHigh = high;
+
+            auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+            data->setProperty ("id", id);
+            data->setProperty ("change", "keyRange");
+            emitEvent ("instrumentChanged", data);
+            return;
+        }
+    }
+}
+
+std::optional<AudioEngine::MidiChannelInfo> AudioEngine::getTrackChannelInfo (TrackId trackId) const
+{
+    const auto outputs = getTrackOutputs (trackId);
+
+    if (outputs.empty())
+        return std::nullopt;
+
+    const auto& output = outputs.front();
+
+    if (auto* instrument = findInstrument (output.instrument))
+        for (auto& channel : instrument->midiChannels)
+            if (channel.midiPort == output.midiPort && channel.midiChannel == output.midiChannel)
+                return channel;
+
+    return std::nullopt;
 }
 
 int AudioEngine::getNumLoadedInstruments() const
@@ -1688,6 +1748,19 @@ bool AudioEngine::saveProject (const juce::File& file)
             c->setAttribute ("channel", channel.midiChannel);
             c->setAttribute ("name", channel.name);
             c->setAttribute ("synced", channel.synced);
+
+            if (channel.veproChannelAddress.isNotEmpty())
+            {
+                c->setAttribute ("veproInstance", channel.veproInstanceId);
+                c->setAttribute ("veproChannel", channel.veproChannelAddress);
+                c->setAttribute ("veproPlugin", channel.veproPluginId);
+            }
+
+            if (channel.keyLow >= 0)
+            {
+                c->setAttribute ("keyLow", channel.keyLow);
+                c->setAttribute ("keyHigh", channel.keyHigh);
+            }
         }
 
         if (auto* audioChannel = getAudioChannel (instrument.audioChannel))
@@ -1924,10 +1997,19 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
                 if (auto* loadedInstrument = findInstrument (newId))
                     for (auto* c : element->getChildWithTagNameIterator ("MIDICHANNEL"))
-                        loadedInstrument->midiChannels.push_back ({ c->getIntAttribute ("port", 1),
-                                                                    c->getIntAttribute ("channel", 1),
-                                                                    c->getStringAttribute ("name"),
-                                                                    c->getBoolAttribute ("synced") });
+                    {
+                        MidiChannelInfo channel;
+                        channel.midiPort = c->getIntAttribute ("port", 1);
+                        channel.midiChannel = c->getIntAttribute ("channel", 1);
+                        channel.name = c->getStringAttribute ("name");
+                        channel.synced = c->getBoolAttribute ("synced");
+                        channel.veproInstanceId = c->getStringAttribute ("veproInstance");
+                        channel.veproChannelAddress = c->getStringAttribute ("veproChannel");
+                        channel.veproPluginId = c->getStringAttribute ("veproPlugin");
+                        channel.keyLow = c->getIntAttribute ("keyLow", -1);
+                        channel.keyHigh = c->getIntAttribute ("keyHigh", -1);
+                        loadedInstrument->midiChannels.push_back (channel);
+                    }
 
                 if (auto* a = element->getChildByName ("AUDIOCHANNEL"))
                 {

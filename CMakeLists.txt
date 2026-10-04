@@ -7,6 +7,22 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(external/JUCE)
 
+# zstd reference decoder (BSD licence, decompression only): Synchron Player
+# state embeds zstd-compressed JSON (key ranges etc.).
+add_library(zstd_decoder STATIC
+    external/zstd/lib/common/debug.c
+    external/zstd/lib/common/entropy_common.c
+    external/zstd/lib/common/error_private.c
+    external/zstd/lib/common/fse_decompress.c
+    external/zstd/lib/common/xxhash.c
+    external/zstd/lib/common/zstd_common.c
+    external/zstd/lib/decompress/huf_decompress.c
+    external/zstd/lib/decompress/zstd_ddict.c
+    external/zstd/lib/decompress/zstd_decompress.c
+    external/zstd/lib/decompress/zstd_decompress_block.c)
+target_include_directories(zstd_decoder PUBLIC external/zstd/lib)
+target_compile_definitions(zstd_decoder PRIVATE ZSTD_DISABLE_ASM=1 ZSTD_LEGACY_SUPPORT=0)
+
 juce_add_gui_app(OrchestralDAW
     PRODUCT_NAME "Orchestral DAW"
     COMPANY_NAME "Loitsut")
@@ -127,6 +143,7 @@ add_custom_target(OrchestralDAWVersion
     BYPRODUCTS ${CMAKE_BINARY_DIR}/generated/AppVersion.h)
 
 foreach(target OrchestralDAW OrchestralDAWTests)
+    target_link_libraries(${target} PRIVATE zstd_decoder)
     add_dependencies(${target} OrchestralDAWVersion)
     target_include_directories(${target} PRIVATE ${CMAKE_BINARY_DIR}/generated)
 endforeach()

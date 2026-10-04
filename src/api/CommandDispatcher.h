@@ -58,6 +58,12 @@ private:
     std::map<juce::String, Command> commands;
     bool veproSyncRunning = false;
 
+    // The server address the last sync/fetch resolved ("auto" -> discovered IP),
+    // so per-player queries skip discovery
+    juce::String veproResolvedHost;
+    int veproResolvedPort = 0;
+    std::set<juce::String> keyRangeFetches;   // "instance/address" in flight
+
     JUCE_DECLARE_WEAK_REFERENCEABLE (CommandDispatcher)
     JUCE_DECLARE_NON_COPYABLE (CommandDispatcher)
 };

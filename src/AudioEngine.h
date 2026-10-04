@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_audio_utils/juce_audio_utils.h>
+#include <optional>
 
 #include "engine/Transport.h"
 #include "engine/MidiRecorder.h"
@@ -68,6 +69,11 @@ public:
         int midiChannel = 1;
         juce::String name;
         bool synced = false;
+
+        // Synced channels: where the player lives on the server, and its playable
+        // key range once fetched (-1 = unknown; Synchron Player only)
+        juce::String veproInstanceId, veproChannelAddress, veproPluginId;
+        int keyLow = -1, keyHigh = -1;
     };
 
     // How many MIDI ports the plugin itself offers (its VST3 MIDI event input
@@ -79,6 +85,10 @@ public:
     juce::String getInstrumentChannelName (InstrumentId, int midiChannel, int midiPort = 1) const;
     std::vector<MidiChannelInfo> getInstrumentMidiChannels (InstrumentId) const;
     void setSyncedInstrumentChannels (InstrumentId, std::vector<MidiChannelInfo>);   // replaces the synced set
+    void setInstrumentChannelKeyRange (InstrumentId, int midiPort, int midiChannel, int low, int high);
+
+    // The channel info behind a track's first output (nullopt when it has none)
+    std::optional<MidiChannelInfo> getTrackChannelInfo (TrackId) const;
 
     //==============================================================================
     // Audio channels (one per instrument for now; device inputs and summing later)

@@ -150,6 +150,8 @@ namespace vepro
         int midiChannel = 1;
         juce::String name;
         juce::String colour;           // "#rrggbb" from channel/color/get
+        juce::String channelAddress;   // the server's channel address (for state export)
+        juce::String pluginId;         // e.g. "Vienna Synchron Player"
     };
 
     struct SyncInstance
@@ -233,6 +235,9 @@ namespace vepro
                                     if (! channels->isEmpty())
                                     {
                                         player.name = channels->getFirst().getProperty ("title", {}).toString();
+                                        player.channelAddress = channels->getFirst().getProperty ("channelAddress", {}).toString();
+                                        player.pluginId = channels->getFirst().getProperty ("instrument", {})
+                                                                              .getProperty ("pluginId", {}).toString();
 
                                         const auto channelId = channels->getFirst().getProperty ("id", {}).toString();
 

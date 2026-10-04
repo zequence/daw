@@ -39,10 +39,12 @@ public:
 
         // Not history material: our own travels, state-free notifications, view state.
         // Arming follows track selection - not an edit (and each entry snapshots
-        // the whole project, which is costly with 1000+ tracks).
+        // the whole project, which is costly with 1000+ tracks). Key ranges are
+        // fetched server facts, not edits.
         if (type == "historyTravelled" || type == "recordingStarted" || type == "projectSaved"
              || type == "folderViewChanged"
-             || (type == "trackChanged" && event.getProperty ("change", {}).toString() == "armed"))
+             || (type == "trackChanged" && event.getProperty ("change", {}).toString() == "armed")
+             || (type == "instrumentChanged" && event.getProperty ("change", {}).toString() == "keyRange"))
             return;
 
         if (type == "projectCleared" || type == "projectLoaded")
