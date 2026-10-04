@@ -14,6 +14,7 @@
 #include "ui/ArrangementView.h"
 #include "ui/HistoryView.h"
 #include "ui/TimelineBar.h"
+#include "ui/BusyOverlay.h"
 
 // The single-window shell:
 //   topbar (menu, domain buttons, transport) / sidebar + content container / status + keyboard.
@@ -152,6 +153,9 @@ private:
 
     // Without a TooltipWindow, component tooltips never show (ISSUES.md "Global")
     juce::TooltipWindow tooltipWindow { this, 700 };
+
+    // Covers the window during long operations (sync, project load)
+    BusyOverlay busyOverlay { engine.getBusyStatus() };
 
     juce::File currentProjectFile;
     std::unique_ptr<juce::FileChooser> fileChooser;

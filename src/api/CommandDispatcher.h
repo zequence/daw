@@ -50,7 +50,8 @@ private:
 
     // vepro.sync's message-thread half: instruments/channels/tracks per server instance
     void applyVeproSync (const std::vector<vepro::SyncInstance>&, const juce::String& host,
-                         const juce::String& version, Respond, const juce::StringArray& fetchWarnings);
+                         const juce::String& version, Respond, const juce::StringArray& fetchWarnings,
+                         double fetchMs);
 
     AudioEngine& engine;
     HistoryManager* history = nullptr;

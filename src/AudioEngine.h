@@ -230,6 +230,47 @@ public:
     void loadProject (const juce::File&, std::function<void (bool ok, juce::String warnings)> done);
     void clearProject();
 
+    // Batch many graph edits (big syncs, loads): no render-sequence rebuild at
+    // all until the outermost endGraphBatch, which rebuilds once. Nestable.
+    void beginGraphBatch();
+    void endGraphBatch();
+
+    // Long operations (project loads, VE Pro syncs) report here so the UI can
+    // show a busy overlay explaining why the app isn't responding. onChanged
+    // fires synchronously on every change (the UI paints immediately - the
+    // message thread may be about to block). progress: 0..1, or < 0 = unknown.
+    struct BusyStatus
+    {
+        bool active = false;
+        juce::String title, detail;
+        double progress = -1.0;
+        std::function<void()> onChanged;
+
+        void begin (const juce::String& newTitle)
+        {
+            active = true;
+            title = newTitle;
+            detail.clear();
+            progress = -1.0;
+            if (onChanged) onChanged();
+        }
+
+        void update (const juce::String& newDetail, double newProgress = -1.0)
+        {
+            detail = newDetail;
+            progress = newProgress;
+            if (onChanged) onChanged();
+        }
+
+        void end()
+        {
+            active = false;
+            if (onChanged) onChanged();
+        }
+    };
+
+    BusyStatus& getBusyStatus() noexcept    { return busyStatus; }
+
     // True when anything changed since the last save/load/clear (every emitted
     // mutation marks the project dirty).
     bool isProjectDirty() const noexcept    { return projectDirty; }
@@ -425,6 +466,9 @@ private:
 
     bool projectDirty = false;
     int stateRevision = 0;          // bumped by every emitEvent; polled by the UI
+    int graphBatchDepth = 0;        // > 0: graph edits defer their rebuild (see updateKind)
+    BusyStatus busyStatus;
+    juce::AudioProcessorGraph::UpdateKind updateKind() const noexcept;
     bool historySuppress = false;   // mute event emission while applying a snapshot
 
     std::map<TrackId, Track> tracks;

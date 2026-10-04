@@ -1358,9 +1358,13 @@ void CommandDispatcher::registerCommands()
                  return respond (fail ("a VE Pro sync is already running"));
 
              veproSyncRunning = true;
+             engine.getBusyStatus().begin ("Syncing to the VE Pro Server");
+             engine.getBusyStatus().update ("Querying the server for instances and players...");
+
              respond = [this, inner = std::move (respond)] (const juce::var& reply)
              {
                  veproSyncRunning = false;
+                 engine.getBusyStatus().end();
                  inner (reply);
              };
 
@@ -1384,6 +1388,7 @@ void CommandDispatcher::registerCommands()
                  juce::StringArray fetchWarnings;
                  auto resolvedHost = host;
                  auto resolvedPort = port;
+                 const auto fetchStart = juce::Time::getMillisecondCounterHiRes();
 
                  if (vepro::isAutoHost (resolvedHost))
                      vepro::discoverServer (cli, resolvedHost, resolvedPort, fetchError);
@@ -1392,7 +1397,9 @@ void CommandDispatcher::registerCommands()
                                     ? vepro::fetchInstances (cli, resolvedHost, resolvedPort, fetchError, fetchWarnings)
                                     : std::vector<vepro::SyncInstance>();
 
-                 juce::MessageManager::callAsync ([weak, resolvedHost, version, respond,
+                 const auto fetchMs = juce::Time::getMillisecondCounterHiRes() - fetchStart;
+
+                 juce::MessageManager::callAsync ([weak, resolvedHost, version, respond, fetchMs,
                                                    fetchError, fetchWarnings, instances = std::move (fetched)]
                  {
                      if (weak == nullptr)
@@ -1401,7 +1408,7 @@ void CommandDispatcher::registerCommands()
                      if (fetchError.isNotEmpty())
                          return respond (fail ("VE Pro server: " + fetchError));
 
-                     weak->applyVeproSync (instances, resolvedHost, version, respond, fetchWarnings);
+                     weak->applyVeproSync (instances, resolvedHost, version, respond, fetchWarnings, fetchMs);
                  });
              });
          });
@@ -1792,7 +1799,7 @@ void CommandDispatcher::registerCommands()
 // creates a track per player that doesn't have one yet.
 void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& instances,
                                         const juce::String& host, const juce::String& version, Respond respond,
-                                        const juce::StringArray& fetchWarnings)
+                                        const juce::StringArray& fetchWarnings, double fetchMs)
 {
     struct SyncState
     {
@@ -1802,6 +1809,9 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
         juce::StringArray notes;
         int instrumentsCreated = 0, tracksCreated = 0, channelsSynced = 0;
         Respond respond;
+
+        // Phase timing (reported in the reply): server fetch, plugin loads, building
+        double fetchMs = 0, loadMs = 0, buildMs = 0, start = 0, loadStart = 0;
     };
 
     auto state = std::make_shared<SyncState>();
@@ -1810,11 +1820,17 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
     state->version = version;
     state->notes = fetchWarnings;
     state->respond = std::move (respond);
+    state->fetchMs = fetchMs;
+    state->start = juce::Time::getMillisecondCounterHiRes();
+
+    // One graph rebuild for the whole sync instead of one per instance/plugin
+    engine.beginGraphBatch();
 
     auto step = std::make_shared<std::function<void()>>();
 
     auto finishInstance = [this, state, step] (size_t index, AudioEngine::InstrumentId instrumentId)
     {
+        const auto buildStart = juce::Time::getMillisecondCounterHiRes();
         const auto& instance = state->instances[index];
 
         engine.setInstrumentName (instrumentId, instance.name);
@@ -1972,6 +1988,7 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
                                   + " but " + instance.name + "'s plugin offers " + juce::String (portCount)
                                   + " MIDI ports (raise the port count on the VE Pro server)");
 
+        state->buildMs += juce::Time::getMillisecondCounterHiRes() - buildStart;
         (*step)();
     };
 
@@ -1979,6 +1996,11 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
     {
         if (state->next >= state->instances.size())
         {
+            engine.getBusyStatus().update ("Building the audio graph...", 1.0);
+            const auto rebuildStart = juce::Time::getMillisecondCounterHiRes();
+            engine.endGraphBatch();
+            const auto rebuildMs = juce::Time::getMillisecondCounterHiRes() - rebuildStart;
+
             auto o = juce::DynamicObject::Ptr (new juce::DynamicObject());
             o->setProperty ("instances", (int) state->instances.size());
             o->setProperty ("instrumentsCreated", state->instrumentsCreated);
@@ -1991,6 +2013,16 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
 
             o->setProperty ("notes", notes);
 
+            auto timing = juce::DynamicObject::Ptr (new juce::DynamicObject());
+            timing->setProperty ("fetchMs", juce::roundToInt (state->fetchMs));
+            timing->setProperty ("pluginLoadMs", juce::roundToInt (state->loadMs));
+            timing->setProperty ("buildMs", juce::roundToInt (state->buildMs));
+            timing->setProperty ("graphRebuildMs", juce::roundToInt (rebuildMs));
+            timing->setProperty ("applyTotalMs",
+                                 juce::roundToInt (juce::Time::getMillisecondCounterHiRes() - state->start));
+            o->setProperty ("timing", juce::var (timing.get()));
+            juce::Logger::writeToLog ("VE Pro sync timing: " + juce::JSON::toString (juce::var (timing.get()), true));
+
             auto reply = juce::DynamicObject::Ptr (new juce::DynamicObject());
             reply->setProperty ("ok", true);
             reply->setProperty ("result", juce::var (o.get()));
@@ -2002,6 +2034,11 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
 
         const auto index = state->next++;
         const auto& instance = state->instances[index];
+
+        engine.getBusyStatus().update ("Instance " + juce::String ((int) index + 1) + " of "
+                                         + juce::String ((int) state->instances.size()) + ": " + instance.name
+                                         + " (" + juce::String ((int) instance.players.size()) + " players)",
+                                       (double) index / (double) juce::jmax ((size_t) 1, state->instances.size()));
 
         // Reuse the instrument named after the instance, if it's a VE Pro plugin
         for (auto& [instrumentId, name] : engine.getInstruments())
@@ -2040,9 +2077,13 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
             return;
         }
 
+        state->loadStart = juce::Time::getMillisecondCounterHiRes();
+
         engine.addInstrument (description,
             [state, step, finishInstance, index] (AudioEngine::InstrumentId newId, const juce::String& error)
             {
+                state->loadMs += juce::Time::getMillisecondCounterHiRes() - state->loadStart;
+
                 if (newId == 0)
                 {
                     state->notes.add (state->instances[index].name + ": plugin failed to load: " + error);

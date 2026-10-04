@@ -177,6 +177,21 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Integrations
 
+- [x] Syncing the huge VE Pro project still slow (chat, 2026-10-04; 20
+      instances / 1032 players).
+      (measured by phase: each plugin load waited behind an async rebuild of
+      the growing graph - 61 s of a 65 s sync. Graph edits during a sync or
+      project load now defer all rebuilding to ONE rebuild at the end
+      (JUCE UpdateKind::none batch), instrument loads included; the server
+      fetch runs 8 instances in parallel (2.0 -> 0.67 s, results identical
+      across runs); two quadratic per-track steps removed. Sync: 65 s -> 6 s.
+      The reply now reports timing per phase.)
+- [x] A loading overlay showing why the app isn't responding (chat request).
+      (dims the window, blocks clicks, shows the operation, a detail line
+      ("Instance 3 of 20: Stu WW (54 players)") and a progress bar; painted
+      immediately on each step since the message thread is busy; used by
+      VE Pro sync and project loads)
+
 - [x] Syncing should fetch colors from the server. Use the instance colors for
       instance folders and player colors for midi tracks.
       (instance colors come with instance/list, player colors via

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <juce_core/juce_core.h>
+#include <future>
 
 // Talking to the Vienna Ensemble Pro SERVER (instances, players) goes through
 // VSL's own CLI, which ships with VE Pro and speaks their service protocol:
@@ -177,9 +178,9 @@ namespace vepro
             return {};
         }
 
-        std::vector<SyncInstance> instances;
-
-        for (auto& entry : *list.getArray())
+        // Each instance needs two independent queries; instances are fetched up
+        // to 8 at a time (sequential fetching dominated the server phase)
+        const auto fetchOne = [&cli, &host, port] (const juce::var& entry, juce::String& warning)
         {
             SyncInstance instance;
             instance.id = entry.getProperty ("id", {}).toString();
@@ -195,7 +196,7 @@ namespace vepro
             const auto routing = serverCall (cli, host, port, juce::var (routingPayload.get()), routingError);
 
             if (routingError.isNotEmpty())
-                warnings.add (instance.name + ": couldn't read its MIDI routing - " + routingError);
+                warning = instance.name + ": couldn't read its MIDI routing - " + routingError;
 
             // All channel colors of the instance in ONE call (per-player
             // channel/color/get made big projects spawn a CLI per player).
@@ -251,9 +252,32 @@ namespace vepro
                 }
             }
 
-            instances.push_back (std::move (instance));
+            return instance;
+        };
+
+        const auto& entries = *list.getArray();
+        std::vector<SyncInstance> instances ((size_t) entries.size());
+        std::vector<juce::String> instanceWarnings ((size_t) entries.size());
+        constexpr int maxParallel = 8;
+
+        for (int first = 0; first < entries.size(); first += maxParallel)
+        {
+            std::vector<std::future<void>> batch;
+
+            for (int i = first; i < juce::jmin (entries.size(), first + maxParallel); ++i)
+                batch.push_back (std::async (std::launch::async, [&, i]
+                {
+                    instances[(size_t) i] = fetchOne (entries.getReference (i), instanceWarnings[(size_t) i]);
+                }));
+
+            for (auto& done : batch)
+                done.get();
         }
 
-        return instances;
+        for (auto& warning : instanceWarnings)
+            if (warning.isNotEmpty())
+                warnings.add (warning);
+
+        return instances;   // server order preserved
     }
 }

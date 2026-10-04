@@ -12,11 +12,34 @@ namespace
     constexpr auto midiChannelIndex = juce::AudioProcessorGraph::midiChannelIndex;
     using IOProcessor = juce::AudioProcessorGraph::AudioGraphIOProcessor;
 
-    // Track-path graph edits are ASYNC: JUCE's default (sync) rebuilds the whole
-    // render sequence on every call, which made big syncs/loads quadratic
-    // (1000 tracks = ~4000 full rebuilds) and every arm change touch ~1000
-    // connections. Async edits coalesce into one rebuild on the message thread.
-    constexpr auto asyncUpdate = juce::AudioProcessorGraph::UpdateKind::async;
+}
+
+// Graph edits never rebuild synchronously: JUCE's default (sync) rebuilds the
+// whole render sequence on every call, which made big syncs/loads quadratic.
+// Normally edits coalesce into one async rebuild; inside a batch (vepro.sync,
+// project loads) they don't rebuild at all until the batch ends - otherwise
+// each async plugin load waited behind a rebuild of the ever-growing graph.
+juce::AudioProcessorGraph::UpdateKind AudioEngine::updateKind() const noexcept
+{
+    return graphBatchDepth > 0 ? juce::AudioProcessorGraph::UpdateKind::none
+                               : juce::AudioProcessorGraph::UpdateKind::async;
+}
+
+void AudioEngine::beginGraphBatch()
+{
+    ++graphBatchDepth;
+}
+
+void AudioEngine::endGraphBatch()
+{
+    if (graphBatchDepth > 0 && --graphBatchDepth == 0)
+    {
+        const auto start = juce::Time::getMillisecondCounterHiRes();
+        graph.rebuild();
+        juce::Logger::writeToLog ("Graph batch rebuilt in "
+                                  + juce::String (juce::roundToInt (juce::Time::getMillisecondCounterHiRes() - start))
+                                  + " ms (" + juce::String (graph.getNumNodes()) + " nodes)");
+    }
 }
 
 AudioEngine::AudioEngine (juce::PropertiesFile& settingsToUse)
@@ -258,26 +281,26 @@ void AudioEngine::addInstrument (const juce::PluginDescription& description, Ins
 
             Instrument instrument;
             instrument.name = name;
-            instrument.pluginNode = graph.addNode (std::move (instance))->nodeID;
+            instrument.pluginNode = graph.addNode (std::move (instance), std::nullopt, updateKind())->nodeID;
 
             // Give the instrument its audio channel strip.
             AudioChannel channel;
             channel.name = name;
-            channel.node = graph.addNode (std::make_unique<AudioChannelProcessor>())->nodeID;
+            channel.node = graph.addNode (std::make_unique<AudioChannelProcessor>(), std::nullopt, updateKind())->nodeID;
 
             for (int ch = 0; ch < 2; ++ch)
-                graph.addConnection ({ { channel.node, ch }, { audioOutNode, ch } });
+                graph.addConnection ({ { channel.node, ch }, { audioOutNode, ch } }, updateKind());
 
             // Only the first stereo pair for now; multi-output routing comes later.
             if (numOuts == 1)
             {
-                graph.addConnection ({ { instrument.pluginNode, 0 }, { channel.node, 0 } });
-                graph.addConnection ({ { instrument.pluginNode, 0 }, { channel.node, 1 } });
+                graph.addConnection ({ { instrument.pluginNode, 0 }, { channel.node, 0 } }, updateKind());
+                graph.addConnection ({ { instrument.pluginNode, 0 }, { channel.node, 1 } }, updateKind());
             }
             else
             {
                 for (int ch = 0; ch < juce::jmin (2, numOuts); ++ch)
-                    graph.addConnection ({ { instrument.pluginNode, ch }, { channel.node, ch } });
+                    graph.addConnection ({ { instrument.pluginNode, ch }, { channel.node, ch } }, updateKind());
             }
 
             const auto channelId = nextAudioChannelId++;
@@ -321,7 +344,7 @@ void AudioEngine::removeInstrument (InstrumentId id)
         {
             if (it->instrument == id)
             {
-                graph.removeNode (it->routeNode, asyncUpdate);
+                graph.removeNode (it->routeNode, updateKind());
                 it = track.outputs.erase (it);
             }
             else
@@ -498,10 +521,10 @@ AudioEngine::TrackId AudioEngine::addTrack (const juce::String& name)
     Track track;
     track.name = name.isNotEmpty() ? name : "Track " + juce::String (id);
     track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport),
-                                          std::nullopt, asyncUpdate)->nodeID;
+                                          std::nullopt, updateKind())->nodeID;
     // Live input is wired permanently; the source gates it by arming (no graph changes on arm)
     graph.addConnection ({ { midiInNode, midiChannelIndex }, { track.midiSourceNode, midiChannelIndex } },
-                         asyncUpdate);
+                         updateKind());
     track.position = nextChildPosition (true, 0);
     tracks[id] = track;
 
@@ -524,9 +547,9 @@ void AudioEngine::removeTrack (TrackId id)
         return;
 
     for (auto& output : track->outputs)
-        graph.removeNode (output.routeNode, asyncUpdate);
+        graph.removeNode (output.routeNode, updateKind());
 
-    graph.removeNode (track->midiSourceNode, asyncUpdate);
+    graph.removeNode (track->midiSourceNode, updateKind());
     tracks.erase (id);
 
     if (armedTrack == id)
@@ -611,15 +634,23 @@ void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, in
     // 'port - 1' (see MidiRouteProcessor::wrapForPort) - like Cubase, the
     // plugin's own MIDI ports are addressed directly, no helper plugins.
     output.routeNode = graph.addNode (std::make_unique<MidiRouteProcessor> (output.midiChannel, output.midiPort),
-                                      std::nullopt, asyncUpdate)->nodeID;
+                                      std::nullopt, updateKind())->nodeID;
 
     graph.addConnection ({ { track->midiSourceNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } },
-                         asyncUpdate);
+                         updateKind());
     graph.addConnection ({ { output.routeNode, midiChannelIndex }, { instrument->pluginNode, midiChannelIndex } },
-                         asyncUpdate);
+                         updateKind());
 
     track->outputs.push_back (output);
-    applyMuteAndSolo();
+
+    // Only the new route needs the mute/solo gate (re-applying it to every route
+    // in the project per added output made big syncs quadratic)
+    if (auto* route = getRoute (output))
+    {
+        const auto anySolo = std::any_of (tracks.begin(), tracks.end(),
+                                          [] (const auto& entry) { return entry.second.soloed; });
+        route->setRouteEnabled (! track->muted && (! anySolo || track->soloed));
+    }
 
     juce::Logger::writeToLog ("Track " + juce::String (trackId) + " output -> " + instrument->name
                               + " port " + juce::String (output.midiPort)
@@ -632,7 +663,7 @@ void AudioEngine::clearTrackOutputs (TrackId id)
     if (auto* track = findTrack (id))
     {
         for (auto& output : track->outputs)
-            graph.removeNode (output.routeNode, asyncUpdate);
+            graph.removeNode (output.routeNode, updateKind());
 
         track->outputs.clear();
         emitTrackChanged (id, "outputs");
@@ -866,9 +897,9 @@ void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
             Track track;
             track.name = state.name;
             track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport),
-                                                  std::nullopt, asyncUpdate)->nodeID;
+                                                  std::nullopt, updateKind())->nodeID;
             graph.addConnection ({ { midiInNode, midiChannelIndex }, { track.midiSourceNode, midiChannelIndex } },
-                                 asyncUpdate);
+                                 updateKind());
             tracks[state.id] = std::move (track);
             nextTrackId = juce::jmax (nextTrackId, state.id + 1);
         }
@@ -1222,8 +1253,30 @@ std::vector<AudioEngine::ChildRef> AudioEngine::getChildrenOf (bool midiDomain, 
 
 int AudioEngine::nextChildPosition (bool midiDomain, FolderId parent) const
 {
-    const auto children = getChildrenOf (midiDomain, parent);
-    return children.empty() ? 0 : children.back().position + 1;
+    // One pass for the max - no list building or sorting (called per created
+    // track, so big syncs made the sort version quadratic)
+    int maxPosition = -1;
+
+    for (auto& [id, folder] : folders)
+        if (folder.midiDomain == midiDomain && folder.parent == parent)
+            maxPosition = juce::jmax (maxPosition, folder.position);
+
+    const auto effectiveFolder = [this] (FolderId f) { return folderExists (f) ? f : 0; };
+
+    if (midiDomain)
+    {
+        for (auto& [id, track] : tracks)
+            if (effectiveFolder (track.folder) == parent)
+                maxPosition = juce::jmax (maxPosition, track.position);
+    }
+    else
+    {
+        for (auto& [id, channel] : audioChannels)
+            if (effectiveFolder (channel.folder) == parent)
+                maxPosition = juce::jmax (maxPosition, channel.position);
+    }
+
+    return maxPosition + 1;
 }
 
 void AudioEngine::setChildPosition (bool midiDomain, const ChildRef& child, int position)
@@ -1661,9 +1714,9 @@ void AudioEngine::clearProject()
     for (auto& [id, track] : tracks)
     {
         for (auto& output : track.outputs)
-            graph.removeNode (output.routeNode, asyncUpdate);
+            graph.removeNode (output.routeNode, updateKind());
 
-        graph.removeNode (track.midiSourceNode, asyncUpdate);
+        graph.removeNode (track.midiSourceNode, updateKind());
     }
 
     tracks.clear();
@@ -1702,6 +1755,8 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
     juce::Logger::writeToLog ("Loading project: " + file.getFullPathName());
     clearProject();
+    beginGraphBatch();   // one render-sequence rebuild for the whole load (ended in the final step)
+    busyStatus.begin ("Loading " + file.getFileNameWithoutExtension());
 
     if (auto* tempoXml = xml->getChildByName ("TEMPOMAP"))
     {
@@ -1762,7 +1817,10 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
     {
         if (state->next >= state->instrumentElements.size())
         {
+            busyStatus.update ("Restoring tracks and building the audio graph...", 1.0);
             restoreProjectTracks (*state->xml, state->idMap, state->folderIdMap, state->warnings);
+            endGraphBatch();
+            busyStatus.end();
 
             auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
             data->setProperty ("path", state->path);
@@ -1778,6 +1836,10 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
         auto* element = state->instrumentElements[state->next++];
         const auto savedName = element->getStringAttribute ("name", "instrument");
+
+        busyStatus.update ("Instrument " + juce::String ((int) state->next) + " of "
+                             + juce::String ((int) state->instrumentElements.size()) + ": " + savedName,
+                           (double) (state->next - 1) / (double) juce::jmax ((size_t) 1, state->instrumentElements.size()));
 
         juce::PluginDescription description;
         auto* pluginXml = element->getChildByName ("PLUGIN");

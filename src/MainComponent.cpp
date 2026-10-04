@@ -55,6 +55,13 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         safe->updateWindowTitle();
     };
 
+    addChildComponent (busyOverlay);
+    engine.getBusyStatus().onChanged = [safe = juce::Component::SafePointer<MainComponent> (this)]
+    {
+        if (safe != nullptr)
+            safe->busyOverlay.statusChanged();
+    };
+
     dispatcher.onSelectTrack = [safe = juce::Component::SafePointer<MainComponent> (this)] (int id)
     {
         if (safe != nullptr)
@@ -382,6 +389,7 @@ void MainComponent::createDefaultTrack()
 
 MainComponent::~MainComponent()
 {
+    engine.getBusyStatus().onChanged = nullptr;   // the engine outlives this window
     stopTimer();
     keyboardState.removeListener (this);
     engine.getDeviceManager().removeChangeListener (this);
@@ -1293,6 +1301,7 @@ void MainComponent::resized()
                                                                 &instrumentsView, &instrumentEditorView, &historyView })
         view->setBounds (area);
 
-    // Settings replaces the whole UI
+    // Settings replaces the whole UI; the busy overlay covers everything
     settingsView.setBounds (getLocalBounds());
+    busyOverlay.setBounds (getLocalBounds());
 }
