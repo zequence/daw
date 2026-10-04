@@ -96,6 +96,54 @@ public:
 
         expect (! engine.getTransport().isPlaying(), "transport did not stop");
         expect (maxPeak > 0.001f, "no audio came out of the instrument");
+
+        //======================================================================
+        // Live input reaches ONLY the armed track (live MIDI is wired to every
+        // source permanently and gated by arming - no graph changes on arm).
+        beginTest ("live input plays through the armed track only");
+
+        engine.setTrackSequence (track, nullptr);
+        const auto otherTrack = engine.addTrack();   // no outputs: arming it must silence live input
+        pump (400);
+
+        const auto playLiveAndMeasure = [&]
+        {
+            const auto now = juce::Time::getMillisecondCounterHiRes() * 0.001;
+            auto on = juce::MidiMessage::noteOn (1, 64, (juce::uint8) 100);
+            on.setTimeStamp (now);
+            engine.getLiveMidiCollector().addMessageToQueue (on);
+
+            float peak = 0.0f;
+            const auto until = juce::Time::getMillisecondCounter() + 700;
+
+            while (juce::Time::getMillisecondCounter() < until)
+            {
+                pump (50);
+
+                if (channel != nullptr)
+                    peak = juce::jmax (peak, channel->getLastPeak());
+            }
+
+            auto off = juce::MidiMessage::noteOff (1, 64);
+            off.setTimeStamp (juce::Time::getMillisecondCounterHiRes() * 0.001);
+            engine.getLiveMidiCollector().addMessageToQueue (off);
+            pump (600);   // let the release tail die before the next measurement
+            return peak;
+        };
+
+        engine.setArmedTrack (otherTrack);
+        pump (100);
+        const auto unarmedPeak = playLiveAndMeasure();
+
+        engine.setArmedTrack (track);
+        pump (100);
+        const auto armedPeak = playLiveAndMeasure();
+
+        logMessage ("live peak - other track armed: " + juce::String (unarmedPeak, 4)
+                      + ", instrument's track armed: " + juce::String (armedPeak, 4));
+
+        expect (armedPeak > 0.001f, "live input didn't reach the armed track's instrument");
+        expect (unarmedPeak < 0.0005f, "live input leaked to an unarmed track's instrument");
     }
 
 private:

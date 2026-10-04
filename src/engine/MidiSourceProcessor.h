@@ -21,7 +21,14 @@ public:
     explicit MidiSourceProcessor (const Transport& t) : transport (t)
     {
         activeNotes.reserve (128);
+        liveIn.ensureSize (4096);
     }
+
+    // Live MIDI (the graph's MIDI input, connected to EVERY source permanently)
+    // passes through only while this track is armed. Arming therefore flips two
+    // flags instead of changing graph connections - which on big projects meant
+    // a full render-sequence rebuild (>1 s with 1000+ tracks) per selection.
+    void setLiveEnabled (bool shouldPass)        { liveEnabled.store (shouldPass); }
 
     // Any thread; the audio thread picks the new sequence up at the next block.
     void setSequence (MidiSequence::Ptr s)       { sequence.store (std::move (s)); }
@@ -36,6 +43,19 @@ public:
 
     //==============================================================================
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer& midi) override
+    {
+        // 'midi' arrives holding the live input; keep it only while armed
+        liveIn.clear();
+
+        if (liveEnabled.load())
+            liveIn.addEvents (midi, 0, -1, 0);
+
+        renderSequence (midi);
+        midi.addEvents (liveIn, 0, -1, 0);
+    }
+
+private:
+    void renderSequence (juce::MidiBuffer& midi)
     {
         midi.clear();
 
@@ -68,8 +88,9 @@ public:
     }
 
     //==============================================================================
+public:
     const juce::String getName() const override              { return "MIDI Source"; }
-    bool acceptsMidi() const override                        { return false; }
+    bool acceptsMidi() const override                        { return true; }    // live input, passed while armed
     bool producesMidi() const override                       { return true; }
     void prepareToPlay (double, int) override                {}
     void releaseResources() override                         {}
@@ -219,7 +240,8 @@ private:
 
     const Transport& transport;
     std::atomic<MidiSequence::Ptr> sequence;
-    std::atomic<bool> killAllRequest { false }, suppressed { false };
+    std::atomic<bool> killAllRequest { false }, suppressed { false }, liveEnabled { false };
+    juce::MidiBuffer liveIn;   // audio-thread scratch for the passed-through live input
 
     std::vector<ActiveNote> activeNotes;
     bool sustainDown[16] = {};

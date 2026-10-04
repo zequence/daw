@@ -359,10 +359,15 @@ void TrackList::refresh()
 
 void TrackList::selectFolder (AudioEngine::FolderId folderId)
 {
+    // Only the folder itself is selected (ISSUES.md: no auto-selecting its tracks)
     selectedFolder = folderId;
     multiSelection.clear();
+    refreshSoon();
+}
 
-    // Every track inside, at any depth - collapsed subfolders included
+void TrackList::setSubtreeCollapsed (AudioEngine::FolderId folderId, bool collapsed)
+{
+    // The folder and every folder below it
     const auto all = engine.getSidebarItems (true, false);
     int folderDepth = -1;
 
@@ -371,16 +376,19 @@ void TrackList::selectFolder (AudioEngine::FolderId folderId)
         if (folderDepth < 0)
         {
             if (item.folder == folderId)
+            {
                 folderDepth = item.depth;
+                engine.setFolderCollapsed (folderId, collapsed);
+            }
 
             continue;
         }
 
         if (item.depth <= folderDepth)
-            break;   // left the folder's subtree
+            break;   // left the subtree
 
-        if (item.member != 0)
-            multiSelection.insert (item.member);
+        if (item.folder != 0)
+            engine.setFolderCollapsed (item.folder, collapsed);
     }
 
     refreshSoon();
@@ -744,6 +752,13 @@ void TrackList::showFolderMenu (AudioEngine::FolderId folderId)
             safe->refresh();
         }
     });
+
+    menu.addSeparator();
+    menu.addItem ("Collapse all (with subfolders)",
+                  [safe, folderId] { if (safe != nullptr) safe->setSubtreeCollapsed (folderId, true); });
+    menu.addItem ("Expand all (with subfolders)",
+                  [safe, folderId] { if (safe != nullptr) safe->setSubtreeCollapsed (folderId, false); });
+    menu.addSeparator();
 
     juce::PopupMenu moveTo;
     moveTo.addItem ("Top level", true, engine.getFolderParent (folderId) == 0, [safe, folderId]

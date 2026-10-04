@@ -499,6 +499,9 @@ AudioEngine::TrackId AudioEngine::addTrack (const juce::String& name)
     track.name = name.isNotEmpty() ? name : "Track " + juce::String (id);
     track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport),
                                           std::nullopt, asyncUpdate)->nodeID;
+    // Live input is wired permanently; the source gates it by arming (no graph changes on arm)
+    graph.addConnection ({ { midiInNode, midiChannelIndex }, { track.midiSourceNode, midiChannelIndex } },
+                         asyncUpdate);
     track.position = nextChildPosition (true, 0);
     tracks[id] = track;
 
@@ -614,10 +617,6 @@ void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, in
                          asyncUpdate);
     graph.addConnection ({ { output.routeNode, midiChannelIndex }, { instrument->pluginNode, midiChannelIndex } },
                          asyncUpdate);
-
-    if (trackId == armedTrack)
-        graph.addConnection ({ { midiInNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } },
-                             asyncUpdate);
 
     track->outputs.push_back (output);
     applyMuteAndSolo();
@@ -868,6 +867,8 @@ void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
             track.name = state.name;
             track.midiSourceNode = graph.addNode (std::make_unique<MidiSourceProcessor> (transport),
                                                   std::nullopt, asyncUpdate)->nodeID;
+            graph.addConnection ({ { midiInNode, midiChannelIndex }, { track.midiSourceNode, midiChannelIndex } },
+                                 asyncUpdate);
             tracks[state.id] = std::move (track);
             nextTrackId = juce::jmax (nextTrackId, state.id + 1);
         }
@@ -1910,17 +1911,9 @@ void AudioEngine::setArmedTrack (TrackId id)
 
 void AudioEngine::updateMidiRouting()
 {
+    // Live input reaches every track's source permanently; only the armed one
+    // passes it on. Flags only - no graph change, no render-sequence rebuild.
     for (auto& [id, track] : tracks)
-    {
-        for (auto& output : track.outputs)
-        {
-            const juce::AudioProcessorGraph::Connection connection { { midiInNode, midiChannelIndex },
-                                                                     { output.routeNode, midiChannelIndex } };
-
-            if (id == armedTrack)
-                graph.addConnection (connection, asyncUpdate);
-            else
-                graph.removeConnection (connection, asyncUpdate);
-        }
-    }
+        if (auto* source = getSource (id))
+            source->setLiveEnabled (id == armedTrack);
 }

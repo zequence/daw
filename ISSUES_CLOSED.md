@@ -94,6 +94,20 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Sidebar
 
+- [x] Switching tracks took over a second in a big project (reported in chat,
+      1032-track VE Pro sync).
+      (arming used to rewire live MIDI in the graph, and any connection change
+      rebuilds JUCE's render sequence - >1 s with ~2100 nodes. Live input is
+      now wired to every track's source permanently and gated by an atomic
+      arm flag, so selecting is 1.3 s -> 0.01 s. Arming also no longer
+      creates history entries. New end-to-end test proves live input reaches
+      the armed track only.)
+- [x] Selecting a folder should not select all the channels inside it
+      (removed: clicking a folder row only highlights the folder)
+- [x] Collapse/expand all folders in right click menu. Shows only when right
+      clicking folders and collapses/expands all its subfolders.
+      (folder menu: "Collapse all (with subfolders)" / "Expand all (with
+      subfolders)")
 - [x] Collapsing folders should only be done from the arrows. Most of the
       folder area is for selecting the folder.
       (the arrow toggles collapse; clicking elsewhere on the folder row selects

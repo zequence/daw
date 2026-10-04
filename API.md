@@ -44,6 +44,7 @@ Quick test from a terminal while the app is running:
 | VE Pro | `instrument.connectVepro` (connect a loaded VE Pro plugin to a named server instance by synthesized state; the state format is versioned per Pro Server release - select in Settings > Integrations, override with `version`), `vepro.sync` (one connected instrument per server instance, synced immutable per-player MIDI channels, one track per player; idempotent, never deletes; the "Sync to VE Pro Server" button) |
 | audio | `channel.list`, `channel.setGain`, `channel.setMuted` |
 | folders | `folder.list`, `folder.create`, `folder.rename`, `folder.remove`, `folder.setParent`, `folder.setCollapsed`, `folder.setColor`, `track.setFolder`, `channel.setFolder`, `sidebar.move` (sidebar grouping and ordering; `domain` is `midi` or `audio`, folders nest; `sidebar.move` re-orders folders/members as one group - the drag operation) |
+| ui | `ui.selectTrack` (select a track exactly like a sidebar click: arms it with auto-arm, the open editor follows; replies with the time it took) |
 | colors | `track.setColor` / `folder.setColor` ('#rrggbb', empty = none); shown as sidebar left borders and region borders, opacity in Settings > Theming; vepro.sync seeds them from the server's instance/player colors on creation |
 | recording | `record.start`, `record.stop` |
 | projects | `project.save`, `project.load`, `project.new` |

@@ -316,6 +316,24 @@ void CommandDispatcher::registerCommands()
              respond (ok());
          });
 
+    add ("ui.selectTrack", "Select a track exactly like clicking it in the sidebar (arms it when auto-arm is on; "
+                           "the open editor follows)", "trackId:int",
+         [this, requireTrack] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             if (onSelectTrack == nullptr)
+                 return respond (fail ("no UI attached"));
+
+             const auto start = juce::Time::getMillisecondCounterHiRes();
+             onSelectTrack (id);
+
+             auto o = object();
+             o->setProperty ("ms", juce::Time::getMillisecondCounterHiRes() - start);
+             respond (ok (juce::var (o.get())));
+         });
+
     add ("track.setColor", "Color a track ('#rrggbb', empty = none); shown as the row's left border and the region borders",
          "trackId:int color:string",
          [this, requireTrack] (const juce::var& params, Respond respond)

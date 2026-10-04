@@ -33,6 +33,7 @@ public:
     // UI hooks, so API-driven project changes keep the window state sane.
     std::function<void()> onBeforeProjectChange;                 // e.g. close plugin editor windows
     std::function<void (const juce::File&)> onAfterProjectChange;   // e.g. refresh labels/title ({} = new project)
+    std::function<void (int trackId)> onSelectTrack;                // ui.selectTrack: the sidebar click path
 
     void setHistoryManager (HistoryManager* h)   { history = h; }
 

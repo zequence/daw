@@ -45,7 +45,8 @@ private:
     void rebuildRows();
     void layoutRows();
     void refreshSoon();                   // deferred refresh, safe from row callbacks
-    void selectFolder (AudioEngine::FolderId);   // selects the folder + every track inside
+    void selectFolder (AudioEngine::FolderId);   // highlights the folder (its tracks stay unselected)
+    void setSubtreeCollapsed (AudioEngine::FolderId, bool collapsed);   // folder + all subfolders
     void showFolderMenu (AudioEngine::FolderId);
     void showBackgroundMenu();            // right-click on the empty area
 

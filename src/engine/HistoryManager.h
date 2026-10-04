@@ -37,9 +37,12 @@ public:
     {
         const auto type = event.getProperty ("event", {}).toString();
 
-        // Not history material: our own travels, state-free notifications, view state
+        // Not history material: our own travels, state-free notifications, view state.
+        // Arming follows track selection - not an edit (and each entry snapshots
+        // the whole project, which is costly with 1000+ tracks).
         if (type == "historyTravelled" || type == "recordingStarted" || type == "projectSaved"
-             || type == "folderViewChanged")
+             || type == "folderViewChanged"
+             || (type == "trackChanged" && event.getProperty ("change", {}).toString() == "armed"))
             return;
 
         if (type == "projectCleared" || type == "projectLoaded")

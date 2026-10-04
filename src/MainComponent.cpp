@@ -55,6 +55,12 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         safe->updateWindowTitle();
     };
 
+    dispatcher.onSelectTrack = [safe = juce::Component::SafePointer<MainComponent> (this)] (int id)
+    {
+        if (safe != nullptr)
+            safe->selectTrack (id, false);
+    };
+
     // --- Topbar ---
     menuButton.setButtonText (juce::String::fromUTF8 ("\xE2\x98\xB0"));   // hamburger
     menuButton.setTooltip ("Main menu");
@@ -410,8 +416,23 @@ void MainComponent::removeTrack (AudioEngine::TrackId id)
 
 void MainComponent::selectTrack (AudioEngine::TrackId id, bool forceArm)
 {
+    // Step timing goes to the log when a selection is slow (big projects)
+    auto last = juce::Time::getMillisecondCounterHiRes();
+    juce::StringArray slowSteps;
+
+    const auto lap = [&last, &slowSteps] (const char* step)
+    {
+        const auto now = juce::Time::getMillisecondCounterHiRes();
+
+        if (now - last > 20.0)
+            slowSteps.add (juce::String (step) + " " + juce::String (juce::roundToInt (now - last)) + " ms");
+
+        last = now;
+    };
+
     selectedTrack = id;
     trackList.setSelectedTrack (id);
+    lap ("trackList");
 
     const auto autoArm = engine.getSettingsFile().getBoolValue (SettingsView::autoRecordOnSelectKey, true);
 
@@ -421,14 +442,22 @@ void MainComponent::selectTrack (AudioEngine::TrackId id, bool forceArm)
         engine.setArmedTrack (id);
     }
 
+    lap ("arm");
+
     if (contentView == ContentView::instruments)
         instrumentsView.focusTrack (id);
 
     if (contentView == ContentView::midiEditor)
         pianoRollView.setTrack (id);   // the editor follows the selected track
 
+    lap ("views");
+
     historyView.setSelectedTrack (id);
     updatePlaceholders();
+    lap ("rest");
+
+    if (! slowSteps.isEmpty())
+        juce::Logger::writeToLog ("Slow track selection: " + slowSteps.joinIntoString (", "));
 }
 
 void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
