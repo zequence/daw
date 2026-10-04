@@ -27,6 +27,8 @@ public:
         options.storageFormat = juce::PropertiesFile::storeAsXML;
         settings = std::make_unique<juce::PropertiesFile> (UserData::getSettingsFile(), options);
 
+        theme::Manager::get().restoreSession();   // saved theme + unsaved edits from last time
+
         engine = std::make_unique<AudioEngine> (*settings);
         dispatcher = std::make_unique<CommandDispatcher> (*engine);
         historyManager = std::make_unique<HistoryManager> (*engine);

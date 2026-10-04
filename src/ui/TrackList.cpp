@@ -1,5 +1,6 @@
 #include "TrackList.h"
 #include "ColorPalette.h"
+#include "Theme.h"
 
 namespace
 {
@@ -116,12 +117,10 @@ public:
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
 
-        g.setColour (selected ? juce::Colour (0xff39404d) : juce::Colour (0xff2b2e33));
-        g.fillRoundedRectangle (bounds, 4.0f);
+        theme::paintRowBox (g, bounds, false, selected);
 
         // The track color shows as a left border only; uncolored = grey (ISSUES.md)
-        g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (trackId), juce::Colour (0xff6d7178))
-                         .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
+        g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (trackId), juce::Colour (0xff6d7178)));
         g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
 
         if (selected)
@@ -245,18 +244,10 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
-        g.setColour (selected ? juce::Colour (0xff39404d) : juce::Colour (0xff2e3038));
-        g.fillRoundedRectangle (bounds, 4.0f);
-
-        if (selected)
-        {
-            g.setColour (juce::Colour (0xff6c87b5));
-            g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
-        }
+        theme::paintRowBox (g, bounds, true, selected);
 
         // Folder color as a left border; uncolored = grey (like tracks)
-        g.setColour (AudioEngine::colourFromHex (engine.getFolderColour (folderId), juce::Colour (0xff6d7178))
-                         .withAlpha (colours::opacityFrom (engine.getSettingsFile())));
+        g.setColour (AudioEngine::colourFromHex (engine.getFolderColour (folderId), juce::Colour (0xff6d7178)));
         g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
 
         // Collapse triangle

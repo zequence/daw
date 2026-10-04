@@ -1,6 +1,7 @@
 #include "ArrangementView.h"
 #include "../api/CommandDispatcher.h"
 #include "ColorPalette.h"
+#include "Theme.h"
 
 ArrangementView::ArrangementView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a, sidebar::VerticalScroll& v)
     : engine (e), dispatcher (d), axis (a), vscroll (v)
@@ -296,11 +297,11 @@ void ArrangementView::timerCallback()
 //==============================================================================
 void ArrangementView::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff1a1c1f));
+    g.fillAll (theme::colour (theme::Token::arrangeBg));
 
     const auto map = engine.getTransport().getTempoMap();
     const auto items = itemsNow();
-    const auto opacity = colours::opacityFrom (engine.getSettingsFile());
+
 
     // --- Row backgrounds (same Y axis as the sidebar rows) ---
     {
@@ -313,9 +314,9 @@ void ArrangementView::paint (juce::Graphics& g)
             if (y + height > 0 && y < getHeight())
             {
                 if (item.folder != 0)
-                    g.setColour (juce::Colour (0xff1d2024));
+                    g.setColour (theme::colour (theme::Token::arrangeLaneFolder));
                 else
-                    g.setColour (trackParity % 2 == 0 ? juce::Colour (0xff202327) : juce::Colour (0xff24272c));
+                    g.setColour (theme::colour (trackParity % 2 == 0 ? theme::Token::arrangeLaneEven : theme::Token::arrangeLaneOdd));
 
                 g.fillRect (0, y, getWidth(), height);
             }
@@ -338,7 +339,7 @@ void ArrangementView::paint (juce::Graphics& g)
 
         if (x >= TimeAxis::gutter)
         {
-            g.setColour (juce::Colour (0xff2e3136));
+            g.setColour (theme::colour (theme::Token::arrangeBarline));
             g.fillRect (x, 0, 1, getHeight());
         }
 
@@ -352,7 +353,7 @@ void ArrangementView::paint (juce::Graphics& g)
 
         if (x >= TimeAxis::gutter && x <= getWidth())
         {
-            g.setColour (juce::Colours::gold.withAlpha (0.35f));
+            g.setColour (theme::colour (theme::Token::arrangeMarkerLine));
             g.fillRect (x, 0, 1, getHeight());
         }
     }
@@ -378,7 +379,6 @@ void ArrangementView::paint (juce::Graphics& g)
             // pronounced and colorful, the box brighter and less colorful.
             const auto base = AudioEngine::colourFromHex (engine.getTrackColour (trackId),
                                                           juce::Colour (0xff8a8f98));
-            const auto fill = base.withMultipliedSaturation (0.45f).withMultipliedBrightness (1.2f);
 
             for (auto& block : blocksFor (trackId))
             {
@@ -399,11 +399,13 @@ void ArrangementView::paint (juce::Graphics& g)
                 if (rect.getRight() < TimeAxis::gutter || rect.getX() > getWidth())
                     continue;
 
-                g.setColour (fill.withAlpha (isSelected || isDragged ? 0.95f : 0.6f));
+                // Opacity and brightness of the box and border come from the theme
+                const auto style = theme::regionStyle (base, isSelected || isDragged);
+
+                g.setColour (style.fill);
                 g.fillRoundedRectangle (rect.toFloat(), 4.0f);
 
-                g.setColour ((isSelected || isDragged ? base.interpolatedWith (juce::Colours::white, 0.45f)
-                                                      : base).withAlpha (opacity));
+                g.setColour (style.border);
                 g.drawRoundedRectangle (rect.toFloat(), 4.0f, 1.8f);
 
                 // Mini note preview
@@ -430,9 +432,9 @@ void ArrangementView::paint (juce::Graphics& g)
     }
 
     // --- Gutter (shared left column): names over a solid background ---
-    g.setColour (juce::Colour (0xff1d1f23));
+    g.setColour (theme::colour (theme::Token::arrangeGutterBg));
     g.fillRect (0, 0, TimeAxis::gutter, getHeight());
-    g.setColour (juce::Colour (0xff2e3136));
+    g.setColour (theme::colour (theme::Token::arrangeGutterBorder));
     g.fillRect (TimeAxis::gutter - 1, 0, 1, getHeight());
 
     {
@@ -471,7 +473,7 @@ void ArrangementView::paint (juce::Graphics& g)
 
     if (playheadX >= TimeAxis::gutter && playheadX <= getWidth())
     {
-        g.setColour (juce::Colours::white.withAlpha (0.7f));
+        g.setColour (theme::colour (theme::Token::transportLine));
         g.fillRect (playheadX, 0, 1, getHeight());
     }
 

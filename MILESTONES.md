@@ -74,6 +74,42 @@ more lanes stackable on top of each other, with controls below the piano keys.
 (From ISSUES.md Midi editing - larger than a quick fix because it reworks the
 lane area into a list of lanes.)
 
+## Theming (planned 2026-10-04; full plan in THEMING.md)
+
+Settings > Theming becomes a theme editor. Every kind of UI item has its own
+color slot (a "token"); some are unique (arrange/audio background), some are
+shared and inherited (panel border). Specific items follow a common parent
+until overridden, so one change can retheme everything or just one thing.
+
+Settings > Theming must have:
+- **Theme picker.** Built-in Dark is the default and cannot be deleted or
+  edited in place (editing it forks a copy).
+- **Save / delete custom themes** (XML of overrides in the user data dir).
+- **One setting per item**, each with a color picker: a color area plus a hex
+  field (hex can be copied and pasted), and a reset-to-inherited button.
+- **Live preview**: changes show immediately in the real app.
+
+Items (first pass; THEMING.md has the token table):
+- Arrange/audio background (one item), transport line (one item).
+- Channel background and channel border; folder background (and border).
+- MIDI region background and border, each with **opacity** and **brightness**
+  (these are not plain colors: they modify the track color the region is
+  drawn with; today's global track color opacity moves here).
+- Also proposed: playhead, loop range, markers (loop/tempo/meter/marker),
+  grid and bar lines, lane stripes (even/odd), selection (row and outline),
+  piano roll background, keys (white/black), note fill / selected note /
+  note border, unplayable-key grey-out, timeline bar, track list rows, top
+  bar and its panel/separators, transport buttons (play/record/loop/arm/
+  solo/mute, off and on), text (primary/secondary/dim), settings window,
+  status bar, popup menus and standard widgets (via a LookAndFeel).
+
+Out of scope for v1: fonts, sizes, corner radii, per-project themes.
+
+Phases: (1) audit + token registry, default theme pixel-identical; (2) theme
+core; (3) convert views one by one; (4) LookAndFeel; (5) `theme.*` API
+commands (command-first); (6) settings UI; (7) extra built-in themes + lint
+against new hard-coded colors. Open questions are at the end of THEMING.md.
+
 ## Parallel processing graph
 
 Render independent tracks/instruments on worker threads in dependency order;

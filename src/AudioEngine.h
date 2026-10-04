@@ -310,6 +310,7 @@ public:
     // so a timer-driven view compares ONE number to know whether anything it
     // might display has changed, instead of hand-picking state to watch.
     int getStateRevision() const noexcept   { return stateRevision; }
+    void requestRepaint() noexcept          { ++stateRevision; }   // view-only change (theme): repaint without dirtying the project
 
     void saveSettings();
     juce::PropertiesFile& getSettingsFile()   { return settings; }

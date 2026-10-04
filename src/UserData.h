@@ -20,6 +20,21 @@ namespace UserData
 
     inline juce::File getSettingsFile()     { return getDir().getChildFile ("Settings.xml"); }
     inline juce::File getPluginCacheFile()  { return getDir().getChildFile ("PluginCache.xml"); }
+    inline juce::File getThemesDir()
+    {
+        auto dir = getDir().getChildFile ("Themes");
+        dir.createDirectory();
+        return dir;
+    }
+
+    // Unsaved theme edits survive a restart here (see ui/Theme.h)
+    inline juce::File getThemeWorkingCopyFile()
+    {
+        auto dir = getDir().getChildFile ("Cache");
+        dir.createDirectory();
+        return dir.getChildFile ("ThemeWorkingCopy.xml");
+    }
+
     inline juce::File getLogsDir()
     {
         auto dir = getDir().getChildFile ("Logs");

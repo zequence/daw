@@ -15,7 +15,7 @@ Claude is unsure of an issue they will pose a question.
 
 # Settings Window
 
-- [ ] New category: Theming. Selectable themes. Colors for certain areas, buttons, etc. Ability to save custom themes.
+- [ ] New category: Theming. Selectable themes. Colors for certain areas, buttons, etc. Ability to save custom themes. (Milestone "Theming" in MILESTONES.md; plan in THEMING.md.)
 
 # Timeline bar
 

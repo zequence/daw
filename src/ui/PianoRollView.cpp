@@ -1,4 +1,5 @@
 #include "PianoRollView.h"
+#include "Theme.h"
 #include "../api/CommandDispatcher.h"
 
 namespace
@@ -1170,7 +1171,7 @@ void PianoRollView::paint (juce::Graphics& g)
 
     if (playheadX >= grid.getX() && playheadX <= getWidth())
     {
-        g.setColour (juce::Colours::white.withAlpha (0.7f));
+        g.setColour (theme::colour (theme::Token::transportLine));
         g.fillRect (playheadX, grid.getY(), 1, getHeight() - grid.getY());
     }
 

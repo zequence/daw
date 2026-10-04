@@ -1,4 +1,5 @@
 #include "TimelineBar.h"
+#include "Theme.h"
 #include "../api/CommandDispatcher.h"
 
 namespace
@@ -426,7 +427,7 @@ void TimelineBar::paint (juce::Graphics& g)
 
     if (playheadX >= TimeAxis::gutter && playheadX < getWidth())
     {
-        g.setColour (juce::Colours::white.withAlpha (0.8f));
+        g.setColour (theme::colour (theme::Token::transportLine));
         g.fillRect (playheadX, 0, 1, getHeight());
     }
 }

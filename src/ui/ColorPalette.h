@@ -4,12 +4,10 @@
 
 // The color palette for tracks and folders (ISSUES.md "Colored tracks"), and
 // the "Color" submenu shared by the right-click menus. Colors are "#rrggbb"
-// strings throughout (the VE Pro server's format). The opacity they're drawn
-// with comes from Settings > Theming.
+// strings throughout (the VE Pro server's format). How regions use them
+// (opacity, brightness) comes from Settings > Theming (ui/Theme.h).
 namespace colours
 {
-    constexpr auto opacitySettingsKey = "colorOpacity";   // 0.2 .. 1.0, default 1.0
-
     struct Entry
     {
         const char* name;
@@ -37,10 +35,6 @@ namespace colours
         return entries;
     }
 
-    inline float opacityFrom (juce::PropertiesFile& settings)
-    {
-        return (float) juce::jlimit (0.2, 1.0, settings.getDoubleValue (opacitySettingsKey, 1.0));
-    }
 
     // A submenu of swatches; 'apply' receives the "#rrggbb" string ("" = none).
     inline juce::PopupMenu buildMenu (const juce::String& current, std::function<void (juce::String)> apply)
