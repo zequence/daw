@@ -2,6 +2,7 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../api/CommandDispatcher.h"
+#include "Theme.h"
 
 // Content view: the global action history. Purely command-driven - it reads
 // history.list and clicks become history.travel, the same surface agents use.
@@ -117,9 +118,9 @@ private:
 
         if (isCurrent)
         {
-            g.setColour (juce::Colour (0xff39404d));
+            g.setColour (theme::colour (theme::Token::selectionBg));
             g.fillRect (0, 0, width, height);
-            g.setColour (juce::Colour (0xff6c87b5));
+            g.setColour (theme::colour (theme::Token::selectionBorder));
             g.drawRect (0, 0, width, height);
         }
 

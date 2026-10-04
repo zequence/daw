@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../AudioEngine.h"
+#include "Theme.h"
 
 // Content view: the instrument rack. Instruments used by the focused track sort to the
 // top of the list. Call refresh() from a UI timer.
@@ -104,7 +105,7 @@ private:
 
             if (focused)
             {
-                g.setColour (juce::Colour (0xff6c87b5));
+                g.setColour (theme::colour (theme::Token::selectionBorder));
                 g.drawRoundedRectangle (bounds, 4.0f, 1.2f);
             }
 

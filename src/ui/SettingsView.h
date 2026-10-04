@@ -309,7 +309,7 @@ private:
 
                 if (i == selected)
                 {
-                    g.setColour (juce::Colour (0xff39404d));
+                    g.setColour (theme::colour (theme::Token::selectionBg));
                     g.fillRoundedRectangle (row.toFloat().reduced (3.0f, 2.0f), 4.0f);
                 }
 

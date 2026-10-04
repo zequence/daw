@@ -122,12 +122,6 @@ public:
         // The track color shows as a left border only; uncolored = grey (ISSUES.md)
         g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (trackId), juce::Colour (0xff6d7178)));
         g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
-
-        if (selected)
-        {
-            g.setColour (juce::Colour (0xff6c87b5));
-            g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
-        }
     }
 
     void resized() override
