@@ -27,6 +27,13 @@ namespace theme
     C (selectionBg,      "selection.bg",      "Common",   "Selected row background",   -1,                      0xff39404d, false) \
     C (selectionBorder,  "selection.border",  "Common",   "Selection outline",         -1,                      0xff6c87b5, false) \
     C (transportLine,    "transport.line",    "Transport", "Transport line (playhead)", -1,                     0xb3ffffff, true)  \
+    C (transportRtzBg,   "transport.rtz.bg",  "Transport", "Return-to-start button",     -1,                      0xff3a3e46, false) \
+    C (transportPlayBg,  "transport.play.bg", "Transport", "Play button",                -1,                      0xff2b4634, false) \
+    C (transportPlayOn,  "transport.play.on", "Transport", "Play button (playing)",      -1,                      0xff006400, false) \
+    C (transportRecordBg,"transport.record.bg","Transport","Record button",              -1,                      0xff4a2e2e, false) \
+    C (transportRecordOn,"transport.record.on","Transport","Record button (recording)", -1,                      0xff8b0000, false) \
+    C (transportLoopBg,  "transport.loop.bg", "Transport", "Loop button",                -1,                      0xff2e3b4a, false) \
+    C (transportLoopOn,  "transport.loop.on", "Transport", "Loop button (looping)",      -1,                      0xff4682b4, false) \
     C (arrangeBg,        "arrange.bg",        "Arrange / audio", "Background",         (int) Token::surfaceContent, 0xff1a1c1f, false) \
     C (arrangeLaneEven,  "arrange.lane.even", "Arrange / audio", "Track lane (even)",  -1,                      0xff202327, false) \
     C (arrangeLaneOdd,   "arrange.lane.odd",  "Arrange / audio", "Track lane (odd)",   -1,                      0xff24272c, false) \
@@ -41,6 +48,16 @@ namespace theme
     C (channelSelectedBorder,"channel.selected.border","Channel","Selected channel border",(int) Token::selectionBorder, 0xff6c87b5, false) \
     C (folderBg,         "folder.bg",         "Folder",   "Folder background",         -1,                      0xff2e3038, false) \
     C (folderBorder,     "folder.border",     "Folder",   "Folder border",             -1,                      0x00000000, true)  \
+    C (buttonBg,         "button.bg",         "Buttons",  "Button background",         -1,                      0xff263238, false) \
+    C (buttonOn,         "button.on",         "Buttons",  "Button background (on / selected)", -1,              0xff181f22, false) \
+    C (buttonAccentOn,   "button.accent.on",  "Buttons",  "Toggle button background (on)", -1,                  0xff4682b4, false) \
+    C (buttonBorder,     "button.border",     "Buttons",  "Button and field border",   -1,                      0xff8e989b, false) \
+    C (buttonText,       "button.text",       "Buttons",  "Button text",               -1,                      0xffffffff, false) \
+    C (topbarButtonBg,   "topbar.button.bg",  "Top bar",  "Top bar button background", (int) Token::buttonBg,   0xff263238, false) \
+    C (topbarButtonOn,   "topbar.button.on",  "Top bar",  "Top bar button (on / selected)", (int) Token::buttonOn, 0xff181f22, false) \
+    C (trackArmOn,       "track.arm.on",      "Track buttons", "Record-arm button (armed)", -1,                 0xffd50000, false) \
+    C (trackSoloOn,      "track.solo.on",     "Track buttons", "Solo button (soloed)",  -1,                     0xffdaa520, false) \
+    C (trackMuteOn,      "track.mute.on",     "Track buttons", "Mute button (muted)",   -1,                     0xffc47f00, false) \
     N (regionBgOpacity,       "region.bg.opacity",        "MIDI region", "Background opacity",                   0.6f,  0.0f, 1.0f) \
     N (regionBgBrightness,    "region.bg.brightness",     "MIDI region", "Background brightness",                1.2f,  0.3f, 2.0f) \
     N (regionBgSelectedOpacity,"region.bg.selopacity",    "MIDI region", "Selected background opacity",          0.95f, 0.0f, 1.0f) \

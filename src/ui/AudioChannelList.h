@@ -3,7 +3,7 @@
 #include "../AudioEngine.h"
 #include "../engine/AudioChannelProcessor.h"
 #include "ColorPalette.h"
-#include "Theme.h"
+#include "ThemedLookAndFeel.h"
 
 // The Audio-domain sidebar: one row per audio channel showing its input, a meter,
 // mute and volume, grouped by folders (Cubase-style, like the track list): folder
@@ -115,7 +115,7 @@ private:
             : owner (ownerToUse), engine (ownerToUse.engine), channelId (id), depth (depthToUse)
         {
             muteButton.setClickingTogglesState (true);
-            muteButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::orange.darker (0.3f));
+            theme::setButtonRole (muteButton, "mute");
             muteButton.setWantsKeyboardFocus (false);
             muteButton.onClick = [this]
             {

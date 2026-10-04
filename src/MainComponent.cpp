@@ -104,17 +104,15 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     };
 
     rtzButton.setTooltip ("Return to start (Home)");
-    rtzButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff3a3e46));
+    theme::setButtonRole (rtzButton, "rtz");
     rtzButton.onClick = [this] { engine.getTransport().returnToZero(); };
 
     playButton.setTooltip ("Play/Stop (space)");
-    playButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2b4634));
-    playButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::darkgreen);
+    theme::setButtonRole (playButton, "play");
     playButton.onClick = [this] { engine.getTransport().togglePlayStop(); };
 
     recordButton.setTooltip ("Record live MIDI onto the armed track (starts playback if stopped)");
-    recordButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff4a2e2e));
-    recordButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::darkred);
+    theme::setButtonRole (recordButton, "record");
     recordButton.onClick = [this]
     {
         if (engine.isRecording())
@@ -125,8 +123,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     loopButton.setTooltip ("Loop from the start to the end of the last clip");
     loopButton.setClickingTogglesState (true);
-    loopButton.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff2e3b4a));
-    loopButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::steelblue);
+    theme::setButtonRole (loopButton, "loop");
     loopButton.onClick = [this]
     {
         auto& transport = engine.getTransport();
@@ -154,6 +151,9 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     timeLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     timeLabel.setFont (juce::FontOptions (14.0f));
     timeLabel.setInterceptsMouseClicks (false, false);
+
+    for (auto* b : { &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &perfButton })
+        theme::setButtonRole (*b, "topbar");
 
     perfButton.setTooltip ("Performance monitor (F12)");
     perfButton.setClickingTogglesState (true);

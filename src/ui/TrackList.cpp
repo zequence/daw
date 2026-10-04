@@ -1,6 +1,6 @@
 #include "TrackList.h"
 #include "ColorPalette.h"
-#include "Theme.h"
+#include "ThemedLookAndFeel.h"
 
 namespace
 {
@@ -26,7 +26,7 @@ public:
         nameLabel.setInterceptsMouseClicks (false, false);   // single click selects; double click edits
 
         armButton.setTooltip ("Arm for live input and recording");
-        armButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::red.darker (0.2f));
+        theme::setButtonRole (armButton, "arm");
         armButton.onClick = [this] { if (owner.onArm) owner.onArm (trackId); };
 
         editorButton.setTooltip ("Open the MIDI editor for this track");
@@ -34,12 +34,12 @@ public:
 
         soloButton.setTooltip ("Solo (MIDI)");
         soloButton.setClickingTogglesState (true);
-        soloButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::goldenrod);
+        theme::setButtonRole (soloButton, "solo");
         soloButton.onClick = [this] { engine.setTrackSoloed (trackId, soloButton.getToggleState()); };
 
         muteButton.setTooltip ("Mute (MIDI)");
         muteButton.setClickingTogglesState (true);
-        muteButton.setColour (juce::TextButton::buttonOnColourId, juce::Colours::orange.darker (0.3f));
+        theme::setButtonRole (muteButton, "mute");
         muteButton.onClick = [this] { engine.setTrackMuted (trackId, muteButton.getToggleState()); };
 
         instrumentButton.setTooltip ("Open this track's instrument (plugin GUI and rack entry)");

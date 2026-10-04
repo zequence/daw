@@ -1,5 +1,5 @@
 #include "PianoRollView.h"
-#include "Theme.h"
+#include "ThemedLookAndFeel.h"
 #include "../api/CommandDispatcher.h"
 
 namespace
@@ -73,7 +73,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
                            "Off: notes can be drawn and moved freely between grid lines");
     snapToggle.setClickingTogglesState (true);
     snapToggle.setToggleState (true, juce::dontSendNotification);
-    snapToggle.setColour (juce::TextButton::buttonOnColourId, juce::Colours::steelblue);
+    theme::setButtonRole (snapToggle, "accent");
     addAndMakeVisible (snapToggle);
 
     snapBox.setTooltip ("Grid division (snapping and quantize)");
@@ -93,7 +93,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     auditionToggle.setTooltip ("Play notes when added (through the armed track's instrument)");
     auditionToggle.setClickingTogglesState (true);
     auditionToggle.setToggleState (true, juce::dontSendNotification);
-    auditionToggle.setColour (juce::TextButton::buttonOnColourId, juce::Colours::steelblue);
+    theme::setButtonRole (auditionToggle, "accent");
     addAndMakeVisible (auditionToggle);
 
     quantizeButton.setTooltip ("Quantize selected notes (or all) to the grid division");

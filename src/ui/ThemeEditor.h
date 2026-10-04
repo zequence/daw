@@ -73,8 +73,8 @@ public:
         status.setBounds (0, y, width, 18);
         y += 24;
 
-        preview.setBounds (0, y, juce::jmin (width, 640), 140);
-        y += 152;
+        preview.setBounds (0, y, juce::jmin (width, 700), 178);
+        y += 190;
 
         groupHeaders.clear();
         size_t nextGroup = 0;
@@ -325,10 +325,50 @@ private:
     // A miniature arrange view + sidebar drawn with the real tokens
     struct Preview final : juce::Component
     {
+        static constexpr int buttonStrip = 38;
+
+        Preview()
+        {
+            struct Mock { const char* text; const char* role; bool on; int width; };
+
+            for (auto m : { Mock { "Menu", "topbar", false, 56 }, Mock { "Midi", "topbar", true, 50 },
+                            Mock { "|<", "rtz", false, 36 }, Mock { "Play", "play", false, 50 },
+                            Mock { "Rec", "record", false, 46 }, Mock { "Loop", "loop", true, 50 },
+                            Mock { "R", "arm", true, 30 }, Mock { "S", "solo", false, 30 }, Mock { "M", "mute", true, 30 },
+                            Mock { "Snap", "accent", true, 50 }, Mock { "Button", "", false, 64 } })
+            {
+                auto button = std::make_unique<juce::TextButton> (m.text);
+                button->setToggleState (m.on, juce::dontSendNotification);
+
+                if (juce::String (m.role).isNotEmpty())
+                    theme::setButtonRole (*button, m.role);
+
+                button->setInterceptsMouseClicks (false, false);   // a picture of the buttons, not controls
+                button->setWantsKeyboardFocus (false);
+                widths.push_back (m.width);
+                addAndMakeVisible (*button);
+                buttons.push_back (std::move (button));
+            }
+        }
+
+        void resized() override
+        {
+            int x = 0;
+
+            for (size_t i = 0; i < buttons.size(); ++i)
+            {
+                buttons[i]->setBounds (x, getHeight() - buttonStrip + 8, widths[i], 24);
+                x += widths[i] + 6;
+            }
+        }
+
+        std::vector<std::unique_ptr<juce::TextButton>> buttons;
+        std::vector<int> widths;
+
         void paint (juce::Graphics& g) override
         {
             using T = theme::Token;
-            auto area = getLocalBounds();
+            auto area = getLocalBounds().withTrimmedBottom (buttonStrip);
             const auto sidebar = area.removeFromLeft (190);
 
             g.setColour (theme::colour (T::surfacePanel));

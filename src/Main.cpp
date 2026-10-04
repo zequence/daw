@@ -7,6 +7,7 @@
 #include "api/McpProcess.h"
 #include "engine/HistoryManager.h"
 #include "ui/SettingsView.h"
+#include "ui/ThemedLookAndFeel.h"
 
 class OrchestralDAWApplication final : public juce::JUCEApplication
 {
@@ -28,6 +29,8 @@ public:
         settings = std::make_unique<juce::PropertiesFile> (UserData::getSettingsFile(), options);
 
         theme::Manager::get().restoreSession();   // saved theme + unsaved edits from last time
+        lookAndFeel = std::make_unique<ThemedLookAndFeel>();
+        juce::LookAndFeel::setDefaultLookAndFeel (lookAndFeel.get());
 
         engine = std::make_unique<AudioEngine> (*settings);
         dispatcher = std::make_unique<CommandDispatcher> (*engine);
@@ -76,6 +79,8 @@ public:
         eventBroadcaster.reset();
         apiServer.reset();             // stop accepting commands
         mainWindow.reset();            // UI (and plugin editors) before the engine
+        juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
+        lookAndFeel.reset();
         historyManager.reset();
         dispatcher.reset();
         engine.reset();
@@ -119,6 +124,7 @@ private:
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainWindow)
     };
 
+    std::unique_ptr<ThemedLookAndFeel> lookAndFeel;
     std::unique_ptr<juce::FileLogger> logger;
     std::unique_ptr<juce::PropertiesFile> settings;
     std::unique_ptr<AudioEngine> engine;

@@ -9,6 +9,7 @@
 #include "ui/InstrumentsView.h"
 #include "ui/InstrumentEditorView.h"
 #include "ui/SettingsView.h"
+#include "ui/ThemedLookAndFeel.h"
 #include "ui/PlaceholderView.h"
 #include "ui/PianoRollView.h"
 #include "ui/ArrangementView.h"
