@@ -16,6 +16,14 @@ call "%VSINSTALL%\VC\Auxiliary\Build\vcvars64.bat" >nul || exit /b 1
 
 if not exist "%~dp0external\JUCE\CMakeLists.txt" git -C "%~dp0." submodule update --init || exit /b 1
 
+rem Local JUCE patches (applied once; skipped when already applied)
+for %%P in ("%~dp0patches\*.patch") do (
+    git -C "%~dp0external\JUCE" apply --reverse --check "%%~fP" >nul 2>&1 || (
+        git -C "%~dp0external\JUCE" apply "%%~fP" || exit /b 1
+        echo Applied JUCE patch %%~nxP
+    )
+)
+
 cmake -S "%~dp0." -B "%~dp0build\%CONFIG%" -G Ninja -DCMAKE_BUILD_TYPE=%CONFIG% || exit /b 1
 cmake --build "%~dp0build\%CONFIG%" || exit /b 1
 

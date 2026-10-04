@@ -965,6 +965,8 @@ void CommandDispatcher::registerCommands()
                  }
 
                  o->setProperty ("midiChannels", channels);
+
+                 o->setProperty ("midiPorts", engine.getInstrumentMidiPortCount (id));
                  list.add (juce::var (o.get()));
              }
 
@@ -1059,6 +1061,7 @@ void CommandDispatcher::registerCommands()
              o->setProperty ("latencySamples", plugin->getLatencySamples());
              o->setProperty ("tailLengthSeconds", plugin->getTailLengthSeconds());
              o->setProperty ("parameterCount", plugin->getParameters().size());
+             o->setProperty ("midiPorts", engine.getInstrumentMidiPortCount (id));   // VST3 MIDI event input buses
 
              // Audio buses (VE Pro exposes many outputs; disabled ones report 0 channels)
              for (auto isInput : { true, false })
@@ -1927,10 +1930,6 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
                     engine.setTrackColour (trackId, player.colour);
 
                 ++state->tracksCreated;
-
-                if (player.midiPort > 1)
-                    state->notes.add (player.name + ": port " + juce::String (player.midiPort)
-                                      + " routes silently until Event Input support lands");
             }
         }
 
@@ -1944,6 +1943,16 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
                                       + instance.name + " port " + juce::String (output.midiPort)
                                       + " ch " + juce::String (output.midiChannel)
                                       + ", which has no player on the server (kept)");
+
+        // Players need their port to exist on the plugin (its VST3 MIDI event
+        // buses mirror the server's port setting, e.g. 8 or 16)
+        const auto portCount = engine.getInstrumentMidiPortCount (instrumentId);
+
+        for (auto& player : instance.players)
+            if (player.midiPort > portCount)
+                state->notes.add (player.name + ": port " + juce::String (player.midiPort)
+                                  + " but " + instance.name + "'s plugin offers " + juce::String (portCount)
+                                  + " MIDI ports (raise the port count on the VE Pro server)");
 
         (*step)();
     };

@@ -32,13 +32,15 @@ Claude is unsure of an issue they will pose a question.
 
 - [ ] Draw regions for folders that span the content inside them.
       (small now that folder rows exist as lanes on the shared Y axis)
-- [ ] Double clicking a folder in the midi UI will load the editor and show the combined midi. This also selects all midi channels inside it.
+- [ ] Double clicking a folder region will load the editor and show the combined midi.
       (Milestone-sized: multi-channel editing. Pairs with the editor's
       channel dropdown below.)
 
 # Midi editor
 
+- [ ] Show midi for multiple tracks. Midi for the selected channel is normal, while other channel midi is greyed out.
 - [ ] A dropdown in the top editor bar to select which channel to edit. It will only show the selected midi channels.
+- [ ] A button for enabling editing on multi-channel (for example copy paste)
 - [ ] CC and note velocity, aftertouch at the bottom. Velocity is default. More
       lanes can be added on top of each other. Requires controls below the piano
       keys. (Milestone-sized - also captured as "Stacked editor lanes" in

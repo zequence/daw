@@ -1,0 +1,45 @@
+diff --git a/modules/juce_audio_processors_headless/format_types/juce_VST3Common.h b/modules/juce_audio_processors_headless/format_types/juce_VST3Common.h
+index f6d23b6ed4..f4d71ed461 100644
+--- a/modules/juce_audio_processors_headless/format_types/juce_VST3Common.h
++++ b/modules/juce_audio_processors_headless/format_types/juce_VST3Common.h
+@@ -1247,7 +1247,24 @@ private:
+                                     StoredMidiMapping* midiMapping,
+                                     Callback&& callback)
+     {
+-        const auto msg = metadata.getMessage();
++        auto msg = metadata.getMessage();
++
++        // [orchestral-daw patch] Multiport MIDI: the host wraps messages for event
++        // bus N as a private SysEx  F0 7D 50 <bus> <status hi> <status lo> <data..> F7
++        // (bus = port - 1; the status byte is split into nibbles to stay 7-bit).
++        // Unwrap here so the plugin sees the plain message on the right event bus.
++        Steinberg::int32 eventBus = 0;
++        const auto* raw = msg.getRawData();
++
++        if (msg.getRawDataSize() >= 7 && raw[0] == 0xf0 && raw[1] == 0x7d && raw[2] == 0x50)
++        {
++            eventBus = raw[3];
++            const auto status = (uint8) ((raw[4] << 4) | (raw[5] & 0x0f));
++            const auto dataBytes = msg.getRawDataSize() - 7;   // between status nibbles and F7
++            msg = dataBytes >= 2 ? MidiMessage (status, raw[6], raw[7], msg.getTimeStamp())
++                : dataBytes == 1 ? MidiMessage (status, raw[6], msg.getTimeStamp())
++                                 : MidiMessage (status, msg.getTimeStamp());
++        }
+ 
+         if (sendMappedParameter (msg, midiMapping, std::forward<Callback> (callback)))
+             return;
+@@ -1255,12 +1272,12 @@ private:
+         const auto kind = midiMapping != nullptr ? EventConversionKind::hostToPlugin
+                                                  : EventConversionKind::pluginToHost;
+ 
+-        auto maybeEvent = createVstEvent (msg, metadata.data, kind);
++        auto maybeEvent = createVstEvent (msg, msg.getRawData(), kind);
+ 
+         if (! maybeEvent.hasValue())
+             return;
+ 
+-        maybeEvent->busIndex = 0;
++        maybeEvent->busIndex = eventBus;
+         maybeEvent->sampleOffset = metadata.samplePosition;
+         result.addEvent (*maybeEvent);
+     }

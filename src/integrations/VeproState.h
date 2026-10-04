@@ -25,10 +25,39 @@ namespace vepro
         juce::String hostAddress { "127.0.0.1" };
         juce::String hostName { "localhost" };
         bool decoupled = true;              // connection only, no embedded instance content
+        juce::String pluginId;              // 32 hex chars; empty = generate
     };
 
     namespace detail
     {
+        // VSL's component state 'Size' + uint32 + JSON, inside JUCE's
+        // <VST3PluginState> XML, inside the VC2! binary-XML container.
+        inline juce::MemoryBlock wrap (const juce::var& root)
+        {
+            const auto json = juce::JSON::toString (root, true);
+
+            juce::MemoryOutputStream component;
+            component.write ("Size", 4);
+            component.writeInt ((int) json.getNumBytesAsUTF8());
+            component << json;
+
+            const juce::MemoryBlock componentBlock (component.getData(), component.getDataSize());
+
+            const auto xml = juce::String ("<?xml version=\"1.0\" encoding=\"UTF-8\"?> "
+                                           "<VST3PluginState><IComponent>")
+                               + componentBlock.toBase64Encoding()
+                               + "</IComponent></VST3PluginState>";
+
+            // juce::AudioProcessor::copyXmlToBinary layout: 'VC2!' + uint32 textLength + text + NUL
+            juce::MemoryOutputStream out;
+            out.writeInt (0x21324356);
+            out.writeInt ((int) xml.getNumBytesAsUTF8());
+            out << xml;
+            out.writeByte (0);
+
+            return out.getMemoryBlock();
+        }
+
         // Pro Server 8.1: the VST3 component state is 'Size' + uint32 + JSON, carried
         // inside JUCE's <VST3PluginState> XML, inside the VC2! binary-XML container.
         inline juce::MemoryBlock build81 (const ConnectTarget& target)
@@ -39,7 +68,8 @@ namespace vepro
             custom->setProperty ("decoupled", target.decoupled);
             custom->setProperty ("hostAddress", target.hostAddress);
             custom->setProperty ("hostName", target.hostName);
-            custom->setProperty ("id", juce::Uuid().toString());   // 32 hex chars
+            custom->setProperty ("id", target.pluginId.isNotEmpty() ? target.pluginId
+                                                                      : juce::Uuid().toString());   // 32 hex chars
             custom->setProperty ("instanceName", target.instanceName);
             custom->setProperty ("latencyBufferCount", 2);
 
@@ -64,28 +94,7 @@ namespace vepro
             root->setProperty ("data", juce::var (data));
             root->setProperty ("version", 0);
 
-            const auto json = juce::JSON::toString (juce::var (root), true);
-
-            juce::MemoryOutputStream component;
-            component.write ("Size", 4);
-            component.writeInt ((int) json.getNumBytesAsUTF8());
-            component << json;
-
-            const juce::MemoryBlock componentBlock (component.getData(), component.getDataSize());
-
-            const auto xml = juce::String ("<?xml version=\"1.0\" encoding=\"UTF-8\"?> "
-                                           "<VST3PluginState><IComponent>")
-                               + componentBlock.toBase64Encoding()
-                               + "</IComponent></VST3PluginState>";
-
-            // juce::AudioProcessor::copyXmlToBinary layout: 'VC2!' + uint32 textLength + text + NUL
-            juce::MemoryOutputStream out;
-            out.writeInt (0x21324356);
-            out.writeInt ((int) xml.getNumBytesAsUTF8());
-            out << xml;
-            out.writeByte (0);
-
-            return out.getMemoryBlock();
+            return wrap (juce::var (root));
         }
     }
 

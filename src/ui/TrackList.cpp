@@ -214,10 +214,26 @@ public:
         if (event.mods.isPopupMenu())
             return;
 
-        // A click (no drag happened) toggles collapse
+        // A click (no drag happened): the arrow toggles collapse; the rest of
+        // the row selects the folder (ISSUES.md) - which selects every track
+        // inside it, ready for multi-channel work.
         if (! owner.finishRowDrag (folderId))
-            engine.setFolderCollapsed (folderId, ! engine.isFolderCollapsed (folderId));
-            // finishRowDrag already scheduled the refresh (deferred: it deletes this row)
+        {
+            if (event.x < depth * indentPerLevel + 26)
+                engine.setFolderCollapsed (folderId, ! engine.isFolderCollapsed (folderId));
+            else
+                owner.selectFolder (folderId);
+        }
+        // finishRowDrag already scheduled the refresh (deferred: it may delete this row)
+    }
+
+    void setSelected (bool shouldBeSelected)
+    {
+        if (selected != shouldBeSelected)
+        {
+            selected = shouldBeSelected;
+            repaint();
+        }
     }
 
     void mouseDoubleClick (const juce::MouseEvent& event) override
@@ -229,8 +245,14 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
-        g.setColour (juce::Colour (0xff2e3038));
+        g.setColour (selected ? juce::Colour (0xff39404d) : juce::Colour (0xff2e3038));
         g.fillRoundedRectangle (bounds, 4.0f);
+
+        if (selected)
+        {
+            g.setColour (juce::Colour (0xff6c87b5));
+            g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
+        }
 
         // Folder color as a left border; uncolored = grey (like tracks)
         g.setColour (AudioEngine::colourFromHex (engine.getFolderColour (folderId), juce::Colour (0xff6d7178))
@@ -262,6 +284,10 @@ private:
     const AudioEngine::FolderId folderId;
     const int depth;
     juce::Label nameLabel;
+    bool selected = false;
+
+public:
+    AudioEngine::FolderId getFolderId() const noexcept { return folderId; }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (FolderRow)
 };
@@ -304,20 +330,60 @@ void TrackList::refresh()
     vscroll.set (viewport.getViewPositionY());   // viewport clamping wins
     lastScrollRevision = vscroll.revision;
 
-    // Drop selections that no longer exist
-    const auto trackIds = engine.getTrackIds();
-    std::erase_if (multiSelection, [&trackIds] (auto id)
-                   { return std::find (trackIds.begin(), trackIds.end(), id) == trackIds.end(); });
+    realizeVisibleRows();   // scrolling brings new rows into existence
 
-    for (size_t i = 0; i < rowComponents.size(); ++i)
+    // Drop selections that no longer exist
+    if (! multiSelection.empty())
     {
-        if (auto* trackRow = dynamic_cast<Row*> (rowComponents[i].get()))
+        const auto trackIds = engine.getTrackIds();
+        const std::set<AudioEngine::TrackId> existing (trackIds.begin(), trackIds.end());
+        std::erase_if (multiSelection, [&existing] (auto id) { return existing.count (id) == 0; });
+    }
+
+    // Only live (near-visible) rows refresh
+    const auto armed = engine.getArmedTrack();
+
+    for (auto& [key, component] : liveRows)
+    {
+        if (auto* trackRow = dynamic_cast<Row*> (component.get()))
             trackRow->refresh (trackRow->getTrackId() == selectedTrack
                                  || multiSelection.count (trackRow->getTrackId()) > 0,
-                               trackRow->getTrackId() == engine.getArmedTrack());
-        else if (auto* folderRow = dynamic_cast<FolderRow*> (rowComponents[i].get()))
+                               trackRow->getTrackId() == armed);
+        else if (auto* folderRow = dynamic_cast<FolderRow*> (component.get()))
+        {
+            folderRow->setSelected (folderRow->getFolderId() == selectedFolder);
             folderRow->refresh();
+        }
     }
+}
+
+void TrackList::selectFolder (AudioEngine::FolderId folderId)
+{
+    selectedFolder = folderId;
+    multiSelection.clear();
+
+    // Every track inside, at any depth - collapsed subfolders included
+    const auto all = engine.getSidebarItems (true, false);
+    int folderDepth = -1;
+
+    for (auto& item : all)
+    {
+        if (folderDepth < 0)
+        {
+            if (item.folder == folderId)
+                folderDepth = item.depth;
+
+            continue;
+        }
+
+        if (item.depth <= folderDepth)
+            break;   // left the folder's subtree
+
+        if (item.member != 0)
+            multiSelection.insert (item.member);
+    }
+
+    refreshSoon();
 }
 
 int TrackList::heightOfItem (const AudioEngine::SidebarItem& item)
@@ -325,39 +391,81 @@ int TrackList::heightOfItem (const AudioEngine::SidebarItem& item)
     return sidebar::heightOf (item);
 }
 
+// The list is VIRTUALIZED: only rows near the visible area own components
+// (big projects have 1000+ tracks; building them all made collapse/expand
+// and every UI tick slow). Rows are keyed by (folder, member, depth), so a
+// row survives as long as its item does and scrolling only creates the rows
+// that come into view.
 void TrackList::rebuildRows()
 {
-    rowComponents.clear();
+    rowTops.clear();
+    int y = 0;
 
     for (auto& item : items)
     {
-        std::unique_ptr<juce::Component> row;
-
-        if (item.folder != 0)
-            row = std::make_unique<FolderRow> (*this, engine, item.folder, item.depth);
-        else
-            row = std::make_unique<Row> (*this, engine, item.member, item.depth);
-
-        rowContainer.addAndMakeVisible (*row);
-        rowComponents.push_back (std::move (row));
+        rowTops.push_back (y);
+        y += heightOfItem (item);
     }
 
+    totalHeight = y;
     layoutRows();
 }
 
 void TrackList::layoutRows()
 {
-    const auto width = juce::jmax (1, viewport.getMaximumVisibleWidth());
-    int y = 0;
+    // At least viewport height, so right-clicking the empty area reaches the container
+    rowContainer.setSize (juce::jmax (1, viewport.getMaximumVisibleWidth()),
+                          juce::jmax (1, totalHeight, viewport.getHeight()));
+    realizeVisibleRows();
+}
 
-    for (size_t i = 0; i < rowComponents.size(); ++i)
+void TrackList::realizeVisibleRows()
+{
+    const auto width = juce::jmax (1, viewport.getMaximumVisibleWidth());
+    const auto margin = juce::jmax (200, viewport.getHeight());   // a screen of slack each way
+    const auto top = viewport.getViewPositionY() - margin;
+    const auto bottom = viewport.getViewPositionY() + viewport.getHeight() + margin;
+
+    std::set<RowKey> wanted;
+
+    for (size_t i = 0; i < items.size(); ++i)
     {
-        rowComponents[i]->setBounds (0, y, width, heightOfItem (items[i]));
-        y += heightOfItem (items[i]);
+        const auto& item = items[i];
+        const auto height = heightOfItem (item);
+
+        if (rowTops[i] + height < top || rowTops[i] > bottom)
+            continue;
+
+        const RowKey key { item.folder, item.member, item.depth };
+        wanted.insert (key);
+
+        auto& row = liveRows[key];
+
+        if (row == nullptr)
+        {
+            if (item.folder != 0)
+                row = std::make_unique<FolderRow> (*this, engine, item.folder, item.depth);
+            else
+                row = std::make_unique<Row> (*this, engine, item.member, item.depth);
+
+            rowContainer.addAndMakeVisible (*row);
+        }
+
+        row->setBounds (0, rowTops[i], width, height);
     }
 
-    // At least viewport height, so right-clicking the empty area reaches the container
-    rowContainer.setSize (width, juce::jmax (1, y, viewport.getHeight()));
+    // Retire rows that left the window - but never while a mouse button is down:
+    // the row under the cursor may be mid-gesture (drag/click).
+    if (juce::ModifierKeys::currentModifiers.isAnyMouseButtonDown())
+        return;
+
+    for (auto it = liveRows.begin(); it != liveRows.end();)
+    {
+        if (wanted.count (it->first) == 0)
+            it = liveRows.erase (it);
+        else
+            ++it;
+    }
 }
 
 //==============================================================================
@@ -371,6 +479,7 @@ void TrackList::rowMouseDown (juce::Component*, bool isFolder, int id, const juc
     if (isFolder)
         return;   // folders don't join the multi-selection; a plain drag moves just the folder
 
+    selectedFolder = 0;   // clicking a track ends a folder selection
     const auto trackId = (AudioEngine::TrackId) id;
 
     if (event.mods.isCtrlDown())
@@ -515,7 +624,7 @@ void TrackList::computeDropTarget (int y)
         drag.intoFolder = true;
         drag.parent = item.folder;
         drag.index = std::numeric_limits<int>::max();   // append
-        drag.folderHighlight = rowComponents[i]->getBounds();
+        drag.folderHighlight = { 0, rowTops[i], rowContainer.getWidth(), height };
         return;
     }
 

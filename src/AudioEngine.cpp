@@ -4,6 +4,7 @@
 #include "engine/MidiSourceProcessor.h"
 #include "engine/MidiRouteProcessor.h"
 #include "engine/MidiRecorderProcessor.h"
+#include <pluginterfaces/vst/ivstcomponent.h>   // MIDI port count = VST3 event input buses
 
 namespace
 {
@@ -295,6 +296,16 @@ void AudioEngine::addInstrument (const juce::PluginDescription& description, Ins
 
             if (callback) callback (id, {});
         });
+}
+
+int AudioEngine::getInstrumentMidiPortCount (InstrumentId id) const
+{
+    if (auto* plugin = getInstrumentPlugin (id))
+        if (auto* vst3 = plugin->getVST3Client())
+            if (auto* component = vst3->getIComponentPtr())
+                return juce::jmax (1, (int) component->getBusCount (Steinberg::Vst::kEvent, Steinberg::Vst::kInput));
+
+    return 1;
 }
 
 void AudioEngine::removeInstrument (InstrumentId id)
@@ -593,23 +604,16 @@ void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, in
     output.instrument = instrumentId;
     output.midiChannel = juce::jlimit (1, 16, midiChannel);
     output.midiPort = juce::jmax (1, midiPort);
-    output.routeNode = graph.addNode (std::make_unique<MidiRouteProcessor> (output.midiChannel),
+    // The route node tags port >= 2 traffic for the plugin's VST3 event bus
+    // 'port - 1' (see MidiRouteProcessor::wrapForPort) - like Cubase, the
+    // plugin's own MIDI ports are addressed directly, no helper plugins.
+    output.routeNode = graph.addNode (std::make_unique<MidiRouteProcessor> (output.midiChannel, output.midiPort),
                                       std::nullopt, asyncUpdate)->nodeID;
 
     graph.addConnection ({ { track->midiSourceNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } },
                          asyncUpdate);
-
-    // Port 1 is the plugin itself; further ports route to their Event Input node
-    // once multiport support lands (until then the output exists but is silent).
-    if (output.midiPort == 1)
-        graph.addConnection ({ { output.routeNode, midiChannelIndex }, { instrument->pluginNode, midiChannelIndex } },
-                             asyncUpdate);
-    else if (auto it = instrument->portNodes.find (output.midiPort); it != instrument->portNodes.end())
-        graph.addConnection ({ { output.routeNode, midiChannelIndex }, { it->second, midiChannelIndex } },
-                             asyncUpdate);
-    else
-        juce::Logger::writeToLog ("Track " + juce::String (trackId) + ": port " + juce::String (output.midiPort)
-                                  + " of " + instrument->name + " has no Event Input node yet (silent)");
+    graph.addConnection ({ { output.routeNode, midiChannelIndex }, { instrument->pluginNode, midiChannelIndex } },
+                         asyncUpdate);
 
     if (trackId == armedTrack)
         graph.addConnection ({ { midiInNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } },
@@ -1244,9 +1248,42 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
 {
     std::vector<SidebarItem> items;
 
+    // Group every child by parent in ONE pass (per-folder rescans of all tracks
+    // made this quadratic, and both sidebar and arrangement call it per frame)
+    std::map<FolderId, std::vector<ChildRef>> childrenByParent;
+    const auto effectiveFolder = [this] (FolderId f) { return folderExists (f) ? f : 0; };
+
+    for (auto& [id, folder] : folders)
+        if (folder.midiDomain == midiDomain)
+            childrenByParent[folder.parent].push_back ({ true, id, folder.position });
+
+    if (midiDomain)
+    {
+        for (auto& [id, track] : tracks)
+            childrenByParent[effectiveFolder (track.folder)].push_back ({ false, id, track.position });
+    }
+    else
+    {
+        for (auto& [id, channel] : audioChannels)
+            childrenByParent[effectiveFolder (channel.folder)].push_back ({ false, id, channel.position });
+    }
+
+    for (auto& [parent, children] : childrenByParent)
+        std::sort (children.begin(), children.end(), [] (const ChildRef& a, const ChildRef& b)
+        {
+            if (a.position != b.position)   return a.position < b.position;
+            if (a.isFolder != b.isFolder)   return a.isFolder;
+            return a.id < b.id;
+        });
+
     const std::function<void (FolderId, int)> visit = [&] (FolderId parent, int depth)
     {
-        for (auto& child : getChildrenOf (midiDomain, parent))
+        const auto found = childrenByParent.find (parent);
+
+        if (found == childrenByParent.end())
+            return;
+
+        for (auto& child : found->second)
         {
             if (child.isFolder)
             {

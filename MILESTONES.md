@@ -12,11 +12,12 @@ tracks. Track outputs carry (instrument, port, channel); server queries go
 through VSL's own CLI (address in Settings > Integrations); connection states
 are versioned per Pro Server release (src/integrations/VeproState.h).
 
+Ports >= 2 delivered 2026-10-04: the plugin's own VST3 MIDI event buses are
+addressed directly (like Cubase; count read from the plugin, e.g. 16) via a
+small JUCE patch (patches/juce-vst3-event-bus.patch) - no Event Input
+plugins needed.
+
 Remaining:
-- **Ports >= 2 routing**: players beyond MIDI port 1 need "Vienna Ensemble
-  Pro Event Input" plugin instances managed as part of the rack instrument
-  (the model and sync already record the port; such outputs are silent and
-  reported in the sync notes until then).
 - **Re-sync stale dialog**: today tracks whose player vanished from the
   server are kept and reported in the sync notes; the decided UX is to ASK
   per case (remove the channel vs keep it marked) from the UI.

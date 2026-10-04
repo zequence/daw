@@ -45,6 +45,7 @@ private:
     void rebuildRows();
     void layoutRows();
     void refreshSoon();                   // deferred refresh, safe from row callbacks
+    void selectFolder (AudioEngine::FolderId);   // selects the folder + every track inside
     void showFolderMenu (AudioEngine::FolderId);
     void showBackgroundMenu();            // right-click on the empty area
 
@@ -63,13 +64,20 @@ private:
     juce::Viewport viewport;
     RowContainer rowContainer { *this };
 
-    std::vector<AudioEngine::SidebarItem> items;          // what the rows were built from
-    std::vector<std::unique_ptr<juce::Component>> rowComponents;   // parallel to items
+    std::vector<AudioEngine::SidebarItem> items;          // what the rows are built from
+    std::vector<int> rowTops;                             // parallel to items (container y)
+    int totalHeight = 0;
+
+    // Virtualized: components exist only for rows near the visible area
+    using RowKey = std::tuple<int, int, int>;             // (folder, member, depth)
+    std::map<RowKey, std::unique_ptr<juce::Component>> liveRows;
+    void realizeVisibleRows();
 
     AudioEngine::TrackId selectedTrack = 0;
 
     // Multi-select (UI-level; the primary selection stays with MainComponent)
     std::set<AudioEngine::TrackId> multiSelection;
+    AudioEngine::FolderId selectedFolder = 0;
     AudioEngine::TrackId shiftAnchor = 0;
     bool clearSelectionOnMouseUp = false;
 

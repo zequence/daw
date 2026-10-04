@@ -94,6 +94,17 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Sidebar
 
+- [x] Collapsing folders should only be done from the arrows. Most of the
+      folder area is for selecting the folder.
+      (the arrow toggles collapse; clicking elsewhere on the folder row selects
+      the folder - highlighted - and every track inside it, collapsed
+      subfolders included, ready for multi-channel work)
+- [x] Collapsing folders is very slow when there are a lot of visible tracks.
+      (the track list is virtualized: only rows near the visible area get
+      components - ~30 instead of 1000+ - so collapse/expand and every UI tick
+      cost the same in any project size; the per-frame folder-tree walk is
+      one pass instead of a rescan of all tracks per folder. Removes the
+      constant ~300 ms UI stalls the log showed with 1032 tracks.)
 - [x] Uncolored tracks should be grey
       (tracks and folders without a color draw a grey left border)
 - [x] Remove the yellow lines that show where expanded folders begin and end.

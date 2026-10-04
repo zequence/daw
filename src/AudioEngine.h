@@ -58,9 +58,8 @@ public:
     void setInstrumentName (InstrumentId, const juce::String&);   // renames its audio channel too (if unchanged)
     int getNumLoadedInstruments() const;
 
-    // An instrument's MIDI channels live on (port, channel). Port 1 is the plugin's
-    // own MIDI input; further ports exist for multiport instruments (VE Pro via
-    // Event Input plugins - routing for ports >= 2 lands with that support).
+    // An instrument's MIDI channels live on (port, channel). Ports are the
+    // plugin's own VST3 MIDI event buses (see getInstrumentMidiPortCount).
     // 'synced' entries are inherited from a VE Pro server instance: their name and
     // binding are immutable and refresh on sync; manual entries stay editable.
     struct MidiChannelInfo
@@ -70,6 +69,11 @@ public:
         juce::String name;
         bool synced = false;
     };
+
+    // How many MIDI ports the plugin itself offers (its VST3 MIDI event input
+    // buses - VE Pro mirrors its server's port setting, e.g. 8 or 16). Outputs on
+    // port N reach event bus N-1 directly, like Cubase. 1 for non-VST3 plugins.
+    int getInstrumentMidiPortCount (InstrumentId) const;
 
     bool setInstrumentChannelName (InstrumentId, int midiChannel, const juce::String&, int midiPort = 1);
     juce::String getInstrumentChannelName (InstrumentId, int midiChannel, int midiPort = 1) const;
@@ -297,11 +301,10 @@ public:
 private:
     struct Instrument
     {
-        NodeID pluginNode;                          // the plugin = MIDI port 1
+        NodeID pluginNode;                          // all MIDI ports address this plugin
         juce::String name;
         AudioChannelId audioChannel = 0;
         std::vector<MidiChannelInfo> midiChannels;  // named channels (manual + synced)
-        std::map<int, NodeID> portNodes;            // ports >= 2 (VE Pro Event Input, later)
     };
 
     struct AudioChannel
