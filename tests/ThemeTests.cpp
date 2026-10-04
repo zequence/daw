@@ -48,6 +48,10 @@ public:
             const auto normal = theme::regionStyle (track, false);
             expect (normal.fill == track.withMultipliedSaturation (0.45f).withMultipliedBrightness (1.2f).withAlpha (0.6f));
             expect (normal.border == track);
+
+            const auto selected = theme::regionStyle (track, true);
+            expect (selected.fill == track.withMultipliedSaturation (0.45f).withMultipliedBrightness (1.2f).withAlpha (0.95f));
+            expect (selected.border == track.withMultipliedBrightness (1.6f));
         }
     }
 };

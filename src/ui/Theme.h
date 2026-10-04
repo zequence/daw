@@ -41,11 +41,14 @@ namespace theme
     C (channelSelectedBorder,"channel.selected.border","Channel","Selected channel border",(int) Token::selectionBorder, 0xff6c87b5, false) \
     C (folderBg,         "folder.bg",         "Folder",   "Folder background",         -1,                      0xff2e3038, false) \
     C (folderBorder,     "folder.border",     "Folder",   "Folder border",             -1,                      0x00000000, true)  \
-    N (regionBgOpacity,       "region.bg.opacity",        "MIDI region", "Background opacity",            0.6f,  0.0f, 1.0f) \
-    N (regionBgSelectedOpacity,"region.bg.selopacity",    "MIDI region", "Background opacity (selected)", 0.95f, 0.0f, 1.0f) \
-    N (regionBgBrightness,    "region.bg.brightness",     "MIDI region", "Background brightness",         1.2f,  0.3f, 2.0f) \
-    N (regionBorderOpacity,   "region.border.opacity",    "MIDI region", "Border opacity",                1.0f,  0.0f, 1.0f) \
-    N (regionBorderBrightness,"region.border.brightness", "MIDI region", "Border brightness",             1.0f,  0.3f, 2.0f)
+    N (regionBgOpacity,       "region.bg.opacity",        "MIDI region", "Background opacity",                   0.6f,  0.0f, 1.0f) \
+    N (regionBgBrightness,    "region.bg.brightness",     "MIDI region", "Background brightness",                1.2f,  0.3f, 2.0f) \
+    N (regionBgSelectedOpacity,"region.bg.selopacity",    "MIDI region", "Selected background opacity",          0.95f, 0.0f, 1.0f) \
+    N (regionBgSelectedBrightness,"region.bg.selbrightness","MIDI region","Selected background brightness",     1.2f,  0.3f, 2.0f) \
+    N (regionBorderOpacity,   "region.border.opacity",    "MIDI region", "Border opacity",                       1.0f,  0.0f, 1.0f) \
+    N (regionBorderBrightness,"region.border.brightness", "MIDI region", "Border brightness",                    1.0f,  0.3f, 2.0f) \
+    N (regionBorderSelectedOpacity,"region.border.selopacity","MIDI region","Selected border opacity",           1.0f,  0.0f, 1.0f) \
+    N (regionBorderSelectedBrightness,"region.border.selbrightness","MIDI region","Selected border brightness", 1.6f,  0.3f, 2.0f)
 
     enum class Token : int
     {
@@ -371,18 +374,21 @@ namespace theme
 
     inline RegionStyle regionStyle (juce::Colour trackColour, bool emphasised)
     {
+        using T = Token;
         auto& m = Manager::get();
 
+        // Selected regions have their own opacity and brightness for both parts.
         // The box is less colorful than the border (the track colour stays the hero).
         const auto fill = trackColour.withMultipliedSaturation (0.45f)
-                                     .withMultipliedBrightness (m.number (Token::regionBgBrightness))
-                                     .withAlpha (emphasised ? m.number (Token::regionBgSelectedOpacity)
-                                                            : m.number (Token::regionBgOpacity));
+                                     .withMultipliedBrightness (m.number (emphasised ? T::regionBgSelectedBrightness
+                                                                                     : T::regionBgBrightness))
+                                     .withAlpha (m.number (emphasised ? T::regionBgSelectedOpacity
+                                                                      : T::regionBgOpacity));
 
-        const auto border = (emphasised ? trackColour.interpolatedWith (juce::Colours::white, 0.45f)
-                                        : trackColour)
-                                .withMultipliedBrightness (m.number (Token::regionBorderBrightness))
-                                .withAlpha (m.number (Token::regionBorderOpacity));
+        const auto border = trackColour.withMultipliedBrightness (m.number (emphasised ? T::regionBorderSelectedBrightness
+                                                                                      : T::regionBorderBrightness))
+                                       .withAlpha (m.number (emphasised ? T::regionBorderSelectedOpacity
+                                                                        : T::regionBorderOpacity));
 
         return { fill, border };
     }
