@@ -592,6 +592,91 @@ more lanes stackable on top of each other, with controls below the piano keys.
 (From ISSUES.md Midi editing - larger than a quick fix because it reworks the
 lane area into a list of lanes.)
 
+## CC editing with points (drafted 2026-10-06)
+
+Today a CC (or pitch bend) lane is edited by drawing: a stroke writes a value
+every 1/32 note. Orchestral parts want shapes - a swell over two bars, a quick
+dip, a held level - that are easier to place, read and change as a few points
+than as hundreds of values. So a controller lane becomes a list of **points**
+with a **curve to the next point**.
+
+- **Points.** A point has a position (tick) and a value (0-127, or the bend
+  range). Click in the lane to add one, drag to move it (position and value),
+  right-click or Delete to remove; a selection of points moves together, and
+  dragging a selection's top or bottom edge scales its values. Notes are not
+  involved: a lane edits only its controller.
+- **Where points can go: Q and the grid.** A new or moved point snaps to the
+  editor's grid when Snap is on (the Snap toggle and grid dropdown the notes use);
+  Alt (temporarily) frees it. Quantize (Q) on selected points moves them to the
+  grid, like notes.
+- **Curves.** Each point says how the value travels to the next one:
+  - **Step** (staircase): it holds until the next point, then jumps.
+  - **Ramp**: a straight line from this point's value to the next.
+  - **Bent ramp**: a curve - its bend set by dragging the segment's middle up or
+    down (one handle per segment; straight when centred). An ease-in or
+    ease-out swell is one bent segment.
+
+  The lane shows the curve, the points as handles, and the segment handle on hover.
+  A point's curve is changed from its context menu, or a default for new points
+  (Step / Ramp / Bent) in the lane's header.
+- **What is sent.** Playback turns the points into CC messages: a step sends one
+  message at its point; a ramp or bent ramp sends values along the segment, only
+  when the 7-bit value changes (and at least every 1/64 note at most, so a slow
+  ramp stays light). The pre-roll and the chase send the value in effect at the
+  play position, as they do for CCs today.
+- **Recorded and imported CCs.** A recorded or imported controller stream is a
+  dense list of values; it is kept as points with Step curves (exact playback),
+  with a "Thin" command that reduces it to fewer points with ramps within a
+  tolerance (the Cubase "reduce" idea), as one undo step.
+- **Model and file.** A lane stores its points (tick, value, curve, bend); the
+  project keeps them per track and controller next to the notes. Old projects'
+  CC events load as Step points. Commands: `clip.addControlPoints`,
+  `clip.updateControlPoints`, `clip.removeControlPoints`, `clip.thinControls`
+  (same undo and history rules as the note commands).
+- **Lanes.** Goes with "Stacked editor lanes": every CC lane in the stack edits
+  points. Velocity stays a per-note bar lane.
+
+Phases: model, file, playback rendering and commands with tests; the lane editor
+(add / move / delete / select / snap); curves and the bend handle; thinning of
+recorded data.
+
+## Articulation remote control: key commands and MIDI controllers (drafted 2026-10-06)
+
+Choosing an articulation without the mouse: a computer key command, a MIDI
+message from a controller, or both, per articulation. (ISSUES.md "Settings
+Window": controller or key commands for specific articulations.)
+
+- **Bindings live on the articulations of a map** (stored in the map, like the
+  Cubase maps' "remote" keys), so a map brings its controls along: per
+  articulation an optional **key command** (e.g. Ctrl+1) and an optional **MIDI
+  trigger** (a note, a CC with a value, or a program change, on a channel or any).
+  Set in the map editor's articulation details: a key field that records the
+  next key pressed, and "Learn" for the MIDI trigger (the next message from an
+  articulation controller). A binding used twice in a map is refused with the
+  reason.
+- **Articulation controllers (Settings > Audio & MIDI).** Any MIDI input device
+  can be added as an **articulation controller**: its messages then only
+  trigger articulations - they never reach tracks, recording or the MIDI
+  monitor's note stream. Add / remove in the MIDI input list ("Use for
+  articulations"); saved in the settings. A device that is not an articulation
+  controller plays notes as today.
+- **What a trigger does:** exactly what choosing that articulation in the
+  articulation panel does, with the same rules (defaults filled in, alternatives
+  replaced, only what a slot has): on the selected notes in the MIDI editor; with
+  no notes selected, on the articulation new notes are drawn and recorded with,
+  for the editor's track or the armed track.
+- **Hearing it while playing.** A trigger also sends the new combination's slot
+  outputs to the instrument at once (through the track's route), so the next note
+  played live sounds in that articulation.
+- **Recording.** Notes recorded while articulations are switched carry the
+  articulation in effect when each note started (a switch timeline per take),
+  so a played performance keeps its articulations.
+
+Phases: (1) settings: articulation controllers (their input kept away from
+tracks), the bindings in the map and the map editor (key field, MIDI Learn),
+triggers applying to the selection / the new-note choice, live switching;
+(2) recording stamps the articulation on recorded notes.
+
 ## Theming (planned 2026-10-04; full plan in THEMING.md)
 
 Settings > Theming becomes a theme editor. Every kind of UI item has its own
