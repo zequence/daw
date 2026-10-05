@@ -22,7 +22,9 @@ Claude is unsure of an issue they will pose a question.
 # Sidebar
 
 # Integrations
-- [ ] A configuration view for MIDI channels: port, channel and expression map.      (Milestone "MIDI channel configuration view" in MILESTONES.md.)
+
+- [ ] A configuration view for MIDI channels: port, channel and expression map.
+      (Milestone "MIDI channel configuration view" in MILESTONES.md.)
 
 
 # Midi record
