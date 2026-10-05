@@ -98,8 +98,36 @@ both articulations:
   conflicting combination sends nothing and a message says why, instead of
   playing the wrong sound silently.
 
-An articulation may also have a **lead time**: how far ahead of its note the
-output is sent, because a library needs a moment to switch. See open questions.
+The output is always sent exactly before its note - no setting, no default
+offset. (Timing is a separate thing, next.)
+
+### Timing offset (working name)
+
+Some articulations sound late: a Spitfire legato has a delay between the note
+being triggered and being heard. To line such notes up with the others, every
+articulation can have a **timing offset**: time added to or removed from the
+moment its notes are triggered. A legato at -70 ms is triggered 70 ms early so
+it is heard on the beat.
+
+- Per articulation, in **milliseconds** (the delay is real time, not musical
+  time; converted to ticks with the tempo map at the note's position). Default
+  0: no offset unless the user sets one. Negative = earlier, positive = later.
+- The offset moves the **note**, and the switch goes with it: the keyswitch / CC /
+  program change is still sent exactly (just) before the shifted note-on. The
+  gap between switch and note does not change.
+- It only changes what is **sent**. The editor keeps drawing notes where they
+  are written (on the grid, on the beat); the offset is playback compensation.
+- The note's length is kept (note-off moves with note-on).
+- A negative offset needs **look-ahead** in `MidiSourceProcessor`: the events of
+  the next ~100+ ms must be rendered before the playhead gets there, including
+  across a loop wrap and a locate. A note at the very start with a negative
+  offset has nowhere to go (clamp, or a pre-roll when playback starts).
+- Notes shifted by different amounts can overlap or reorder (a shifted legato
+  overlapping the previous note). That is usually the point, but it is new
+  behaviour for the processor's note tracking.
+- Not sure what to call it: "timing offset", "latency compensation" and "delay
+  compensation" are candidates; Cubase recently added this to its expression
+  maps, so its naming is worth a look when we get there.
 
 ### Key ranges and named keys
 
@@ -170,9 +198,10 @@ note-ons and chases state on locate. The track's instrument channel (output
 instrument + port + channel) tells which map applies; it reaches the processor
 as an immutable snapshot, like `setSequence`, and is refreshed when the
 assignment or the map changes. The output goes out whenever the active
-articulation changes from one note to the next, just before the note-on (minus
-the lead time). Locating mid-song chases the last articulation before the
-playhead. Live playing uses the editor's current articulation (later).
+articulation changes from one note to the next, just before the note-on
+(which is itself shifted by the articulation's timing offset). Locating
+mid-song chases the last articulation before the playhead. Live playing uses
+the editor's current articulation (later).
 
 ### Dynamics, velocity layers and CC sequences
 
@@ -200,7 +229,7 @@ selection. The UI is a client of the same commands.
    maps and assignments). No UI.
 2. Editor: the dropdown, note assignment, symbols on notes, named keys and
    per-articulation key ranges.
-3. Playback: output, lead time, chase on locate.
+3. Playback: output, timing offsets (with look-ahead), chase on locate.
 4. The two configuration views (own milestone below) and the map editor UI.
 5. Library, presets (Spitfire UACC, a generic keyswitch map), Cubase
    `.expressionmap` import (observed format only), Synchron detection, then
@@ -208,9 +237,8 @@ selection. The UI is a client of the same commands.
 
 ### Open questions
 
-- **Lead time**: per articulation, per map, or a map default with per-articulation
-  overrides (the leaning)? In milliseconds, so it doesn't depend on tempo. CC and
-  program changes usually need less than keyswitches.
+- **Timing offset**: what it is called, and what happens to a negative offset at
+  the very start of the song (clamp, or pre-roll on playback start).
 - Notes whose articulation doesn't exist in the instrument's map (track moved,
   map changed): keep and show as unresolved (as drafted), or clear them?
 - Does a map ever need to differ per track on the same instrument?
