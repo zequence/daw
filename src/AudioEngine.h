@@ -383,7 +383,16 @@ public:
         TempoMap::Ptr tempoMap;
         std::vector<Marker> markers;
         std::vector<ChannelState> channels;
+        struct ChannelMapState   // which map an instrument channel uses (only channels that have one)
+        {
+            InstrumentId instrument = 0;
+            int midiPort = 1, midiChannel = 1;
+            juce::String map;
+        };
+
         std::vector<FolderState> folders;
+        std::vector<ExpressionMap> expressionMaps;
+        std::vector<ChannelMapState> channelMaps;
     };
 
     HistorySnapshot captureHistorySnapshot() const;

@@ -161,6 +161,7 @@ private:
         if (type.startsWith ("clip")) return "clip";
         if (type.startsWith ("instrument")) return "instrument";
         if (type.startsWith ("marker")) return "marker";
+        if (type.startsWith ("expressionMap")) return "expressionmap";
         if (type.startsWith ("tempo")) return "tempo";
         if (type.startsWith ("recording")) return "recording";
         return "project";
@@ -183,6 +184,17 @@ private:
         if (type == "tempoChanged")      return "Tempo " + juce::String ((double) event.getProperty ("bpm", 0.0), 1) + " bpm";
         if (type == "markerAdded")       return "Marker '" + event.getProperty ("name", {}).toString() + "'";
         if (type == "markerRemoved")     return "Remove marker";
+        if (type == "expressionMapRemoved") return "Remove expression map '" + event.getProperty ("name", {}).toString() + "'";
+
+        if (type == "expressionMapChanged")
+            return event.hasProperty ("oldName")
+                     ? "Rename expression map '" + event.getProperty ("oldName", {}).toString() + "' to '" + event.getProperty ("name", {}).toString() + "'"
+                     : "Expression map '" + event.getProperty ("name", {}).toString() + "'";
+
+        if (type == "instrumentChanged")
+            return "Instrument '" + engine.getInstrumentName ((int) event.getProperty ("id", 0)) + "': "
+                   + (event.getProperty ("change", {}).toString() == "expressionMap" ? juce::String ("expression map")
+                                                                                    : event.getProperty ("change", {}).toString());
         if (type == "folderAdded")       return "Add folder '" + event.getProperty ("name", {}).toString() + "'";
         if (type == "folderRemoved")     return "Remove folder " + event.getProperty ("folderId", {}).toString();
 

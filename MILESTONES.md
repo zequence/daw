@@ -314,6 +314,15 @@ selection. The UI is a client of the same commands.
    and drop-on-root-change rules, one modifier per group, structure/range validation,
    project round trip, rename rewriting, sync keeps assignments, snapshots cover
    maps and assignments). No UI.
+   **Delivered 2026-10-05** (ExpressionMap.h, AudioEngine, CommandDispatcher):
+   the model and validation, XML/JSON, the project's maps and the channel
+   assignment (kept across re-syncs), articulations on notes, the choosing
+   rules (`expressionmap.choose`, `clip.setArticulation`), the commands in
+   API.md, and maps + assignments in the history snapshots.
+   **Still to do in this phase:** renaming a group or an articulation *inside a
+   map* (`expressionmap.set` replaces the whole map today and leaves notes
+   that used the old name as visible errors) should be a command that rewrites
+   those notes across the instruments using the map, in one undo step.
 2. Editor: the dropdown, note assignment, symbols on notes, named keys and
    per-articulation key ranges.
 3. Playback: first the pre-roll spike (transport counting from -N, playback

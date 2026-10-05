@@ -1104,12 +1104,54 @@ AudioEngine::HistorySnapshot AudioEngine::captureHistorySnapshot() const
         snapshot.folders.push_back ({ id, folder.name, folder.midiDomain, folder.parent,
                                       folder.collapsed, folder.position, folder.colour });
 
+    snapshot.expressionMaps = expressionMaps;
+
+    for (auto& [id, instrument] : instruments)
+        for (auto& channel : instrument.midiChannels)
+            if (channel.expressionMap.isNotEmpty())
+                snapshot.channelMaps.push_back ({ id, channel.midiPort, channel.midiChannel, channel.expressionMap });
+
     return snapshot;
 }
 
 void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
 {
     historySuppress = true;
+
+    // Expression maps and which channel uses which restore wholesale; the channels' own
+    // data (names, key ranges, sync state) is not history material
+    expressionMaps = snapshot.expressionMaps;
+
+    for (auto& [id, instrument] : instruments)
+    {
+        for (auto& channel : instrument.midiChannels)
+            channel.expressionMap.clear();
+
+        // A manual channel that only existed to hold a map is gone again
+        std::erase_if (instrument.midiChannels, [] (const MidiChannelInfo& c) { return ! c.synced && c.name.isEmpty(); });
+    }
+
+    for (auto& state : snapshot.channelMaps)
+    {
+        auto* instrument = findInstrument (state.instrument);
+
+        if (instrument == nullptr)
+            continue;   // the instrument is gone
+
+        auto it = std::find_if (instrument->midiChannels.begin(), instrument->midiChannels.end(),
+                                [&] (const MidiChannelInfo& c) { return c.midiPort == state.midiPort && c.midiChannel == state.midiChannel; });
+
+        if (it == instrument->midiChannels.end())
+        {
+            MidiChannelInfo channel;
+            channel.midiPort = state.midiPort;
+            channel.midiChannel = state.midiChannel;
+            instrument->midiChannels.push_back (channel);
+            it = std::prev (instrument->midiChannels.end());
+        }
+
+        it->expressionMap = state.map;
+    }
 
     // Folders restore wholesale (ids are stable, nothing in the graph references them)
     folders.clear();
