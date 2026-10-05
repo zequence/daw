@@ -39,6 +39,7 @@ public:
     void mouseUp (const juce::MouseEvent&) override;
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseMove (const juce::MouseEvent&) override;
+    void mouseExit (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     bool keyPressed (const juce::KeyPress&) override;
 
@@ -111,6 +112,9 @@ private:
     int lastAxisRevision = -1, lastEngineRevision = -1;
     int keyHeight = 12;
     int topKey = 84;                       // highest visible key (C5)
+    int hoveredKey = -1;                   // the key under the pointer (lit on the keyboard), -1 = none
+
+    static juce::MouseCursor penCursor();
 
     // Interaction state
     Drag drag = Drag::none;

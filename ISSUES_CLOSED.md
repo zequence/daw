@@ -268,6 +268,12 @@ resolution notes. Newest additions go at the top of each chapter.
 
 ## Midi editor
 
+- [x] Change pointer to a pen when in draw mode
+      (a pencil cursor drawn in code, its tip at the hotspot, over the grid in
+      Draw mode; the resize cursor still wins at a note's right edge.)
+- [x] When hovering over the grid highlight the hovered key in the piano roll
+      (the key under the pointer is lit on the keyboard, its row faintly across
+      the grid; over the keys column too; cleared when the pointer leaves.)
 - [x] Articulations: show available modifiers on the right side of a selected articulation, ordered by group
       (the articulation button opens columns, one per group in map order -
       Color | Main | Legato | Release | Tempo - each with what is offered for

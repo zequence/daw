@@ -1054,7 +1054,69 @@ void PianoRollView::mouseMove (const juce::MouseEvent& event)
 
     bool onRightEdge = false;
     noteIndexAt (event.getPosition(), onRightEdge);
-    setMouseCursor (onRightEdge ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::NormalCursor);
+    const auto overGrid = gridArea().contains (event.getPosition());
+
+    if (onRightEdge)
+        setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+    else if (overGrid && modeBox.getSelectedId() == 2)
+        setMouseCursor (penCursor());
+    else
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+
+    // The key under the pointer is lit on the keyboard (and its row, faintly)
+    const auto key = (overGrid || keysArea().contains (event.getPosition())) ? yToKey (event.y) : -1;
+
+    if (key != hoveredKey)
+    {
+        hoveredKey = key;
+        repaint();
+    }
+}
+
+void PianoRollView::mouseExit (const juce::MouseEvent&)
+{
+    if (hoveredKey >= 0)
+    {
+        hoveredKey = -1;
+        repaint();
+    }
+}
+
+// Draw mode's pointer: a pencil, its tip at the hotspot (bottom left)
+juce::MouseCursor PianoRollView::penCursor()
+{
+    static const auto cursor = []() -> juce::MouseCursor
+    {
+        constexpr int size = 24;
+        juce::Image image (juce::Image::ARGB, size, size, true);
+
+        {
+            juce::Graphics g (image);
+            juce::Path pen;
+            // the pencil along the diagonal: tip at (2, 22), end at (20, 4)
+            pen.startNewSubPath (2.0f, 22.0f);
+            pen.lineTo (5.5f, 14.5f);
+            pen.lineTo (17.0f, 3.0f);
+            pen.lineTo (21.0f, 7.0f);
+            pen.lineTo (9.5f, 18.5f);
+            pen.closeSubPath();
+
+            g.setColour (juce::Colours::black);
+            g.strokePath (pen, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved));
+            g.setColour (juce::Colours::white);
+            g.fillPath (pen);
+
+            juce::Path tip;   // the graphite
+            tip.addTriangle (2.0f, 22.0f, 4.0f, 17.5f, 6.5f, 20.0f);
+            g.setColour (juce::Colours::black);
+            g.fillPath (tip);
+            g.drawLine (14.5f, 5.5f, 18.5f, 9.5f, 1.2f);   // where the eraser starts
+        }
+
+        return juce::MouseCursor (juce::ScaledImage (image), juce::Point<int> (2, 22));
+    }();
+
+    return cursor;
 }
 
 void PianoRollView::mouseWheelMove (const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
@@ -1236,6 +1298,12 @@ void PianoRollView::paint (juce::Graphics& g)
         else
             g.setColour (isBlackKey (key) ? juce::Colour (0xff202327) : juce::Colour (0xff25282d));
         g.fillRect (grid.getX(), y, grid.getWidth(), keyHeight);
+
+        if (key == hoveredKey)   // the row under the pointer
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.06f));
+            g.fillRect (grid.getX(), y, grid.getWidth(), keyHeight);
+        }
 
         if (key % 12 == 0)
         {
@@ -1496,6 +1564,12 @@ void PianoRollView::paint (juce::Graphics& g)
             g.setColour (isBlackKey (key) ? juce::Colour (0xff17191c) : juce::Colour (0xffd8d8d8));
 
         g.fillRect (keys.getX(), y, keys.getWidth() - 2, keyHeight - 1);
+
+        if (key == hoveredKey)   // the key under the pointer
+        {
+            g.setColour (theme::colour (theme::Token::selectionBorder).withAlpha (0.55f));
+            g.fillRect (keys.getX(), y, keys.getWidth() - 2, keyHeight - 1);
+        }
 
         // Keys the map names (a keyswitch is named after its articulation) get their name, and
         // keyswitches a mark on the left
