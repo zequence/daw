@@ -30,7 +30,7 @@ public:
 
     // Draw: click adds a note at the length dropdown's value, dragging stretches it.
     // Edit (select): drag selects, double-click adds.
-    void setDrawMode (bool shouldDraw)   { drawMode = shouldDraw; setMouseCursor (juce::MouseCursor::NormalCursor); }
+    void setDrawMode (bool shouldDraw);
     bool isDrawMode() const              { return drawMode; }
     ~PianoRollView() override;
 
@@ -72,6 +72,7 @@ private:
     int keyToY (int key) const;
     juce::Rectangle<int> noteRect (const MidiSequence::Note&) const;
     juce::int64 snapTick (juce::int64 tick) const;
+    void updateCursorAt (juce::Point<int>);   // resize edge, pen (Draw) or the normal pointer
     juce::int64 snapTicksOrZero() const;      // 0 when snapping is off (the transport's Snap button)
     juce::int64 gridTicks() const;            // the grid dropdown, regardless of the toggle
     juce::int64 newNoteTicks() const;         // the note-length dropdown

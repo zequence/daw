@@ -1191,17 +1191,7 @@ void PianoRollView::mouseMove (const juce::MouseEvent& event)
     if (tip != getTooltip())
         setTooltip (tip);
 
-    bool onRightEdge = false;
-    noteIndexAt (event.getPosition(), onRightEdge);
-    const auto overGrid = gridArea().contains (event.getPosition());
-
-    if (onRightEdge)
-        setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
-    else if (overGrid && drawMode)
-        setMouseCursor (penCursor());
-    else
-        setMouseCursor (juce::MouseCursor::NormalCursor);
-
+    updateCursorAt (event.getPosition());
     updateHoveredKey (event.getPosition());
 }
 
@@ -1228,6 +1218,26 @@ void PianoRollView::mouseExit (const juce::MouseEvent&)
 }
 
 // Draw mode's pointer: a pencil, its tip at the hotspot (bottom left)
+void PianoRollView::setDrawMode (bool shouldDraw)
+{
+    drawMode = shouldDraw;
+    updateCursorAt (getMouseXYRelative());
+    juce::Desktop::getInstance().getMainMouseSource().forceMouseCursorUpdate();   // now, not on the next move
+}
+
+void PianoRollView::updateCursorAt (juce::Point<int> position)
+{
+    bool onRightEdge = false;
+    noteIndexAt (position, onRightEdge);
+
+    if (onRightEdge)
+        setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+    else if (gridArea().contains (position) && drawMode)
+        setMouseCursor (penCursor());
+    else
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+}
+
 juce::MouseCursor PianoRollView::penCursor()
 {
     static const auto cursor = []() -> juce::MouseCursor
