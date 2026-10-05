@@ -95,7 +95,17 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     lengthBox.setTooltip ("Length of newly added notes");
     addDivisionItems (lengthBox);
     lengthBox.setSelectedId (4, juce::dontSendNotification);   // 1/8
+    lengthBox.onChange = [this] { setNoteDots (0); };          // a new length starts undotted
     addAndMakeVisible (lengthBox);
+
+    // Dotted lengths: one dot (x1.5) or two (x1.75); click toggles one, shift-click two.
+    // In note input: "." and Shift+"."
+    dotButton.setTooltip ("Dotted note length: click for a dot (x1.5), shift-click for a double dot (x1.75). "
+                          "With Input on: the . key, Shift+. for double. A new length clears it.");
+    dotButton.onClick = [this] { toggleDots (juce::ModifierKeys::getCurrentModifiers().isShiftDown() ? 2 : 1); };
+    theme::setButtonRole (dotButton, "accent");
+    setNoteDots (0);
+    addAndMakeVisible (dotButton);
 
     laneBox.setTooltip ("What the lane below the grid shows and edits");
     addAndMakeVisible (laneBox);
@@ -211,7 +221,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     addAndMakeVisible (trackLabel);
 
     for (auto* c : std::initializer_list<juce::Component*> { &modeBox, &snapToggle, &auditionToggle, &inputToggle, &snapBox,
-                                                             &lengthBox, &laneBox, &quantizeButton, &undoButton,
+                                                             &lengthBox, &dotButton, &laneBox, &quantizeButton, &undoButton,
                                                              &redoButton, &articulationButton, &colourBox })
         c->setWantsKeyboardFocus (false);
 
@@ -346,7 +356,8 @@ juce::int64 PianoRollView::gridTicks() const
 
 juce::int64 PianoRollView::newNoteTicks() const
 {
-    return divisionToTicks (lengthBox.getSelectedId());
+    const auto base = divisionToTicks (lengthBox.getSelectedId());
+    return base + (noteDots >= 1 ? base / 2 : 0) + (noteDots >= 2 ? base / 4 : 0);
 }
 
 juce::int64 PianoRollView::snapTicksOrZero() const
@@ -1278,10 +1289,21 @@ void PianoRollView::mouseWheelMove (const juce::MouseEvent& event, const juce::M
 // box's items in order), 0 enters a rest (the playhead moves on by the length)
 bool PianoRollView::noteInputKey (const juce::KeyPress& key)
 {
-    if (! inputToggle.getToggleState() || key.getModifiers().isAnyModifierKeyDown())
+    if (! inputToggle.getToggleState() || key.getModifiers().isCtrlDown() || key.getModifiers().isAltDown()
+         || key.getModifiers().isCommandDown())
         return false;
 
+    // "." toggles a dot; Shift+"." (whatever character the layout makes of it) a double dot
+    if (key.getKeyCode() == '.' && ! key.getModifiers().isCtrlDown() && ! key.getModifiers().isAltDown())
+    {
+        toggleDots (key.getModifiers().isShiftDown() ? 2 : 1);
+        return true;
+    }
+
     const auto c = key.getTextCharacter();
+
+    if (key.getModifiers().isShiftDown())
+        return false;
 
     if (c >= '1' && c <= '9')
     {
@@ -1301,6 +1323,19 @@ bool PianoRollView::noteInputKey (const juce::KeyPress& key)
     }
 
     return false;
+}
+
+void PianoRollView::setNoteDots (int dots)
+{
+    noteDots = juce::jlimit (0, 2, dots);
+    dotButton.setButtonText (noteDots == 2 ? ".." : ".");
+    dotButton.setToggleState (noteDots > 0, juce::dontSendNotification);
+}
+
+// Choosing the same dots again removes them (a toggle); the other kind replaces them
+void PianoRollView::toggleDots (int dots)
+{
+    setNoteDots (noteDots == dots ? 0 : dots);
 }
 
 bool PianoRollView::keyPressed (const juce::KeyPress& key)
@@ -1411,6 +1446,8 @@ void PianoRollView::resized()
     snapBox.setBounds (toolbar.removeFromLeft (68));
     toolbar.removeFromLeft (10);
     lengthBox.setBounds (toolbar.removeFromLeft (68));
+    toolbar.removeFromLeft (2);
+    dotButton.setBounds (toolbar.removeFromLeft (28));
     toolbar.removeFromLeft (10);
     quantizeButton.setBounds (toolbar.removeFromLeft (30));
     toolbar.removeFromLeft (12);

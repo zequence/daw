@@ -148,6 +148,10 @@ private:
 
     // Toolbar
     juce::TextButton snapToggle { "Snap" }, auditionToggle { "Hear" }, inputToggle { "Input" };
+    juce::TextButton dotButton { "." };
+    int noteDots = 0;                      // 0, 1 (x1.5) or 2 (x1.75): the note length's dots
+    void setNoteDots (int);
+    void toggleDots (int);
 
     // Note input (step entry): notes played within this long after a chord's first note join it
     static constexpr double chordWindowMs = 60.0;
