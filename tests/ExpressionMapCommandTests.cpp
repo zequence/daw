@@ -416,6 +416,84 @@ private:
 
         reply = rename ("expressionmap.renameArticulation", params ({ { "name", "strings" }, { "group", "Main" }, { "newName", "X" } }));
         expect (! reply["ok"] && errorOf (reply).contains ("give the 'articulation'"), errorOf (reply));
+
+        beginTest ("sound slots: setSlot, slots, offered, choose and removeSlot");
+        {
+            // Color (root) Regular -> default Main Long; Main Long / Rep. (-> Tempo 120); Tempo 120 / 130
+            Map map;
+            map.name = "Duality";
+            Map::Articulation regular, longNotes, rep, t120, t130;
+            regular.name = "Regular";
+            regular.defaults = { { "Main", "Long" } };
+            longNotes.name = "Long";
+            rep.name = "Rep.";
+            rep.defaults = { { "Tempo", "120" } };
+            t120.name = "120";
+            t130.name = "130";
+            map.groups.push_back ({ "Color", "", { regular } });
+            map.groups.push_back ({ "Main", "", { longNotes, rep } });
+            map.groups.push_back ({ "Tempo", "", { t120, t130 } });
+
+            Map::Slot first;
+            first.selection.root = "Regular";
+            first.selection.modifiers = { { "Main", "Long" } };
+            first.outputs = { { Out::Type::programChange, 112, 0, false, -1 }, { Out::Type::programChange, 0, 0, false, -1 } };
+            map.slots = { first };
+
+            auto reply = api.run ("expressionmap.set", params ({ { "map", map.toVar() } }));
+            expect (reply["ok"], errorOf (reply));
+
+            const auto slotJson = [] (const char* main, const char* tempo, int program)
+            {
+                juce::Array<juce::var> modifiers { params ({ { "group", "Main" }, { "name", main } }) };
+
+                if (tempo != nullptr)
+                    modifiers.add (params ({ { "group", "Tempo" }, { "name", tempo } }));
+
+                return params ({ { "articulation", params ({ { "root", "Regular" }, { "modifiers", modifiers } }) },
+                                 { "outputs", juce::Array<juce::var> { params ({ { "type", "programChange" }, { "number", program } }) } },
+                                 { "keyLow", 55 }, { "keyHigh", 98 } });
+            };
+
+            reply = api.run ("expressionmap.setSlot", params ({ { "name", "duality" }, { "slot", slotJson ("Rep.", "120", 4) } }));
+            expect (reply["ok"] && ! (bool) reply["result"]["replaced"], errorOf (reply));
+            reply = api.run ("expressionmap.setSlot", params ({ { "name", "duality" }, { "slot", slotJson ("Rep.", "130", 5) } }));
+            expect (reply["ok"], errorOf (reply));
+            reply = api.run ("expressionmap.setSlot", params ({ { "name", "duality" }, { "slot", slotJson ("Rep.", "130", 6) } }));
+            expect (reply["ok"] && (bool) reply["result"]["replaced"] && (int) reply["result"]["slots"] == 3, errorOf (reply));
+
+            reply = api.run ("expressionmap.slots", params ({ { "name", "duality" },
+                                                               { "selection", params ({ { "root", "Regular" }, { "modifiers",
+                                                                 juce::Array<juce::var> { params ({ { "group", "Main" }, { "name", "Rep." } }) } } }) } }));
+            expect (reply["ok"] && reply["result"]["slots"].size() == 2, errorOf (reply));
+
+            // Offered: no Tempo with Long, both tempos with Rep.
+            const auto offered = [&] (const char* main)
+            {
+                return api.run ("expressionmap.offered", params ({ { "name", "duality" }, { "selection", params ({ { "root", "Regular" },
+                    { "modifiers", juce::Array<juce::var> { params ({ { "group", "Main" }, { "name", main } }) } } }) } }))["result"];
+            };
+
+            expectEquals ((int) offered ("Long")["groups"].size(), 1);   // Main only
+            expectEquals ((int) offered ("Rep.")["groups"][1]["articulations"].size(), 2);
+
+            // Choosing Rep. fills in its default tempo
+            reply = api.run ("expressionmap.choose", params ({ { "name", "duality" }, { "selection", params ({ { "root", "Regular" },
+                { "modifiers", juce::Array<juce::var> { params ({ { "group", "Main" }, { "name", "Long" } }) } } }) },
+                { "group", "Main" }, { "articulation", "Rep." } }));
+            expect (reply["ok"] && (bool) reply["result"]["ok"], errorOf (reply));
+            expectEquals (reply["result"]["selection"]["modifiers"][1]["name"].toString(), juce::String ("120"));
+
+            // Removing the only slot of the root's default would leave the root without a whole slot: refused
+            reply = api.run ("expressionmap.removeSlot", params ({ { "name", "duality" }, { "articulation", params ({ { "root", "Regular" },
+                { "modifiers", juce::Array<juce::var> { params ({ { "group", "Main" }, { "name", "Long" } }) } } }) } }));
+            expect (! reply["ok"] && errorOf (reply).contains ("must give a sound slot"), errorOf (reply));
+
+            reply = api.run ("expressionmap.removeSlot", params ({ { "name", "duality" }, { "articulation", params ({ { "root", "Regular" },
+                { "modifiers", juce::Array<juce::var> { params ({ { "group", "Main" }, { "name", "Rep." } }),
+                                                        params ({ { "group", "Tempo" }, { "name", "130" } }) } } }) } }));
+            expect (reply["ok"], errorOf (reply));
+        }
     }
 };
 

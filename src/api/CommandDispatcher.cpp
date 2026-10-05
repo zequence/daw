@@ -1556,6 +1556,152 @@ void CommandDispatcher::registerCommands()
              respond (ok (juce::var (result.get())));
          });
 
+    //==========================================================================
+    // Sound slots (MILESTONES.md "Sound slots"): one combination of articulations
+    // and what it sends. A whole map with its slots also goes through expressionmap.set.
+    add ("expressionmap.slots",
+         "The sound slots of a map: each {articulation:{root, modifiers}, outputs, timingOffsetMs, keyLow, keyHigh}. "
+         "'selection' filters to the slots that contain it (a partial choice)",
+         "name:string [selection:{root,modifiers:[{group,name}]}]",
+         [this, existingMaps] (const juce::var& params, Respond respond)
+         {
+             const auto name = params.getProperty ("name", {}).toString();
+             const auto map = engine.getExpressionMap (name);
+
+             if (! map.has_value())
+                 return respond (fail ("no expression map '" + name + "' (" + existingMaps() + ")"));
+
+             ExpressionMap::Selection filter;
+
+             if (auto error = ExpressionMap::Selection::fromVar (params["selection"], filter); error.isNotEmpty())
+                 return respond (fail (error));
+
+             juce::Array<juce::var> list;
+
+             for (auto& slot : map->slots)
+                 if (filter.isEmpty() || ExpressionMap::contains (slot.selection, filter))
+                     list.add (ExpressionMap::slotToVar (slot));
+
+             auto result = object();
+             result->setProperty ("slots", list);
+             respond (ok (juce::var (result.get())));
+         });
+
+    add ("expressionmap.setSlot",
+         "Add a sound slot to a map, or replace the slot of the same combination. The map must stay valid",
+         "name:string slot:{articulation:{root,modifiers:[{group,name}]}, outputs:[{type,number,value?,held?,bank?}], "
+         "timingOffsetMs?, keyLow?, keyHigh?}",
+         [this, existingMaps] (const juce::var& params, Respond respond)
+         {
+             const auto name = params.getProperty ("name", {}).toString();
+             auto map = engine.getExpressionMap (name);
+
+             if (! map.has_value())
+                 return respond (fail ("no expression map '" + name + "' (" + existingMaps() + ")"));
+
+             ExpressionMap::Slot slot;
+
+             if (auto error = ExpressionMap::slotFromVar (params["slot"], slot); error.isNotEmpty())
+                 return respond (fail (error));
+
+             slot.selection = map->canonical (slot.selection);
+             auto replaced = false;
+
+             for (auto& existing : map->slots)
+                 if (existing.selection.modifiers.size() == slot.selection.modifiers.size()
+                      && ExpressionMap::contains (existing.selection, slot.selection))
+                 {
+                     existing = slot;
+                     replaced = true;
+                 }
+
+             if (! replaced)
+                 map->slots.push_back (slot);
+
+             if (auto error = engine.setExpressionMap (*map); error.isNotEmpty())
+                 return respond (fail (error));
+
+             auto result = object();
+             result->setProperty ("replaced", replaced);
+             result->setProperty ("slots", (int) map->slots.size());
+             respond (ok (juce::var (result.get())));
+         });
+
+    add ("expressionmap.removeSlot",
+         "Remove the sound slot of a combination. Refused when the map would become invalid (e.g. a root that "
+         "then has no slot); notes using the combination keep it and show as errors",
+         "name:string articulation:{root,modifiers:[{group,name}]}",
+         [this, existingMaps] (const juce::var& params, Respond respond)
+         {
+             const auto name = params.getProperty ("name", {}).toString();
+             auto map = engine.getExpressionMap (name);
+
+             if (! map.has_value())
+                 return respond (fail ("no expression map '" + name + "' (" + existingMaps() + ")"));
+
+             ExpressionMap::Selection combination;
+
+             if (auto error = ExpressionMap::Selection::fromVar (params["articulation"], combination); error.isNotEmpty())
+                 return respond (fail (error));
+
+             const auto before = map->slots.size();
+             map->slots.erase (std::remove_if (map->slots.begin(), map->slots.end(), [&] (const ExpressionMap::Slot& s)
+             {
+                 return s.selection.modifiers.size() == combination.modifiers.size() && ExpressionMap::contains (s.selection, combination);
+             }), map->slots.end());
+
+             if (map->slots.size() == before)
+                 return respond (fail ("map '" + name + "' has no slot '" + ExpressionMap::labelOf (combination) + "'"));
+
+             if (auto error = engine.setExpressionMap (*map); error.isNotEmpty())
+                 return respond (fail (error));
+
+             respond (ok());
+         });
+
+    add ("expressionmap.offered",
+         "What the articulation menu offers for a choice in a map with sound slots: per modifier group, the articulations "
+         "some slot has together with the choices of the groups before it. Replies {roots:[...], groups:[{group, articulations:[...]}]}",
+         "name:string [selection:{root,modifiers:[{group,name}]}]",
+         [this, existingMaps] (const juce::var& params, Respond respond)
+         {
+             const auto name = params.getProperty ("name", {}).toString();
+             const auto map = engine.getExpressionMap (name);
+
+             if (! map.has_value())
+                 return respond (fail ("no expression map '" + name + "' (" + existingMaps() + ")"));
+
+             ExpressionMap::Selection current;
+
+             if (auto error = ExpressionMap::Selection::fromVar (params["selection"], current); error.isNotEmpty())
+                 return respond (fail (error));
+
+             juce::Array<juce::var> roots, groupList;
+
+             if (map->rootGroup() != nullptr)
+                 for (auto& root : map->rootGroup()->articulations)
+                     if (! map->hasSlots() || map->rootHasSlots (root.name))
+                         roots.add (root.name);
+
+             for (auto& offered : map->offeredModifiers (current))
+             {
+                 auto g = object();
+                 g->setProperty ("group", offered.group->name);
+                 juce::Array<juce::var> names;
+
+                 for (auto* articulation : offered.articulations)
+                     names.add (articulation->name);
+
+                 g->setProperty ("articulations", names);
+                 groupList.add (juce::var (g.get()));
+             }
+
+             auto result = object();
+             result->setProperty ("roots", roots);
+             result->setProperty ("groups", groupList);
+             respond (ok (juce::var (result.get())));
+         });
+
     add ("instrument.setChannelMap",
          "Give one of an instrument's MIDI channels an expression map (by name; \"\" = none). Works on synced channels too. "
          "Every track playing that channel uses the map",

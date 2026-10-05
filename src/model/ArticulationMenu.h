@@ -105,6 +105,8 @@ namespace articulations
     // The menu. Roots are always all there and always available; a modifier
     // group shows only the modifiers that apply to the root, and an item is
     // greyed out when another item of its group is chosen. Every item toggles.
+    // With sound slots a group shows what some slot has with the choices of the
+    // groups before it, and another item of a chosen group replaces it.
     struct MenuItem
     {
         enum class Kind { header, item };
@@ -146,6 +148,9 @@ namespace articulations
 
             for (auto& root : map.groups.front().articulations)
             {
+                if (map.hasSlots() && ! map.rootHasSlots (root.name))
+                    continue;   // no sound slot uses it
+
                 MenuItem item;
                 item.text = symbolled (root);
                 item.description = root.description;
@@ -172,8 +177,17 @@ namespace articulations
 
             for (auto& modifier : map.groups[g].articulations)
             {
-                // Only what applies to the root of every target
-                if (! allTargets ([&] (const Selection& s) { return ExpressionMap::appliesToRoot (modifier, s.root); }))
+                // Only what every target can have: with sound slots, what some slot has
+                // together with the target's choices in the groups before this one
+                if (! allTargets ([&] (const Selection& s)
+                {
+                    if (! map.hasSlots())
+                        return ExpressionMap::appliesToRoot (modifier, s.root);
+
+                    auto candidate = map.before (s, g);
+                    candidate.modifiers.emplace_back (map.groups[g].name, modifier.name);
+                    return map.leadsToSlot (candidate);
+                }))
                     continue;
 
                 MenuItem item;

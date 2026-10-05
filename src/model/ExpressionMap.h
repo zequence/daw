@@ -242,6 +242,39 @@ struct ExpressionMap
 
     bool hasSlots() const noexcept    { return ! slots.empty(); }
 
+    // A slot as JSON: {articulation:{root, modifiers}, outputs, timingOffsetMs, keyLow, keyHigh}
+    static juce::var slotToVar (const Slot& slot)
+    {
+        auto o = new juce::DynamicObject();
+        o->setProperty ("articulation", slot.selection.toVar());
+        o->setProperty ("outputs", outputsToVar (slot.outputs));
+        o->setProperty ("timingOffsetMs", slot.timingOffsetMs);
+        o->setProperty ("keyLow", slot.keyLow);
+        o->setProperty ("keyHigh", slot.keyHigh);
+        return juce::var (o);
+    }
+
+    // Returns an error sentence (empty = parsed)
+    static juce::String slotFromVar (const juce::var& json, Slot& out)
+    {
+        if (! json.isObject())
+            return "a slot must be an object {articulation:{root, modifiers}, outputs, timingOffsetMs?, keyLow?, keyHigh?}";
+
+        Slot slot;
+
+        if (const auto error = Selection::fromVar (json.getProperty ("articulation", {}), slot.selection); error.isNotEmpty())
+            return error;
+
+        if (const auto error = outputsFromVar (json.getProperty ("outputs", {}), "the slot", slot.outputs); error.isNotEmpty())
+            return error;
+
+        slot.timingOffsetMs = (double) json.getProperty ("timingOffsetMs", 0.0);
+        slot.keyLow = (int) json.getProperty ("keyLow", -1);
+        slot.keyHigh = (int) json.getProperty ("keyHigh", -1);
+        out = std::move (slot);
+        return {};
+    }
+
     //==========================================================================
     static bool sameName (const juce::String& a, const juce::String& b)
     {
