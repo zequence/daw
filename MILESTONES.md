@@ -71,10 +71,23 @@ program change reach the instrument at the right time.
   for display.
 - **A note's articulation** = one root articulation, plus **at most one**
   articulation from each modifier group (or none from that group).
-- **Choices follow the root.** When a root articulation is selected, the
-  modifiers that don't apply to it are removed from the choices (a group with
-  nothing left disappears from the menu), and a modifier already chosen that no
-  longer applies is dropped; the others stay.
+- **Selecting is a toggle, and modifier groups are exclusive.** Choosing an
+  item and choosing it again is the same menu item: select / unselect. In a
+  modifier group, once an item is chosen the other items of that group become
+  unavailable (greyed out) until it is unselected.
+- **The root group is different: all roots are always visible and available.**
+  Still only one root per note, but clicking another root switches directly to
+  it (no unselecting first); clicking the selected root again unselects it
+  (the note then has no root).
+- **Choices follow the root.** The modifiers that don't apply to the selected
+  root are removed from the choices (a group with nothing left disappears from
+  the menu). When a different root is chosen, the modifiers already chosen that
+  still apply are **kept**. Those that no longer apply are handled by a setting,
+  **Settings > Editor > Midi** ("when changing the root articulation would drop
+  incompatible modifiers"): **Ask first** (the default; a prompt lists what would
+  be dropped and the user accepts or cancels the change) or **Drop
+  automatically**. (There is no "Editor" settings tab yet; it is added with
+  this.)
 
 ### Output (how an articulation reaches the instrument)
 
@@ -241,9 +254,11 @@ separate kind of output.
 
 - An **articulation dropdown in the MIDI editor's top bar** (before the track
   label, wired like the other boxes; disabled when the track's instrument has no
-  map). It opens a menu: the root articulations first (symbol + name,
-  description as tooltip); once a root is chosen, the modifier groups with
-  applicable modifiers appear as further sections. It edits the **selected
+  map). It opens a menu: the root articulations first, all always available
+  (symbol + name, description as tooltip, the selected one checked); the
+  modifier groups with applicable modifiers follow as further sections, an item
+  greyed out when another item of its group is chosen. Every item toggles. It
+  edits the **selected
   notes**; with nothing selected it sets the articulation new notes are drawn
   with. A selection that mixes articulations shows "Mixed".
 - Notes show their **symbol** in the piano roll (colour per articulation later).
