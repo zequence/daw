@@ -133,7 +133,7 @@ private:
     ArrangementView arrangementView { engine, commandDispatcher, timeAxis, trackScroll };
     PianoRollView pianoRollView { engine, commandDispatcher, timeAxis };
     InstrumentsView instrumentsView { engine };
-    InstrumentEditorView instrumentEditorView { engine };
+    InstrumentEditorView instrumentEditorView { engine, commandDispatcher };
     ExpressionMapEditorView expressionMapView { engine, commandDispatcher };
     HistoryView historyView { commandDispatcher };
     SettingsView settingsView { engine };
