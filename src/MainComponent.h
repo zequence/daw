@@ -1,6 +1,7 @@
 #pragma once
 
 #include "AudioEngine.h"
+#include "UserData.h"
 #include "PluginWindow.h"
 #include "PluginScanProcess.h"
 #include "diagnostics/PerformancePanel.h"
@@ -67,6 +68,7 @@ private:
     void applyLoadedProject (const juce::File&, bool ok, const juce::String& warnings);
     void updateWindowTitle();
     static juce::File getProjectsDirectory();
+    static juce::File startupProjectFile()    { return UserData::getDir().getChildFile ("Startup.odaw"); }
     void openSettings();
     void closeSettings();
     void updateViewVisibility();

@@ -347,6 +347,28 @@ void MainComponent::createDefaultTrack()
     if (! engine.getTrackIds().empty() || ! engine.getInstruments().empty())
         return;
 
+    // The startup project (hamburger menu > "Save as startup project"), opened untitled
+    if (const auto startup = startupProjectFile(); startup.existsAsFile())
+    {
+        statusLabel.setText ("Opening the startup project...", juce::dontSendNotification);
+
+        engine.loadProject (startup, [safe = juce::Component::SafePointer<MainComponent> (this), startup]
+                                     (bool ok, const juce::String& warnings)
+        {
+            if (safe == nullptr)
+                return;
+
+            safe->applyLoadedProject (startup, ok, warnings);
+            safe->currentProjectFile = {};   // a starting point: saving asks for a name
+            safe->updateWindowTitle();
+            safe->engine.markProjectClean();
+
+            if (ok)
+                safe->statusLabel.setText ("Started from the startup project", juce::dontSendNotification);
+        });
+        return;
+    }
+
     const auto wanted = engine.getSettingsFile().getValue ("defaultInstrument", "FabFilter Twin");
 
     if (wanted.isEmpty())   // empty setting disables the default track's instrument
@@ -782,6 +804,24 @@ void MainComponent::showMainMenu()
     menu.addItem ("Load project...", [safe] { if (safe != nullptr) safe->loadProjectDialog(); });
     menu.addItem ("Save project", [safe] { if (safe != nullptr) safe->saveProject (false); });
     menu.addItem ("Save project as...", [safe] { if (safe != nullptr) safe->saveProject (true); });
+    menu.addSeparator();
+    menu.addItem ("Save as startup project", [safe]
+    {
+        if (safe == nullptr)
+            return;
+
+        const auto ok = safe->engine.saveProject (startupProjectFile());
+        safe->statusLabel.setText (ok ? "Saved as the startup project: the app starts with it from now on"
+                                      : "Saving the startup project FAILED", juce::dontSendNotification);
+    });
+    menu.addItem ("Stop using the startup project", startupProjectFile().existsAsFile(), false, [safe]
+    {
+        if (safe == nullptr)
+            return;
+
+        startupProjectFile().moveFileTo (startupProjectFile().withFileExtension (".odaw.bak"));
+        safe->statusLabel.setText ("The app starts with the default instrument again", juce::dontSendNotification);
+    });
     menu.addSeparator();
     menu.addItem ("Settings...", [safe] { if (safe != nullptr) safe->openSettings(); });
 
