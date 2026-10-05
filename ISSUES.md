@@ -22,6 +22,7 @@ Claude is unsure of an issue they will pose a question.
 # Sidebar
 
 # Integrations
+- [ ] A configuration view for MIDI channels: port, channel and expression map.      (Milestone "MIDI channel configuration view" in MILESTONES.md.)
 
 
 # Midi record
@@ -46,3 +47,5 @@ Claude is unsure of an issue they will pose a question.
       lanes can be added on top of each other. Requires controls below the piano
       keys. (Milestone-sized - also captured as "Stacked editor lanes" in
       MILESTONES.md; say the word if it should come sooner.)
+- [ ] An articulation dropdown in the top editor bar, from the track's expression
+      map. (Milestone "Articulation / expression maps" in MILESTONES.md.)
