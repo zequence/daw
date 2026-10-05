@@ -10,6 +10,7 @@
 #include "ui/InstrumentEditorView.h"
 #include "ui/SettingsView.h"
 #include "ui/ExpressionMapEditorView.h"
+#include "ui/TrackOutputPanel.h"
 #include "ui/ThemedLookAndFeel.h"
 #include "ui/PlaceholderView.h"
 #include "ui/PianoRollView.h"
@@ -51,6 +52,7 @@ private:
     void selectTrack (AudioEngine::TrackId, bool forceArm);
     void showTrackContextMenu (AudioEngine::TrackId);
     void chooseTrackOutput (AudioEngine::TrackId);
+    void showTrackOutputConfig (AudioEngine::TrackId);
     void autoNameTrackForOutput (AudioEngine::TrackId, AudioEngine::InstrumentId);
     void chooseNewInstrumentFor (AudioEngine::TrackId);
     void openPluginWindow (AudioEngine::InstrumentId);

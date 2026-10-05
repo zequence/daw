@@ -419,6 +419,18 @@ selection. The UI is a client of the same commands.
 3. Playback: the pre-roll spike and the wiring are done (see "What the pre-roll spike found" and
    "Playback wiring"); what is left is listed under "Still open" there.
 4. The two configuration views (own milestone below) and the map editor UI.
+   **Delivered 2026-10-05:** the map editor (instrument view > "Expression maps..."):
+   maps, groups, articulations, outputs in series, timing offsets, key ranges,
+   applies-to, key names - all through the commands, with names renamed so notes
+   follow, and an invalid edit refused with the reason; the instrument view with a
+   port selector and, per channel, a map dropdown (None / the project's maps / a
+   missing one) and an Edit button (synced channels keep their name locked, their
+   map is editable); the MIDI track panel (track context menu > "Port and
+   channel...": port and channel of the output, greyed out for a synced track).
+   **Still to do:** the editor's colors and the new views' colors are not in the
+   theme yet; the map editor has no undo button of its own (the global history
+   has every change); a map can't be copied between projects until the library
+   (phase 5); no drag-and-drop ordering (Up/Down buttons).
 5. Library, presets (Spitfire UACC, a generic keyswitch map), Cubase
    `.expressionmap` import (observed format only), Synchron detection, then
    programmed CC sequences.

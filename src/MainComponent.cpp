@@ -496,6 +496,7 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     juce::PopupMenu menu;
 
     menu.addItem ("Set output...", [safe, id] { if (safe != nullptr) safe->chooseTrackOutput (id); });
+    menu.addItem ("Port and channel...", [safe, id] { if (safe != nullptr) safe->showTrackOutputConfig (id); });
     menu.addSeparator();
 
     // Contextual add (ISSUES.md "Sidebar"): the new track lands right below this one
@@ -583,6 +584,14 @@ void MainComponent::autoNameTrackForOutput (AudioEngine::TrackId trackId, AudioE
 
     if (isAutomatic)
         engine.setTrackName (trackId, engine.getInstrumentName (instrumentId));
+}
+
+// The MIDI track configuration: port and channel of the track's output (greyed out for a synced track)
+void MainComponent::showTrackOutputConfig (AudioEngine::TrackId trackId)
+{
+    auto panel = std::make_unique<TrackOutputPanel> (engine, commandDispatcher, trackId);
+    const auto mouse = juce::Desktop::getMousePosition();
+    juce::CallOutBox::launchAsynchronously (std::move (panel), juce::Rectangle<int> (mouse.x, mouse.y, 1, 1), nullptr);
 }
 
 void MainComponent::chooseTrackOutput (AudioEngine::TrackId trackId)
