@@ -1298,6 +1298,50 @@ void CommandDispatcher::registerCommands()
              respond (ok());
          });
 
+    add ("expressionmap.renameGroup",
+         "Rename a group inside an expression map (the root group included). Must stay unique ignoring case; a change "
+         "of case alone is fine. The notes of every track playing a channel that uses the map follow, in one undo step",
+         "name:string group:string newName:string",
+         [this] (const juce::var& params, Respond respond)
+         {
+             int notes = 0;
+
+             if (auto error = engine.renameExpressionMapItem (params.getProperty ("name", {}).toString(),
+                                                              params.getProperty ("group", {}).toString(), {},
+                                                              params.getProperty ("newName", {}).toString(), &notes);
+                 error.isNotEmpty())
+                 return respond (fail (error));
+
+             auto result = object();
+             result->setProperty ("notesChanged", notes);
+             respond (ok (juce::var (result.get())));
+         });
+
+    add ("expressionmap.renameArticulation",
+         "Rename an articulation inside an expression map. Must stay unique within its group ignoring case; a change of "
+         "case alone is fine. The modifiers' appliesTo lists follow a renamed root articulation, and the notes of every "
+         "track playing a channel that uses the map follow, in one undo step. Replies {notesChanged}",
+         "name:string group:string articulation:string newName:string",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const auto articulation = params.getProperty ("articulation", {}).toString();
+
+             if (articulation.trim().isEmpty())
+                 return respond (fail ("give the 'articulation' to rename (to rename a group use expressionmap.renameGroup)"));
+
+             int notes = 0;
+
+             if (auto error = engine.renameExpressionMapItem (params.getProperty ("name", {}).toString(),
+                                                              params.getProperty ("group", {}).toString(), articulation,
+                                                              params.getProperty ("newName", {}).toString(), &notes);
+                 error.isNotEmpty())
+                 return respond (fail (error));
+
+             auto result = object();
+             result->setProperty ("notesChanged", notes);
+             respond (ok (juce::var (result.get())));
+         });
+
     add ("expressionmap.validate",
          "Check a map, given by name or inline: structure, unique names, applies-to lists and value ranges. "
          "Replies {valid, problems:[...]}. How outputs combine is deliberately not checked",

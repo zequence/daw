@@ -149,6 +149,7 @@ private:
         if (type == "sidebarMoved") return 45;
         if (type == "markerAdded" || type == "markerRemoved") return 70;
         if (type == "tempoChanged") return 60;
+        if (type == "expressionMapChanged") return 55;   // names a map edit that also rewrote clips
         if (type == "clipChanged") return 50;
         return 10;   // trackChanged and anything else
     }
@@ -185,6 +186,10 @@ private:
         if (type == "markerAdded")       return "Marker '" + event.getProperty ("name", {}).toString() + "'";
         if (type == "markerRemoved")     return "Remove marker";
         if (type == "expressionMapRemoved") return "Remove expression map '" + event.getProperty ("name", {}).toString() + "'";
+
+        if (type == "expressionMapChanged" && event.hasProperty ("renamedFrom"))
+            return "Rename '" + event.getProperty ("renamedFrom", {}).toString() + "' to '" + event.getProperty ("renamedTo", {}).toString()
+                   + "' in expression map '" + event.getProperty ("name", {}).toString() + "'";
 
         if (type == "expressionMapChanged")
             return event.hasProperty ("oldName")

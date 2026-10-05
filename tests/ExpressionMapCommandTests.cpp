@@ -335,6 +335,87 @@ private:
 
         reply = choose ({ 7 }, "Articulation", "Legato");
         expect (! reply["ok"] && errorOf (reply).contains ("out of range"), errorOf (reply));
+
+        //======================================================================
+        beginTest ("renaming inside a map rewrites the notes of the tracks that play a channel using it");
+
+        const auto selectionVar = [] (const char* root, const char* group = nullptr, const char* modifierName = nullptr)
+        {
+            juce::Array<juce::var> modifiers;
+
+            if (group != nullptr)
+                modifiers.add (params ({ { "group", group }, { "name", modifierName } }));
+
+            return params ({ { "root", root }, { "modifiers", modifiers } });
+        };
+
+        // The track above plays channel 2 (map "strings"): Staccato+Short, Legato+Long, Staccato
+        reply = api.run ("clip.updateNotes", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var> {
+            params ({ { "index", 0 }, { "articulation", selectionVar ("Staccato", "Release", "Short") } }),
+            params ({ { "index", 1 }, { "articulation", selectionVar ("Legato", "Release", "Long") } }),
+            params ({ { "index", 2 }, { "articulation", selectionVar ("Staccato") } }) } } }));
+        expect (reply["ok"], errorOf (reply));
+
+        // A track on channel 3, which has no map: it uses the same words but is not governed by this map
+        const auto otherId = (int) api.run ("track.create")["result"]["id"];
+        engine.addTrackOutput (otherId, instrumentId, 3);
+        api.run ("clip.set", params ({ { "trackId", otherId }, { "notes", juce::Array<juce::var> { note (0, 60) } } }));
+        api.run ("clip.updateNotes", params ({ { "trackId", otherId }, { "notes", juce::Array<juce::var> {
+            params ({ { "index", 0 }, { "articulation", selectionVar ("Staccato") } }) } } }));
+
+        const auto notesOf = [&engine] (int track) { return engine.getTrackSequence (track)->getNotes(); };
+        const auto rename = [&] (const char* what, juce::var args) { return api.run (what, args); };
+
+        // A root articulation: notes and the modifiers' applies-to lists follow
+        reply = rename ("expressionmap.renameArticulation", params ({ { "name", "STRINGS" }, { "group", "articulation" },
+                                                                      { "articulation", "staccato" }, { "newName", "Spiccato" } }));
+        expect (reply["ok"], errorOf (reply));
+        expectEquals ((int) reply["result"]["notesChanged"], 2);
+        expectEquals (notesOf (trackId)[0].articulation.root, juce::String ("Spiccato"));
+        expectEquals (notesOf (trackId)[1].articulation.root, juce::String ("Legato"));
+        expectEquals (notesOf (trackId)[2].articulation.root, juce::String ("Spiccato"));
+        expectEquals (notesOf (otherId)[0].articulation.root, juce::String ("Staccato"));   // another map's world: untouched
+        expectEquals (engine.getExpressionMap ("strings")->groups[1].articulations[0].appliesTo.joinIntoString (","), juce::String ("Spiccato"));
+        expect (engine.getExpressionMap ("strings")->isValid());
+
+        // A modifier group
+        reply = rename ("expressionmap.renameGroup", params ({ { "name", "strings" }, { "group", "Release" }, { "newName", "Tail" } }));
+        expect (reply["ok"], errorOf (reply));
+        expectEquals ((int) reply["result"]["notesChanged"], 2);
+        expectEquals (notesOf (trackId)[0].articulation.modifiers[0].first, juce::String ("Tail"));
+        expectEquals (notesOf (trackId)[1].articulation.modifiers[0].first, juce::String ("Tail"));
+
+        // A modifier articulation
+        reply = rename ("expressionmap.renameArticulation", params ({ { "name", "strings" }, { "group", "Tail" },
+                                                                      { "articulation", "Short" }, { "newName", "Brief" } }));
+        expect (reply["ok"], errorOf (reply));
+        expectEquals ((int) reply["result"]["notesChanged"], 1);
+        expectEquals (notesOf (trackId)[0].articulation.modifiers[0].second, juce::String ("Brief"));
+        expectEquals (notesOf (trackId)[1].articulation.modifiers[0].second, juce::String ("Long"));
+
+        // Everything still resolves against the map: no note is an error
+        const auto map = *engine.getExpressionMap ("strings");
+
+        for (auto& n : notesOf (trackId))
+            expect (map.problemsOf (n.articulation).isEmpty(), map.problemsOf (n.articulation).joinIntoString ("; "));
+
+        // Renaming the root group changes no note; a case-only change counts as no note either
+        reply = rename ("expressionmap.renameGroup", params ({ { "name", "strings" }, { "group", "Articulation" }, { "newName", "Main" } }));
+        expect (reply["ok"] && (int) reply["result"]["notesChanged"] == 0, errorOf (reply));
+        reply = rename ("expressionmap.renameGroup", params ({ { "name", "strings" }, { "group", "Mute" }, { "newName", "MUTE" } }));
+        expect (reply["ok"], errorOf (reply));
+
+        // Refusals change nothing, and say why
+        reply = rename ("expressionmap.renameArticulation", params ({ { "name", "strings" }, { "group", "Main" },
+                                                                      { "articulation", "Legato" }, { "newName", "spiccato" } }));
+        expect (! reply["ok"] && errorOf (reply).contains ("already has an articulation 'Spiccato'"), errorOf (reply));
+        expectEquals (notesOf (trackId)[1].articulation.root, juce::String ("Legato"));
+
+        reply = rename ("expressionmap.renameGroup", params ({ { "name", "Nope" }, { "group", "Main" }, { "newName", "X" } }));
+        expect (! reply["ok"] && errorOf (reply).contains ("no expression map 'Nope'"), errorOf (reply));
+
+        reply = rename ("expressionmap.renameArticulation", params ({ { "name", "strings" }, { "group", "Main" }, { "newName", "X" } }));
+        expect (! reply["ok"] && errorOf (reply).contains ("give the 'articulation'"), errorOf (reply));
     }
 };
 

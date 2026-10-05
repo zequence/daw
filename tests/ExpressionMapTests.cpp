@@ -496,6 +496,70 @@ public:
             expect (anyContains (problems, "'Articulation' is the root group"));
         }
 
+        beginTest ("renaming: stays unique ignoring case, a case-only change is fine, errors name what exists");
+        {
+            auto map = selectionMap();
+
+            expectEquals (map.renameGroup ("release", "Tail"), juce::String());
+            expect (map.findGroup ("Tail") != nullptr && map.findGroup ("Release") == nullptr);
+
+            expectEquals (map.renameGroup ("Tail", "TAIL"), juce::String());   // the same group, other case
+            expectEquals (map.groups[1].name, juce::String ("TAIL"));
+
+            expect (map.renameGroup ("Mute", "tail").contains ("already a group 'TAIL'"));
+            expect (map.renameGroup ("Nope", "X").contains ("no group 'Nope'"));
+            expect (map.renameGroup ("Mute", "  ").contains ("needs a name"));
+            expectEquals (map.groups[2].name, juce::String ("Mute"));   // unchanged by the refusals
+
+            expectEquals (map.renameArticulation ("Mute", "Con sord", "Muted"), juce::String());
+            expectEquals (map.groups[2].articulations[0].name, juce::String ("Muted"));
+            expect (map.renameArticulation ("Articulation", "Legato", "staccato").contains ("already has an articulation 'Staccato'"));
+            expect (map.renameArticulation ("Articulation", "Pizz", "X").contains ("it has: Staccato, Legato, Marcato"));
+            expect (map.renameArticulation ("Nowhere", "Legato", "X").contains ("no group 'Nowhere'"));
+            expect (map.renameArticulation ("Articulation", "Legato", "").contains ("needs a name"));
+
+            // The same articulation name in another group is fine
+            expectEquals (map.renameArticulation ("TAIL", "Short", "Staccato"), juce::String());
+
+            expect (map.isValid(), map.validate().joinIntoString ("; "));
+        }
+
+        beginTest ("renaming a root articulation updates the modifiers' applies-to lists");
+        {
+            auto map = selectionMap();   // Short and Soft apply to Staccato + Marcato, Long to Legato, Sfz to Marcato
+            expectEquals (map.renameArticulation ("Articulation", "Staccato", "Spiccato"), juce::String());
+
+            expectEquals (map.findArticulation ("Release", "Short")->appliesTo.joinIntoString (","), juce::String ("Spiccato,Marcato"));
+            expectEquals (map.findArticulation ("Release", "Long")->appliesTo.joinIntoString (","), juce::String ("Legato"));
+            expect (map.isValid(), map.validate().joinIntoString ("; "));   // nothing is left pointing at the old name
+
+            // Renaming a modifier doesn't touch any list
+            expectEquals (map.renameArticulation ("Release", "Short", "Brief"), juce::String());
+            expectEquals (map.findArticulation ("Release", "Soft")->appliesTo.joinIntoString (","), juce::String ("Spiccato,Marcato"));
+        }
+
+        beginTest ("selections follow a rename");
+        {
+            Map::Selection selection;
+            selection.root = "Staccato";
+            selection.modifiers = { { "Release", "Short" }, { "Mute", "Con sord" } };
+
+            expect (! selection.renameRoot ("Legato", "X"));                  // not this root
+            expect (selection.renameRoot ("STACCATO", "Spiccato"));            // names ignore case
+            expectEquals (selection.root, juce::String ("Spiccato"));
+            expect (! selection.renameRoot ("Staccato", "Spiccato"));          // already renamed
+
+            expect (selection.renameModifierGroup ("release", "Tail"));
+            expectEquals (selection.modifiers[0].first, juce::String ("Tail"));
+            expectEquals (selection.modifiers[1].first, juce::String ("Mute"));
+
+            expect (selection.renameModifier ("Tail", "short", "Brief"));
+            expectEquals (selection.modifiers[0].second, juce::String ("Brief"));
+            expect (! selection.renameModifier ("Mute", "Brief", "X"));        // a different group's articulation
+            expect (! selection.renameModifier ("Nowhere", "Con sord", "X"));
+            expectEquals (selection.modifiers[1].second, juce::String ("Con sord"));
+        }
+
         beginTest ("no restrictions on combining keys, CCs and program changes (left to the user)");
         {
             // A root and a modifier that works with it on the same CC

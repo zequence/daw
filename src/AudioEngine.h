@@ -106,6 +106,13 @@ public:
     juce::String setExpressionMap (ExpressionMap);                                   // add, or replace the map of that name; must validate
     juce::String removeExpressionMap (const juce::String& name);                     // channels using it keep the name (shown as a missing map)
     juce::String renameExpressionMap (const juce::String& name, const juce::String& newName);   // channels follow the rename
+
+    // Rename a group (articulationName empty) or an articulation inside a map. The notes of every
+    // track playing a channel that uses the map follow, in one undo step; "applies to" lists follow
+    // a renamed root. notesChanged (optional) receives how many notes were rewritten.
+    juce::String renameExpressionMapItem (const juce::String& mapName, const juce::String& groupName,
+                                          const juce::String& articulationName, const juce::String& newName,
+                                          int* notesChanged = nullptr);
     juce::String setInstrumentChannelMap (InstrumentId, int midiPort, int midiChannel, const juce::String& mapName);   // "" = none
     std::optional<ExpressionMap> getTrackExpressionMap (TrackId) const;              // the map of the track's channel, if it has a valid one
 

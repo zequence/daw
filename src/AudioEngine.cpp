@@ -667,6 +667,94 @@ juce::String AudioEngine::renameExpressionMap (const juce::String& name, const j
     return {};
 }
 
+juce::String AudioEngine::renameExpressionMapItem (const juce::String& mapName, const juce::String& groupName,
+                                                   const juce::String& articulationName, const juce::String& newName,
+                                                   int* notesChanged)
+{
+    if (notesChanged != nullptr)
+        *notesChanged = 0;
+
+    const auto stored = std::find_if (expressionMaps.begin(), expressionMaps.end(),
+                                      [&] (const ExpressionMap& m) { return ExpressionMap::sameName (m.name, mapName); });
+
+    if (stored == expressionMaps.end())
+        return "no expression map '" + mapName + "' (" + existingMapNames (expressionMaps) + ")";
+
+    // Work on a copy; nothing changes unless everything is accepted
+    auto edited = *stored;
+    const auto* group = edited.findGroup (groupName);
+    const auto isRootGroup = group != nullptr && group == edited.rootGroup();
+    const auto canonicalGroup = group != nullptr ? group->name : groupName;
+    const auto renamingGroup = articulationName.trim().isEmpty();
+    juce::String oldName = canonicalGroup;
+
+    if (! renamingGroup && group != nullptr)
+        if (const auto* articulation = ExpressionMap::findArticulation (*group, articulationName))
+            oldName = articulation->name;
+
+    const auto error = renamingGroup ? edited.renameGroup (groupName, newName)
+                                     : edited.renameArticulation (groupName, articulationName, newName);
+
+    if (error.isNotEmpty())
+        return error;
+
+    const auto clean = newName.trim();
+
+    // The notes that name it: tracks whose channel uses this map (as getTrackExpressionMap sees it)
+    struct Rewrite { TrackId id; std::vector<MidiSequence::Note> notes; std::vector<MidiSequence::Control> controls; };
+    std::vector<Rewrite> rewrites;
+    int total = 0;
+
+    for (auto& [trackId, track] : tracks)
+    {
+        const auto info = getTrackChannelInfo (trackId);
+
+        if (track.sequence == nullptr || ! info.has_value() || ! ExpressionMap::sameName (info->expressionMap, mapName))
+            continue;
+
+        Rewrite rewrite { trackId, track.sequence->getNotes(), track.sequence->getControls() };
+        int changed = 0;
+
+        for (auto& note : rewrite.notes)
+        {
+            auto& selection = note.articulation;
+            bool touched = false;
+
+            if (renamingGroup)
+                touched = ! isRootGroup && selection.renameModifierGroup (oldName, clean);   // the root group's name isn't in notes
+            else if (isRootGroup)
+                touched = selection.renameRoot (oldName, clean);
+            else
+                touched = selection.renameModifier (canonicalGroup, oldName, clean);
+
+            if (touched)
+                ++changed;
+        }
+
+        if (changed > 0)
+        {
+            total += changed;
+            rewrites.push_back (std::move (rewrite));
+        }
+    }
+
+    *stored = std::move (edited);
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("name", stored->name);
+    data->setProperty ("renamedFrom", oldName);
+    data->setProperty ("renamedTo", clean);
+    emitEvent ("expressionMapChanged", data);
+
+    for (auto& rewrite : rewrites)
+        setTrackSequence (rewrite.id, MidiSequence::create (std::move (rewrite.notes), std::move (rewrite.controls)));
+
+    if (notesChanged != nullptr)
+        *notesChanged = total;
+
+    return {};
+}
+
 juce::String AudioEngine::setInstrumentChannelMap (InstrumentId id, int midiPort, int midiChannel, const juce::String& mapName)
 {
     auto* instrument = findInstrument (id);

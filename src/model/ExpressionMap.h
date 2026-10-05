@@ -83,6 +83,44 @@ struct ExpressionMap
 
         bool operator!= (const Selection& other) const    { return ! (*this == other); }
 
+        // Follow a rename in the map. Each returns whether this selection changed.
+        bool renameRoot (const juce::String& oldName, const juce::String& newName)
+        {
+            if (! sameName (root, oldName) || root == newName)
+                return false;
+
+            root = newName;
+            return true;
+        }
+
+        bool renameModifierGroup (const juce::String& oldName, const juce::String& newName)
+        {
+            auto changed = false;
+
+            for (auto& modifier : modifiers)
+                if (sameName (modifier.first, oldName) && modifier.first != newName)
+                {
+                    modifier.first = newName;
+                    changed = true;
+                }
+
+            return changed;
+        }
+
+        bool renameModifier (const juce::String& groupName, const juce::String& oldName, const juce::String& newName)
+        {
+            auto changed = false;
+
+            for (auto& modifier : modifiers)
+                if (sameName (modifier.first, groupName) && sameName (modifier.second, oldName) && modifier.second != newName)
+                {
+                    modifier.second = newName;
+                    changed = true;
+                }
+
+            return changed;
+        }
+
         // {root, modifiers:[{group, name}]}
         juce::var toVar() const
         {
@@ -460,6 +498,69 @@ struct ExpressionMap
     }
 
     //==========================================================================
+    // Renaming. Names are identifiers: a rename must stay unique ignoring case
+    // (changing only the case of the same item is fine), and everything that
+    // refers to the name follows - a root articulation's name in the modifiers'
+    // applies-to lists here, and the notes' choices via Selection::rename*
+    // (the engine does that across the tracks using the map).
+    // Both return an error sentence (empty = renamed).
+    juce::String renameGroup (const juce::String& groupName, const juce::String& newName)
+    {
+        const auto clean = newName.trim();
+        auto* group = findMutableGroup (groupName);
+
+        if (group == nullptr)
+            return "no group '" + groupName + "' in map '" + name + "' (groups: " + groupNames() + ")";
+
+        if (clean.isEmpty())
+            return "a group needs a name";
+
+        for (auto& other : groups)
+            if (&other != group && sameName (other.name, clean))
+                return "there is already a group '" + other.name + "' in map '" + name + "' (names ignore case)";
+
+        group->name = clean;
+        return {};
+    }
+
+    juce::String renameArticulation (const juce::String& groupName, const juce::String& articulationName, const juce::String& newName)
+    {
+        const auto clean = newName.trim();
+        auto* group = findMutableGroup (groupName);
+
+        if (group == nullptr)
+            return "no group '" + groupName + "' in map '" + name + "' (groups: " + groupNames() + ")";
+
+        Articulation* target = nullptr;
+
+        for (auto& articulation : group->articulations)
+            if (sameName (articulation.name, articulationName))
+                target = &articulation;
+
+        if (target == nullptr)
+            return "no articulation '" + articulationName + "' in group '" + group->name + "' (it has: " + names (*group) + ")";
+
+        if (clean.isEmpty())
+            return "an articulation needs a name";
+
+        for (auto& other : group->articulations)
+            if (&other != target && sameName (other.name, clean))
+                return "group '" + group->name + "' already has an articulation '" + other.name + "' (names ignore case)";
+
+        const auto oldName = target->name;
+        target->name = clean;
+
+        if (group == &groups.front())   // a root: the modifiers that list it follow
+            for (size_t g = 1; g < groups.size(); ++g)
+                for (auto& modifier : groups[g].articulations)
+                    for (auto& applies : modifier.appliesTo)
+                        if (sameName (applies, oldName))
+                            applies = clean;
+
+        return {};
+    }
+
+    //==========================================================================
     // Choosing articulations. The editor's menu and the API share these rules:
     //  - every item toggles (choose it again to unselect it);
     //  - a modifier group is exclusive: once an item is chosen, the group's other
@@ -745,6 +846,15 @@ struct ExpressionMap
     }
 
 private:
+    Group* findMutableGroup (const juce::String& groupName)
+    {
+        for (auto& group : groups)
+            if (sameName (group.name, groupName))
+                return &group;
+
+        return nullptr;
+    }
+
     juce::String groupNames() const
     {
         juce::StringArray list;

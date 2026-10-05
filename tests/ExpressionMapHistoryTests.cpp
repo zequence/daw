@@ -163,6 +163,38 @@ private:
             expectEquals (channels[0].midiChannel, 4);
             expectEquals (channels[0].expressionMap, juce::String ("Horns"));
         }
+
+        //======================================================================
+        beginTest ("renaming inside a map is ONE history entry; travelling back restores the map and the notes");
+
+        const auto trackId = (int) api.run ("track.create")["result"]["id"];
+        engine.addTrackOutput (trackId, instrumentId, 4);
+
+        auto articulatedNote = params ({ { "start", 0 }, { "length", 960000 }, { "key", 60 } });
+        articulatedNote.getDynamicObject()->setProperty ("articulation", params ({ { "root", "Staccato" } }));
+        api.run ("clip.set", params ({ { "trackId", trackId }, { "notes", juce::Array<juce::var> { articulatedNote } } }));
+        pump();
+
+        const auto beforeRename = *api.run ("history.list")["result"].getArray();
+
+        reply = api.run ("expressionmap.renameArticulation", params ({ { "name", "Horns" }, { "group", "Articulation" },
+                                                                       { "articulation", "Staccato" }, { "newName", "Spiccato" } }));
+        expect (reply["ok"], reply["error"].toString());
+        expectEquals ((int) reply["result"]["notesChanged"], 1);
+        pump();
+
+        const auto afterRename = *api.run ("history.list")["result"].getArray();
+        expectEquals (afterRename.size(), beforeRename.size() + 1);   // the map edit and the clip rewrite are one entry
+        expect (afterRename[afterRename.size() - 1]["description"].toString().contains ("Rename 'Staccato' to 'Spiccato' in expression map 'Horns'"),
+                afterRename[afterRename.size() - 1]["description"].toString());
+
+        expectEquals (engine.getTrackSequence (trackId)->getNotes()[0].articulation.root, juce::String ("Spiccato"));
+        expectEquals (engine.getExpressionMap ("Horns")->groups[0].articulations[0].name, juce::String ("Spiccato"));
+
+        api.run ("history.travel", params ({ { "id", beforeRename[beforeRename.size() - 1]["id"] } }));
+        pump();
+        expectEquals (engine.getTrackSequence (trackId)->getNotes()[0].articulation.root, juce::String ("Staccato"));
+        expectEquals (engine.getExpressionMap ("Horns")->groups[0].articulations[0].name, juce::String ("Staccato"));
     }
 };
 
