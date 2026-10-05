@@ -29,6 +29,10 @@ public:
         juce::int64 sourceTick = noSource;
 
         juce::int64 written() const noexcept    { return sourceTick == noSource ? startTick : sourceTick; }
+
+        // A keyswitch inserted by an articulation (playback sequences only). When playback starts or a loop
+        // wraps mid-piece, the keyswitch of the articulation in effect is re-sent (the chase).
+        bool isKeyswitch = false;
     };
 
     enum class ControlType { controller, pitchBend, programChange };

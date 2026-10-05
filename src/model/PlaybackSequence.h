@@ -115,6 +115,7 @@ namespace playback
                                 MidiSequence::Note keyswitch;
                                 keyswitch.startTick = scheduled;
                                 keyswitch.sourceTick = writtenTick;
+                                keyswitch.isKeyswitch = true;
                                 keyswitch.channel = original.channel;
                                 keyswitch.key = output.number;
                                 keyswitch.velocity = output.value;

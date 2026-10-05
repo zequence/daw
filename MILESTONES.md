@@ -334,20 +334,46 @@ tick 0. Stop during a pre-roll leaves no stuck notes and the position at the sta
   per lap, exact samples, none stuck); events written past the loop end; stop and
   loop-off while a look-ahead note sounds.
 
-**Not covered yet (still open):**
-- **Wiring:** nothing sets the pre-roll or builds the playback sequence yet. The
-  pre-roll should be the largest negative offset among the tracks' maps,
-  updated when maps change.
-- **Positive offsets across the loop wrap** (a late note written near the loop
-  end, scheduled after it) are not carried into the next lap.
+### Playback wiring (delivered 2026-10-05)
+
+- **The generator** (`model/PlaybackSequence.h`): from the written sequence, the map
+  of the channel the track plays and the tempo map it builds the playback sequence:
+  notes shifted by the sum of their root's and modifiers' timing offsets (ms,
+  converted at the note's position, length kept), and the articulation's outputs
+  inserted at the note's own tick, before its note-on, whenever the articulation
+  changes (keyswitch notes - tapped 30 ms, or held until the next change - then CCs,
+  program changes with bank select CC0/CC32). An unresolved articulation plays as none;
+  a note with none sends nothing. Every generated event carries its written tick.
+- **The engine plays it:** rebuilt on every sequence change (edit, undo, redo, time
+  travel, load), when a map is set/removed/renamed, when an assignment or a track's
+  output changes, when the tempo changes, after a re-sync or an instrument removal, and
+  when the "first root as default" setting is toggled. The written sequence is never
+  touched. The transport's pre-roll is the most negative offset any track uses
+  (0 when none does: nothing changes for projects without maps).
+- **The chase covers keyswitches:** starting mid-piece, or wrapping a loop, re-sends
+  the keyswitch of the articulation in effect (a tapped one for its own length, a held
+  one that is still down until its end), together with the CC/program state.
+- **The recorder** stamps what is played during a pre-roll at the start of the take,
+  never before it.
+
+**Still open:**
+- **Positive offsets across the loop wrap** (a late note written near the loop end,
+  scheduled after it) are not carried into the next lap.
 - **Tempo changes inside the pre-roll window** convert correctly (it is wall-clock
-  time), but the window is measured in samples from the start position, so a
-  tempo change right before the start moves the tick where the pre-roll begins.
-- **The recorder and anything else that reads the position** (metronome, record
-  start) must learn about the pre-roll: `Block::inPreRoll`.
-- **Bouncing/rendering** must include the pre-roll.
-- **Loop shorter than the pre-roll:** the look-ahead window is clamped to the loop.
-- **A pre-roll while the transport is rolling and the loop region is edited.**
+  time), but a tempo change right before the start moves the tick where the
+  pre-roll begins.
+- **The silent gap:** every Play and every locate while playing now waits one
+  pre-roll (70 ms for a Spitfire legato) before the position moves.
+- **No bounce/export exists yet**; when it does it must include the pre-roll. The same
+  goes for a metronome or count-in (neither exists).
+- **A loop shorter than the pre-roll:** the look-ahead window is clamped to the loop.
+- **Editing the loop region or a map while rolling:** the pre-roll changes at once, the
+  position does not jump; the first lap after the change may miss an early note.
+- **Notes sounding in the old state when a sequence is swapped live** are not
+  restarted, only their note-offs stay correct (the existing tracking).
+- **Several notes at the same written tick with different articulations** each send
+  their own switches in note order; the last one wins on the instrument.
+- **Multi-output tracks:** the map of the track's FIRST output decides.
 
 ### Dynamics, velocity layers and CC sequences
 
@@ -390,10 +416,8 @@ selection. The UI is a client of the same commands.
    whose articulation is missing; the editor's new colors (keyswitch mark, error
    red) are hard-coded and belong in the theme; maps can only be created through
    the API until the map editor (phase 4).
-3. Playback: the pre-roll spike is done (see "What the pre-roll spike found"); now the wiring: the playback
-   sequence generated from the written one, with the pre-roll set from the maps' largest negative
-   offset (switch events and timing offsets), regenerated on change, and the chase of
-   the last switch on locate.
+3. Playback: the pre-roll spike and the wiring are done (see "What the pre-roll spike found" and
+   "Playback wiring"); what is left is listed under "Still open" there.
 4. The two configuration views (own milestone below) and the map editor UI.
 5. Library, presets (Spitfire UACC, a generic keyswitch map), Cubase
    `.expressionmap` import (observed format only), Synchron detection, then

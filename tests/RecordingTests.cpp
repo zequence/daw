@@ -54,6 +54,25 @@ public:
             expect (result.controls.empty());
         }
 
+        beginTest ("input played during a pre-roll is recorded at the start of the take, never before it");
+        {
+            Rig rig;
+            rig.transport.setPreRollMs (70.0);   // 3360 samples
+            rig.recorder.start (1);
+            rig.transport.play();
+
+            // A note struck 1000 samples into the pre-roll, held until after it ends
+            rig.block (1680, { { juce::MidiMessage::noteOn (1, 60, (juce::uint8) 90), 1000 } });
+            rig.block (1680);   // the pre-roll is over: tick 0 is reached now
+            rig.block (480, { { juce::MidiMessage::noteOff (1, 60), 240 } });
+
+            const auto result = rig.recorder.finish (rig.transport.getPositionTicks());
+            expectEquals ((int) result.notes.size(), 1);
+            expectEquals (result.notes[0].startTick, (juce::int64) 0);                       // clamped, not -2360 samples
+            expectEquals (result.notes[0].lengthTicks, (juce::int64) 240 * 40);             // it ends 240 samples after the start
+            expect (rig.recorder.getFirstEventTick() >= 0);
+        }
+
         beginTest ("note-on with velocity 0 ends the note");
         {
             Rig rig;

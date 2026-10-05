@@ -95,7 +95,7 @@ private:
         }
 
         if (b.chaseAtStart && seq != nullptr)
-            chase (midi, *seq, b.segments[0].gateTick, b.segments[0].offset);
+            chase (midi, *seq, b.segments[0].gateTick, b.segments[0].offset, b.segments[0].startTick);
 
         for (int i = 0; i < b.numSegments; ++i)
         {
@@ -104,7 +104,7 @@ private:
                 emitAllNotesOff (midi, b.segments[i].offset, true);
 
                 if (seq != nullptr)
-                    chase (midi, *seq, b.segments[i].gateTick, b.segments[i].offset);
+                    chase (midi, *seq, b.segments[i].gateTick, b.segments[i].offset, b.segments[i].startTick);
             }
 
             if (seq != nullptr)
@@ -319,7 +319,7 @@ private:
         }
     }
 
-    void chase (juce::MidiBuffer& midi, const MidiSequence& seq, juce::int64 chaseTick, int offset)
+    void chase (juce::MidiBuffer& midi, const MidiSequence& seq, juce::int64 chaseTick, int offset, juce::int64 emitTick)
     {
         std::memset (ccState, -1, sizeof (ccState));
         std::memset (bendState, -1, sizeof (bendState));
@@ -361,6 +361,44 @@ private:
 
             if (bendState[ch - 1] >= 0)
                 midi.addEvent (juce::MidiMessage::pitchWheel (ch, bendState[ch - 1]), offset);
+        }
+
+        chaseKeyswitch (midi, seq, chaseTick, offset, emitTick);
+    }
+
+    // A keyswitch is a note, so the controller chase above doesn't cover it: starting mid-piece
+    // (or wrapping a loop) the articulation in effect is re-sent. That is the last group of
+    // keyswitches written before 'chaseTick' (and scheduled before it - one scheduled later is
+    // played in due course). A tapped one is replayed for its own length; a held one that is still
+    // down at 'chaseTick' goes down again until its original end.
+    void chaseKeyswitch (juce::MidiBuffer& midi, const MidiSequence& seq, juce::int64 chaseTick, int offset, juce::int64 emitTick)
+    {
+        constexpr auto none = std::numeric_limits<juce::int64>::min();
+        auto lastWritten = none;
+
+        for (const auto& n : seq.getNotes())
+        {
+            if (n.startTick >= chaseTick)
+                break;
+
+            if (n.isKeyswitch && n.written() < chaseTick)
+                lastWritten = juce::jmax (lastWritten, n.written());
+        }
+
+        if (lastWritten == none)
+            return;
+
+        for (const auto& n : seq.getNotes())
+        {
+            if (n.startTick >= chaseTick)
+                break;
+
+            if (! n.isKeyswitch || n.written() != lastWritten)
+                continue;
+
+            const auto originalEnd = n.startTick + n.lengthTicks;
+            midi.addEvent (juce::MidiMessage::noteOn (n.channel, n.key, (juce::uint8) n.velocity), offset);
+            activeNotes.push_back ({ n.channel, n.key, originalEnd > chaseTick ? originalEnd : emitTick + n.lengthTicks });
         }
     }
 

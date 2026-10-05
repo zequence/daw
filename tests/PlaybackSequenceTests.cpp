@@ -255,6 +255,113 @@ public:
             expectEquals (cc1[0]->value, 77);
         }
 
+        beginTest ("starting mid-piece re-sends the keyswitch of the articulation in effect (the chase)");
+        {
+            // Staccato at 0, Legato at 4Q (held keyswitch, until the next change), Staccato at 12Q
+            const auto written = MidiSequence::create ({ note (0, 60, "Staccato"), note (4 * Q, 64, "Legato"), note (12 * Q, 67, "Staccato") }, {});
+            const auto result = playback::build (written, &map, *tempo, false);
+
+            struct Hit { juce::int64 sample; juce::MidiMessage message; };
+
+            const auto playFrom = [&] (juce::int64 startTick, int blocks)
+            {
+                Transport transport;
+                transport.prepare (48000.0);
+                transport.setPreRollMs (-result.earliestOffsetMs);
+                MidiSourceProcessor source (transport);
+                source.setSequence (result.sequence);
+                juce::AudioBuffer<float> audio (2, 4096);
+                std::vector<Hit> hits;
+                juce::int64 clock = 0;
+
+                transport.locate (startTick);
+                transport.play();
+
+                for (int i = 0; i < blocks; ++i)
+                {
+                    transport.beginBlock (480);
+                    juce::MidiBuffer midi;
+                    source.processBlock (audio, midi);
+
+                    for (const auto metadata : midi)
+                        hits.push_back ({ clock + metadata.samplePosition, metadata.getMessage() });
+
+                    clock += 480;
+                }
+
+                return hits;
+            };
+
+            const auto ons = [] (const std::vector<Hit>& hits, int key)
+            {
+                std::vector<juce::int64> samples;
+
+                for (auto& h : hits)
+                    if (h.message.isNoteOn() && h.message.getNoteNumber() == key)
+                        samples.push_back (h.sample);
+
+                return samples;
+            };
+
+            const auto offs = [] (const std::vector<Hit>& hits, int key)
+            {
+                std::vector<juce::int64> samples;
+
+                for (auto& h : hits)
+                    if (h.message.isNoteOff() && h.message.getNoteNumber() == key)
+                        samples.push_back (h.sample);
+
+                return samples;
+            };
+
+            // From bar 3 (8Q): the Legato's held keyswitch is still down, until the Staccato at 12Q
+            {
+                const auto hits = playFrom (8 * Q, 250);
+                expect (ons (hits, 25) == std::vector<juce::int64> { 0 }, "legato's keyswitch is re-sent at the very start");
+                expect (ons (hits, 24).size() == 1, "...and the Staccato's own switch at 12Q comes in due course");
+                expect (offs (hits, 25) == std::vector<juce::int64> { 3360 + 96000 }, "a held keyswitch ends where the articulation does (12Q = 96000 samples on)");
+
+                // The controller part of the state was chased too (CC32 = 20)
+                int cc32 = 0;
+
+                for (auto& h : hits)
+                    if (h.message.isController() && h.message.getControllerNumber() == 32 && h.message.getControllerValue() == 20)
+                        ++cc32;
+
+                expectEquals (cc32, 1);
+            }
+
+            // From bar 4 (12Q + 2Q = 14Q): the Staccato's tapped keyswitch is replayed for its own 30 ms
+            {
+                const auto hits = playFrom (14 * Q, 10);
+                expect (ons (hits, 24) == std::vector<juce::int64> { 0 });
+                expect (offs (hits, 24) == std::vector<juce::int64> { 1440 }, "released 30 ms later");
+                expect (ons (hits, 25).empty());
+            }
+
+            // Before any articulation was set: nothing to chase
+            {
+                const auto hits = playFrom (0, 40);
+                expect (ons (hits, 24) == std::vector<juce::int64> { 3360 }, "the first note's own switch, in its own time");
+            }
+
+            // Starting exactly AT the legato (4Q): its switch is played in the pre-roll, not chased; the earlier one is
+            {
+                const auto hits = playFrom (4 * Q, 20);
+                expect (ons (hits, 25) == std::vector<juce::int64> { 0 }, "the legato's keyswitch once, 70 ms before it");
+                expect (ons (hits, 24) == std::vector<juce::int64> { 0 }, "the earlier articulation is chased");
+                size_t at24 = 0, at25 = 0;
+
+                for (size_t i = 0; i < hits.size(); ++i)
+                {
+                    if (hits[i].message.isNoteOn() && hits[i].message.getNoteNumber() == 24) at24 = i;
+                    if (hits[i].message.isNoteOn() && hits[i].message.getNoteNumber() == 25) at25 = i;
+                }
+
+                expect (at24 < at25, "the chased state first, then the early switch: the legato wins");
+            }
+        }
+
         beginTest ("end to end: the legato sounds 70 ms early and its keyswitch lands in the same sample, first");
         {
             // Written at bar 2; played from the start with the pre-roll the sequence asks for

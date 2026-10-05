@@ -68,6 +68,11 @@ public:
 
                     TimedEvent event;
                     event.tick = b.map->samplesToTicks (seg.startSample + (offset - seg.offset), b.sampleRate);
+
+                    // During a pre-roll the transport runs before the position it shows: what is played then
+                    // is recorded at the start of the take, never before it
+                    if (b.inPreRoll && segment == 0)
+                        event.tick = juce::jmax (event.tick, seg.gateTick);
                     event.size = metadata.numBytes;
                     std::memcpy (event.data, metadata.data, (size_t) metadata.numBytes);
                     push (event);
