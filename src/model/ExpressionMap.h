@@ -15,8 +15,10 @@
 // "staccato" are the same name); the typed case is kept for display.
 //
 // A plain value type: edit a copy, share an immutable snapshot (like
-// MidiSequence and TempoMap). Validation reports every problem as a sentence
-// that names what exists and what clashes.
+// MidiSequence and TempoMap). Validation checks structure and value ranges and
+// reports every problem as a sentence. It deliberately does NOT restrict how
+// outputs combine: the same CC, key or program change in several articulations
+// (even ones active together) is left to the user.
 struct ExpressionMap
 {
     // What an articulation sends to the instrument when it becomes active
@@ -66,6 +68,15 @@ struct ExpressionMap
     }
 
     const Group* rootGroup() const noexcept     { return groups.empty() ? nullptr : &groups.front(); }
+
+    // The first root articulation (the default root, if the user turns that on)
+    const Articulation* firstRoot() const noexcept
+    {
+        if (groups.empty() || groups.front().articulations.empty())
+            return nullptr;
+
+        return &groups.front().articulations.front();
+    }
 
     const Group* findGroup (const juce::String& groupName) const
     {
@@ -178,7 +189,6 @@ struct ExpressionMap
             }
         }
 
-        addConflicts (problems);
         return problems;
     }
 
@@ -217,77 +227,5 @@ private:
                     problems.add (label + ": bank " + juce::String (output.bank) + " is outside 0-16383 (or -1 for none)");
                 break;
         }
-    }
-
-    static juce::String describe (const Output& output)
-    {
-        switch (output.type)
-        {
-            case Output::Type::keyswitch:      return "keyswitch key " + juce::String (output.number);
-            case Output::Type::controller:     return "CC " + juce::String (output.number);
-            case Output::Type::programChange:  return "a program change";
-        }
-
-        return {};
-    }
-
-    // Two outputs of articulations that are active at the same time clash when they would
-    // overwrite each other: the same CC number, the same keyswitch key, or any
-    // two program changes (a channel holds one program).
-    static bool clash (const Output& a, const Output& b)
-    {
-        if (a.type != b.type)
-            return false;
-
-        return a.type == Output::Type::programChange || a.number == b.number;
-    }
-
-    // Articulations in the SAME group are never active together, so sharing a
-    // CC or key there is fine (UACC: CC32 with a different value for each).
-    // Across groups, a pair is active together when a modifier works with the
-    // root (root + modifier), or two modifiers of different groups share a root
-    // they both work with. Modifiers don't exist without a root.
-    void addConflicts (juce::StringArray& problems) const
-    {
-        const auto& root = groups.front();
-
-        // Every output of one against every output of the other
-        const auto reportClashes = [&] (const Group& ga, const Articulation& a, const Group& gb, const Articulation& b)
-        {
-            for (auto& oa : a.outputs)
-                for (auto& ob : b.outputs)
-                    if (clash (oa, ob))
-                        problems.add ("'" + a.name + "' (group '" + ga.name + "') and '" + b.name + "' (group '" + gb.name
-                                      + "') can be active together and both send " + describe (oa)
-                                      + "; the second would overwrite the first. Give one of them a different "
-                                      + (oa.type == Output::Type::programChange ? "output" : "number")
-                                      + ", or limit which roots it applies to");
-        };
-
-        for (size_t g = 1; g < groups.size(); ++g)
-        {
-            for (auto& modifier : groups[g].articulations)
-            {
-                // root + modifier
-                for (auto& rootArticulation : root.articulations)
-                    if (appliesToRoot (modifier, rootArticulation.name))
-                        reportClashes (root, rootArticulation, groups[g], modifier);
-
-                // modifier + modifier of a later group, with a root both work with
-                for (size_t h = g + 1; h < groups.size(); ++h)
-                    for (auto& other : groups[h].articulations)
-                        if (shareARoot (modifier, other))
-                            reportClashes (groups[g], modifier, groups[h], other);
-            }
-        }
-    }
-
-    bool shareARoot (const Articulation& a, const Articulation& b) const
-    {
-        for (auto& rootArticulation : groups.front().articulations)
-            if (appliesToRoot (a, rootArticulation.name) && appliesToRoot (b, rootArticulation.name))
-                return true;
-
-        return false;
     }
 };

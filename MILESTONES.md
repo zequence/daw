@@ -88,6 +88,16 @@ program change reach the instrument at the right time.
   be dropped and the user accepts or cancels the change) or **Drop
   automatically**. (There is no "Editor" settings tab yet; it is added with
   this.)
+- **Modifiers are not available without a root.** With no root selected, the
+  menu offers the roots only; modifiers appear once a root is chosen (and
+  unselecting the root drops them).
+- **Default root (a setting).** Also under **Settings > Editor > Midi**: "Use the
+  first root articulation as the default" (off by default). When on, a note with
+  no root articulation behaves as if the map's first root articulation were
+  selected: it is sent for playback and shown as such, and new notes start with
+  it. This is practical, and it also avoids the instrument staying on whatever
+  the previous note switched to. It applies implicitly (nothing is written to the
+  notes), so turning it off again restores them to "none".
 
 ### Output (how an articulation reaches the instrument)
 
@@ -103,18 +113,14 @@ inside one articulation is the author's explicit sequence, not a conflict.
 
 The active combination's outputs are the root's, then its modifiers'.
 
-**Conflicts are errors, not "last one wins".** Articulations in the same group
-may share a CC or keyswitch freely (only one of them is active at a time; UACC
-uses CC32 with a different value for each). But two articulations that can be
-active TOGETHER - a root and a modifier that applies to it, or modifiers from two
-different groups - must not target the same CC number, keyswitch key or program
-change - in ANY of their outputs. That is a bug in the map and is reported with an error message naming
-both articulations:
-- when the map is edited (the command refuses it, the editor shows it - helpful
-  failure, DESIGN.md), and `expressionmap.validate` lists every conflict;
-- at load/import, if a map arrives with one anyway: the map stays usable but the
-  conflicting combination sends nothing and a message says why, instead of
-  playing the wrong sound silently.
+**No restrictions on combining outputs.** Any articulation may use any key, CC or
+program change, including the same one as another articulation, even one that
+can be active at the same time (a root and its modifier on the same CC, two
+modifiers on the same keyswitch...). This is left to the user for now - it may
+be what a library needs, and refusing it could get in the way. (An advisory
+check can come later if it turns out to be useful.) Validation only checks
+structure and value ranges: names present and unique, "applies to" naming real
+roots, numbers in range.
 
 The output is always sent exactly before its note - no setting, no default
 offset. (Timing is a separate thing, next.)
@@ -305,7 +311,7 @@ selection. The UI is a client of the same commands.
 ### Phases
 
 1. Model + persistence + commands + tests (case-insensitive names, applicability
-   and drop-on-root-change rules, one modifier per group, conflict validation,
+   and drop-on-root-change rules, one modifier per group, structure/range validation,
    project round trip, rename rewriting, sync keeps assignments, snapshots cover
    maps and assignments). No UI.
 2. Editor: the dropdown, note assignment, symbols on notes, named keys and
