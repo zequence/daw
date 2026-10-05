@@ -21,13 +21,12 @@
 #include "ui/BusyOverlay.h"
 
 // The single-window shell:
-//   topbar (menu, domain buttons, transport) / sidebar + content container / status + keyboard.
+//   topbar (menu, domain buttons, transport) / sidebar + content container / status.
 // Settings overlays the whole UI; everything else swaps inside the content container.
 class CommandDispatcher;
 class McpProcess;
 
 class MainComponent final : public juce::Component,
-                            private juce::MidiKeyboardState::Listener,
                             private juce::ChangeListener,
                             private juce::Timer
 {
@@ -78,8 +77,6 @@ private:
     void togglePerfPanel();
     void startPluginScan (juce::StringArray args);
 
-    void handleNoteOn (juce::MidiKeyboardState*, int channel, int note, float velocity) override;
-    void handleNoteOff (juce::MidiKeyboardState*, int channel, int note, float velocity) override;
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
     void timerCallback() override;
 
@@ -150,8 +147,6 @@ private:
 
     // Bottom
     juce::Label statusLabel;
-    juce::MidiKeyboardState keyboardState;
-    juce::MidiKeyboardComponent keyboard { keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard };
     PerformanceTracker perfTracker { engine };
     PerformancePanel perfPanel { perfTracker };
 

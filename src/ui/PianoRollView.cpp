@@ -868,6 +868,13 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
         return;
     }
 
+    // The keyboard plays: the further out on the key (to the right), the louder
+    if (keysArea().contains (position) && ! event.mods.isPopupMenu())
+    {
+        playKey (yToKey (position.y), position.x);
+        return;
+    }
+
     if (! gridArea().contains (position))
         return;
 
@@ -893,6 +900,10 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
             selection = { hit };
         }
 
+        // Hear the note you pick (when Hear is on)
+        if (auto seq = sequence(); seq != nullptr && hit < (int) seq->getNotes().size())
+            auditionNote (seq->getNotes()[(size_t) hit].key, seq->getNotes()[(size_t) hit].velocity);
+
         drag = onRightEdge ? Drag::resize : Drag::move;
     }
     else if (modeBox.getSelectedId() == 2)
@@ -915,8 +926,42 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
     repaint();
 }
 
+// Clicking the keyboard: note on while held, velocity by how far out on the key (left edge soft,
+// right edge loudest); dragging to another key plays that one instead
+void PianoRollView::playKey (int key, int x)
+{
+    key = juce::jlimit (0, 127, key);
+    const auto velocity = juce::jlimit (1, 127, juce::roundToInt (1.0 + 126.0 * juce::jlimit (0.0, 1.0, (double) x / (double) (keysWidth - 2))));
+
+    if (key == keyboardKey)
+        return;
+
+    releaseKey();
+    keyboardKey = key;
+    auto on = juce::MidiMessage::noteOn (1, key, (juce::uint8) velocity);
+    on.setTimeStamp (juce::Time::getMillisecondCounterHiRes() * 0.001);
+    engine.getLiveMidiCollector().addMessageToQueue (on);
+}
+
+void PianoRollView::releaseKey()
+{
+    if (keyboardKey < 0)
+        return;
+
+    auto off = juce::MidiMessage::noteOff (1, keyboardKey);
+    off.setTimeStamp (juce::Time::getMillisecondCounterHiRes() * 0.001);
+    engine.getLiveMidiCollector().addMessageToQueue (off);
+    keyboardKey = -1;
+}
+
 void PianoRollView::mouseDrag (const juce::MouseEvent& event)
 {
+    if (keyboardKey >= 0)
+    {
+        playKey (yToKey (event.y), juce::jlimit (0, keysWidth - 2, event.x));
+        return;
+    }
+
     const auto position = event.getPosition();
 
     if (drag == Drag::move || drag == Drag::resize)
@@ -1006,6 +1051,12 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
 
 void PianoRollView::mouseUp (const juce::MouseEvent& event)
 {
+    if (keyboardKey >= 0)
+    {
+        releaseKey();
+        return;
+    }
+
     if (drag == Drag::marquee)
     {
         const auto rect = juce::Rectangle<int>::leftTopRightBottom (

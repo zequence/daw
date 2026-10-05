@@ -11,7 +11,6 @@ namespace
 {
     constexpr int topbarHeight   = 44;
     constexpr int statusHeight   = 22;
-    constexpr int keyboardHeight = 90;
     constexpr int collapsedSidebarWidth = 26;
 
     // h:mm:ss:ms, hours only when non-zero (same convention as the timeline bar)
@@ -195,8 +194,6 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         if (! engine.getSettingsFile().getBoolValue (SettingsView::autoRecordOnSelectKey, true))
             return;
 
-        keyboardState.allNotesOff (0);
-
         if (selection.empty())
             engine.setArmedTrack (selectedTrack);
         else
@@ -320,23 +317,19 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     statusLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     statusLabel.setFont (juce::FontOptions (12.0f));
 
-    keyboard.setAvailableRange (21, 108);
-    keyboard.setLowestVisibleKey (36);
-    keyboardState.addListener (this);
-
     for (auto* c : std::initializer_list<juce::Component*> {
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
              &collapseButton, &trackList, &channelList, &sidebarResizer,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
              &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView, &settingsView,
-             &statusLabel, &keyboard })
+             &statusLabel })
         addAndMakeVisible (c);
 
     for (auto* b : std::initializer_list<juce::Component*> { &menuButton, &midiDomainButton, &audioDomainButton,
                                                              &instrumentsButton, &historyButton, &rtzButton,
                                                              &playButton, &recordButton, &loopButton, &perfButton,
-                                                             &collapseButton, &keyboard })
+                                                             &collapseButton })
         b->setWantsKeyboardFocus (false);
 
     addChildComponent (perfPanel);
@@ -537,7 +530,6 @@ MainComponent::~MainComponent()
 {
     engine.getBusyStatus().onChanged = nullptr;   // the engine outlives this window
     stopTimer();
-    keyboardState.removeListener (this);
     engine.getDeviceManager().removeChangeListener (this);
     engine.getKnownPlugins().removeChangeListener (this);
 
@@ -592,7 +584,6 @@ void MainComponent::selectTrack (AudioEngine::TrackId id, bool forceArm)
 
     if (id != 0 && (autoArm || forceArm) && engine.getArmedTrack() != id)
     {
-        keyboardState.allNotesOff (0);   // release on-screen keys aimed at the old instrument
         engine.setArmedTrack (id);
     }
 
@@ -1215,20 +1206,6 @@ void MainComponent::startPluginScan (juce::StringArray args)
 }
 
 //==============================================================================
-void MainComponent::handleNoteOn (juce::MidiKeyboardState*, int channel, int note, float velocity)
-{
-    auto message = juce::MidiMessage::noteOn (channel, note, velocity);
-    message.setTimeStamp (juce::Time::getMillisecondCounterHiRes() * 0.001);
-    engine.getLiveMidiCollector().addMessageToQueue (message);
-}
-
-void MainComponent::handleNoteOff (juce::MidiKeyboardState*, int channel, int note, float velocity)
-{
-    auto message = juce::MidiMessage::noteOff (channel, note, velocity);
-    message.setTimeStamp (juce::Time::getMillisecondCounterHiRes() * 0.001);
-    engine.getLiveMidiCollector().addMessageToQueue (message);
-}
-
 void MainComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
 {
     if (source == &engine.getKnownPlugins())
@@ -1402,8 +1379,7 @@ void MainComponent::paint (juce::Graphics& g)
             g.fillRect (x, 10, 1, topbarHeight - 20);
 
     g.setColour (juce::Colour (0xff17191c));
-    auto bottom = getLocalBounds().removeFromBottom (statusHeight + keyboardHeight);
-    g.fillRect (bottom.removeFromBottom (statusHeight));
+    g.fillRect (getLocalBounds().removeFromBottom (statusHeight));
 }
 
 void MainComponent::resized()
@@ -1466,7 +1442,6 @@ void MainComponent::resized()
 
     // Bottom
     statusLabel.setBounds (area.removeFromBottom (statusHeight).reduced (8, 1));
-    keyboard.setBounds (area.removeFromBottom (keyboardHeight));
 
     if (perfPanel.isVisible())
         perfPanel.setBounds (area.removeFromBottom (160));

@@ -118,6 +118,10 @@ private:
     int keyHeight = 12;
     int topKey = 84;                       // highest visible key (C5)
     int hoveredKey = -1;                   // the key under the pointer (lit on the keyboard), -1 = none
+    int keyboardKey = -1;                  // the key being played by clicking the keyboard, -1 = none
+
+    void playKey (int key, int x);
+    void releaseKey();
 
     static juce::MouseCursor penCursor();
 
