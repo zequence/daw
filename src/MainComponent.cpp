@@ -1318,8 +1318,32 @@ void MainComponent::openTrackPluginWindow (AudioEngine::TrackId id)
 {
     const auto outputs = engine.getTrackOutputs (id);
 
-    if (! outputs.empty())
-        openPluginWindow (outputs.front().instrument);
+    if (outputs.empty())
+        return;
+
+    // A toggle: a showing GUI closes
+    const auto instrument = outputs.front().instrument;
+
+    if (const auto it = pluginWindows.find (instrument); it != pluginWindows.end() && it->second != nullptr
+                                                           && it->second->isVisible())
+    {
+        pluginWindows.erase (it);
+        return;
+    }
+
+    openPluginWindow (instrument);
+
+    // Keep the keys here (I again closes it); the plugin window still shows on top
+    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this)]
+    {
+        if (safe != nullptr)
+        {
+            if (auto* top = safe->getTopLevelComponent())
+                top->toFront (true);
+
+            safe->grabKeyboardFocus();
+        }
+    });
 }
 
 // Edit and Draw both open the editor, each with its own pointer. The lit one
