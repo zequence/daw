@@ -84,6 +84,14 @@ private:
     void nudgeSelection (juce::int64 tickDelta, int keyDelta);
     void reselectByValue (const std::vector<MidiSequence::Note>& wanted);
 
+    // Articulations (the top bar's dropdown; the rules live in model/ArticulationMenu.h)
+    std::vector<ExpressionMap::Selection> articulationTargets (const ExpressionMap&) const;   // the selected notes, else the one for new notes
+    std::vector<int> selectedNoteIndices() const;   // the selection, only indices that still exist, ascending
+    void showArticulationMenu();
+    void chooseArticulation (const juce::String& group, const juce::String& name);
+    void commitArticulations (const std::vector<ExpressionMap::Selection>& results);
+    void refreshArticulationButton();
+
     int noteIndexAt (juce::Point<int>, bool& onRightEdge) const;
     MidiSequence::Ptr sequence() const { return engine.getTrackSequence (trackId); }
 
@@ -123,6 +131,9 @@ private:
     juce::TextButton snapToggle { "Snap" }, auditionToggle { "Hear" };
     juce::ComboBox modeBox, snapBox, lengthBox, laneBox;
     juce::TextButton quantizeButton { "Q" }, undoButton { "Undo" }, redoButton { "Redo" };
+    juce::TextButton articulationButton { "Articulation" };
+    ExpressionMap::Selection newNoteArticulation;   // what new notes are drawn with (nothing selected)
+    juce::String articulationKey;                   // what the button was last built for
     juce::Label trackLabel;
     std::vector<int> lastCcList;           // CCs currently offered by laneBox
 

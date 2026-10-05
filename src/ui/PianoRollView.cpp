@@ -1,5 +1,7 @@
 #include "PianoRollView.h"
 #include "ThemedLookAndFeel.h"
+#include "EditorSettings.h"
+#include "../model/ArticulationMenu.h"
 #include "../api/CommandDispatcher.h"
 
 namespace
@@ -90,6 +92,10 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     addAndMakeVisible (laneBox);
     rebuildLaneBox();
 
+    articulationButton.setTooltip ("Articulation");
+    articulationButton.onClick = [this] { showArticulationMenu(); };
+    addAndMakeVisible (articulationButton);
+
     auditionToggle.setTooltip ("Play notes when added (through the armed track's instrument)");
     auditionToggle.setClickingTogglesState (true);
     auditionToggle.setToggleState (true, juce::dontSendNotification);
@@ -163,7 +169,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
 
     for (auto* c : std::initializer_list<juce::Component*> { &modeBox, &snapToggle, &auditionToggle, &snapBox,
                                                              &lengthBox, &laneBox, &quantizeButton, &undoButton,
-                                                             &redoButton })
+                                                             &redoButton, &articulationButton })
         c->setWantsKeyboardFocus (false);
 
     startTimerHz (30);
@@ -177,6 +183,8 @@ void PianoRollView::setTrack (AudioEngine::TrackId id)
     {
         trackId = id;
         selection.clear();
+        newNoteArticulation = {};   // another track, maybe another map
+        articulationKey.clear();
         drag = Drag::none;
         rebuildLaneBox();
 
@@ -367,6 +375,210 @@ void PianoRollView::runCommand (const juce::String& cmd, juce::DynamicObject::Pt
                                   + reply.getProperty ("error", {}).toString());
 }
 
+//==============================================================================
+// Articulations (the rules are in model/ArticulationMenu.h; this is the view)
+std::vector<int> PianoRollView::selectedNoteIndices() const
+{
+    std::vector<int> indices;
+
+    if (auto seq = sequence())
+        for (auto index : selection)
+            if (index >= 0 && index < (int) seq->getNotes().size())
+                indices.push_back (index);
+
+    return indices;
+}
+
+std::vector<ExpressionMap::Selection> PianoRollView::articulationTargets (const ExpressionMap& map) const
+{
+    const auto useFirstRoot = editorSettings::firstRootIsDefault (engine.getSettingsFile());
+    std::vector<ExpressionMap::Selection> targets;
+
+    if (auto seq = sequence())
+        for (auto index : selectedNoteIndices())
+            targets.push_back (articulations::effective (map, seq->getNotes()[(size_t) index].articulation, useFirstRoot));
+
+    if (targets.empty())   // nothing selected: the choice new notes are drawn with
+        targets.push_back (articulations::effective (map, newNoteArticulation, useFirstRoot));
+
+    return targets;
+}
+
+void PianoRollView::refreshArticulationButton()
+{
+    const auto info = engine.getTrackChannelInfo (trackId);
+    const auto mapName = info.has_value() ? info->expressionMap : juce::String();
+    const auto useFirstRoot = editorSettings::firstRootIsDefault (engine.getSettingsFile());
+
+    // Only rebuild when something it depends on changed (this runs on the 30 Hz timer)
+    auto key = juce::String (trackId) + "|" + mapName + "|" + juce::String (engine.getStateRevision())
+                 + "|" + juce::String ((int) useFirstRoot) + "|" + articulations::label (newNoteArticulation);
+
+    for (auto index : selection)
+        key << "," << index;
+
+    if (key == articulationKey)
+        return;
+
+    articulationKey = key;
+
+    if (mapName.isEmpty())
+    {
+        articulationButton.setButtonText ("No expression map");
+        articulationButton.setTooltip ("This track's instrument channel has no expression map. "
+                                       "Assign one with instrument.setChannelMap.");
+        articulationButton.setEnabled (false);
+        return;
+    }
+
+    const auto map = engine.getTrackExpressionMap (trackId);
+
+    if (! map.has_value())
+    {
+        articulationButton.setButtonText ("Missing map: " + mapName);
+        articulationButton.setTooltip ("The instrument channel uses the expression map '" + mapName
+                                       + "', which is not in the project. Notes keep their articulations.");
+        articulationButton.setEnabled (false);
+        return;
+    }
+
+    const auto targets = articulationTargets (*map);
+    const auto notesSelected = ! selectedNoteIndices().empty();
+    auto text = articulations::allEqual (targets) ? articulations::label (targets.front()) : juce::String ("Mixed");
+
+    if (text.isEmpty())
+        text = "No articulation";
+
+    // An articulation the map doesn't have (or that doesn't fit) is a visible error
+    if (std::any_of (targets.begin(), targets.end(), [&] (const auto& s) { return ! articulations::resolves (*map, s); }))
+        text += "  (!)";
+
+    articulationButton.setButtonText (text);
+    articulationButton.setTooltip (notesSelected ? "Articulation of the selected notes (map: " + map->name + ")"
+                                                 : "Articulation new notes are drawn with (map: " + map->name
+                                                     + "). Select notes to change theirs.");
+    articulationButton.setEnabled (true);
+}
+
+void PianoRollView::showArticulationMenu()
+{
+    const auto map = engine.getTrackExpressionMap (trackId);
+
+    if (! map.has_value())
+        return;
+
+    juce::PopupMenu menu;
+
+    for (auto& item : articulations::buildMenu (*map, articulationTargets (*map)))
+    {
+        if (item.kind == articulations::MenuItem::Kind::header)
+        {
+            menu.addSectionHeader (item.text);
+            continue;
+        }
+
+        juce::PopupMenu::Item popupItem (item.text);
+        popupItem.setEnabled (item.enabled);
+        popupItem.setTicked (item.ticked);
+        popupItem.shortcutKeyDescription = item.description.substring (0, 40);   // JUCE menu items have no tooltip
+        popupItem.setAction ([safe = juce::Component::SafePointer<PianoRollView> (this), group = item.group, name = item.name]
+                             {
+                                 if (safe != nullptr)
+                                     safe->chooseArticulation (group, name);
+                             });
+        menu.addItem (popupItem);
+    }
+
+    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&articulationButton));
+}
+
+void PianoRollView::chooseArticulation (const juce::String& group, const juce::String& name)
+{
+    const auto map = engine.getTrackExpressionMap (trackId);
+
+    if (! map.has_value())
+        return;
+
+    const auto applied = articulations::apply (*map, articulationTargets (*map), group, name);
+
+    if (! applied.ok())
+    {
+        juce::Logger::writeToLog ("PianoRoll: articulation refused: " + applied.error);
+        return;
+    }
+
+    const auto indices = selectedNoteIndices();
+
+    // Choosing another root can drop modifiers that no longer apply: ask first (the
+    // default) or just do it - Settings > Editor > Midi. Not for the pen's own choice.
+    if (! applied.dropped.empty() && ! indices.empty() && editorSettings::askBeforeDropping (engine.getSettingsFile()))
+    {
+        juce::StringArray names;
+
+        for (auto& [droppedGroup, droppedName] : applied.dropped)
+            names.add (droppedName + " (" + droppedGroup + ")");
+
+        const auto where = indices.size() == 1 ? juce::String ("the note") : juce::String ((int) indices.size()) + " notes";
+
+        juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, "Drop modifiers?",
+                                            "Choosing '" + name + "' removes " + names.joinIntoString (", ") + " from " + where
+                                              + ", because " + (applied.dropped.size() == 1 ? "it does" : "they do") + " not apply to it.",
+                                            "Drop and change", "Cancel", this,
+                                            juce::ModalCallbackFunction::create (
+                                                [safe = juce::Component::SafePointer<PianoRollView> (this), results = applied.results] (int result)
+                                                {
+                                                    if (result == 1 && safe != nullptr)
+                                                        safe->commitArticulations (results);
+                                                }));
+        return;
+    }
+
+    commitArticulations (applied.results);
+}
+
+void PianoRollView::commitArticulations (const std::vector<ExpressionMap::Selection>& results)
+{
+    const auto indices = selectedNoteIndices();
+
+    if (indices.empty())
+    {
+        if (! results.empty())
+            newNoteArticulation = results.front();
+
+        articulationKey.clear();
+        repaint();
+        return;
+    }
+
+    auto seq = sequence();
+
+    if (seq == nullptr || results.size() != indices.size())
+        return;   // the selection changed under the prompt
+
+    // One clip.updateNotes: one undo step for all the notes
+    juce::Array<juce::var> edits;
+
+    for (size_t i = 0; i < indices.size(); ++i)
+    {
+        if (results[i] == seq->getNotes()[(size_t) indices[i]].articulation)
+            continue;
+
+        auto edit = new juce::DynamicObject();
+        edit->setProperty ("index", indices[i]);
+        edit->setProperty ("articulation", results[i].toVar());
+        edits.add (juce::var (edit));
+    }
+
+    if (edits.isEmpty())
+        return;
+
+    auto params = new juce::DynamicObject();
+    params->setProperty ("trackId", trackId);
+    params->setProperty ("notes", edits);
+    runCommand ("clip.updateNotes", params);
+    articulationKey.clear();
+}
+
 void PianoRollView::auditionNote (int key, int velocity)
 {
     if (! auditionToggle.getToggleState())
@@ -395,6 +607,11 @@ void PianoRollView::commitNewNote (const MidiSequence::Note& newNote)
     note->setProperty ("length", newNote.lengthTicks);
     note->setProperty ("key", juce::jlimit (0, 127, newNote.key));
     note->setProperty ("velocity", newNote.velocity);
+
+    // New notes get the articulation chosen for them (nothing is written when none is chosen:
+    // the default-root setting is implicit)
+    if (! newNoteArticulation.isEmpty() && engine.getTrackExpressionMap (trackId).has_value())
+        note->setProperty ("articulation", newNoteArticulation.toVar());
 
     juce::Array<juce::var> notes;
     notes.add (juce::var (note));
@@ -884,6 +1101,7 @@ void PianoRollView::timerCallback()
         repaint();
     }
 
+    refreshArticulationButton();
     undoButton.setEnabled (engine.canUndoClip (trackId));
     redoButton.setEnabled (engine.canRedoClip (trackId));
 
@@ -922,6 +1140,8 @@ void PianoRollView::resized()
     auditionToggle.setBounds (toolbar.removeFromLeft (46));
     toolbar.removeFromLeft (12);
     laneBox.setBounds (toolbar.removeFromLeft (140));
+    toolbar.removeFromLeft (10);
+    articulationButton.setBounds (toolbar.removeFromLeft (170));
     trackLabel.setBounds (toolbar);
 }
 
