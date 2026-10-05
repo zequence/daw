@@ -56,6 +56,7 @@ private:
     void autoNameTrackForOutput (AudioEngine::TrackId, AudioEngine::InstrumentId);
     void chooseNewInstrumentFor (AudioEngine::TrackId);
     void openPluginWindow (AudioEngine::InstrumentId);
+    void openTrackPluginWindow (AudioEngine::TrackId);   // the track's (first) instrument GUI
 
     void setDomain (Domain);
     void showContent (ContentView);

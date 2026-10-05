@@ -235,14 +235,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     trackList.onOpenInstrument = [this] (auto id)
     {
         selectTrack (id, false);
-
-        const auto outputs = engine.getTrackOutputs (id);
-
-        if (! outputs.empty())
-            openPluginWindow (outputs.front().instrument);
-
-        instrumentsView.focusTrack (id);
-        showContent (ContentView::instruments);
+        openTrackPluginWindow (id);
     };
     trackList.onShowContextMenu = [this] (auto id) { showTrackContextMenu (id); };
 
@@ -1318,6 +1311,14 @@ void MainComponent::timerCallback()
 }
 
 //==============================================================================
+void MainComponent::openTrackPluginWindow (AudioEngine::TrackId id)
+{
+    const auto outputs = engine.getTrackOutputs (id);
+
+    if (! outputs.empty())
+        openPluginWindow (outputs.front().instrument);
+}
+
 // Edit and Draw both open the editor, each with its own pointer. The lit one
 // closes it again; the other switches the pointer.
 void MainComponent::toggleEditor (bool draw)
@@ -1379,6 +1380,13 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (key == juce::KeyPress ('e') || key == juce::KeyPress ('d'))
     {
         toggleEditor (key == juce::KeyPress ('d'));
+        return true;
+    }
+
+    // The selected track's plugin GUI
+    if (selectedTrack != 0 && key == juce::KeyPress ('i'))
+    {
+        openTrackPluginWindow (selectedTrack);
         return true;
     }
 

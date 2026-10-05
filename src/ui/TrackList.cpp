@@ -39,7 +39,7 @@ public:
         theme::setButtonRole (muteButton, "mute");
         muteButton.onClick = [this] { engine.setTrackMuted (trackId, muteButton.getToggleState()); };
 
-        instrumentButton.setTooltip ("Open this track's instrument (plugin GUI and rack entry)");
+        instrumentButton.setTooltip ("Open this track's instrument GUI (I)");
         instrumentButton.onClick = [this] { if (owner.onOpenInstrument) owner.onOpenInstrument (trackId); };
 
         recordModeButton.setTooltip ("Recording mode - Add: merge new takes into the clip. "
