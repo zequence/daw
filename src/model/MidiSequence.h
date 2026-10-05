@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ExpressionMap.h"
 #include "TempoMap.h"
 
 // An immutable, sorted collection of MIDI notes and control events, in ticks.
@@ -16,6 +17,7 @@ public:
         int channel = 1;        // 1..16
         int key = 60;           // 0..127
         int velocity = 100;     // 1..127
+        ExpressionMap::Selection articulation;   // empty = none (see ExpressionMap.h)
     };
 
     enum class ControlType { controller, pitchBend, programChange };
@@ -80,6 +82,9 @@ public:
             e->setAttribute ("channel", n.channel);
             e->setAttribute ("key", n.key);
             e->setAttribute ("velocity", n.velocity);
+
+            if (! n.articulation.isEmpty())
+                e->addChildElement (n.articulation.toXml().release());
         }
 
         for (auto& c : controls)
@@ -101,11 +106,18 @@ public:
         std::vector<Control> controls;
 
         for (auto* e : xml.getChildWithTagNameIterator ("NOTE"))
-            notes.push_back ({ e->getStringAttribute ("start").getLargeIntValue(),
-                               e->getStringAttribute ("length").getLargeIntValue(),
-                               e->getIntAttribute ("channel", 1),
-                               e->getIntAttribute ("key", 60),
-                               e->getIntAttribute ("velocity", 100) });
+        {
+            Note note { e->getStringAttribute ("start").getLargeIntValue(),
+                        e->getStringAttribute ("length").getLargeIntValue(),
+                        e->getIntAttribute ("channel", 1),
+                        e->getIntAttribute ("key", 60),
+                        e->getIntAttribute ("velocity", 100) };
+
+            if (auto* articulation = e->getChildByName ("ARTICULATION"))   // absent in older projects
+                note.articulation = ExpressionMap::Selection::fromXml (*articulation);
+
+            notes.push_back (std::move (note));
+        }
 
         for (auto* e : xml.getChildWithTagNameIterator ("CONTROL"))
             controls.push_back ({ e->getStringAttribute ("tick").getLargeIntValue(),

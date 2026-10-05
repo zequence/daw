@@ -1,4 +1,5 @@
 #include "../src/model/ExpressionMap.h"
+#include "../src/model/MidiSequence.h"
 #include <juce_events/juce_events.h>
 
 namespace
@@ -257,6 +258,53 @@ public:
             expectEquals (a.outputs[0].bank, -1);
             expectEquals (a.keyLow, -1);
             expectEquals (a.timingOffsetMs, 0.0);
+        }
+
+        beginTest ("a note carries its articulation: root plus modifiers, saved with the sequence");
+        {
+            using Note = MidiSequence::Note;
+            Note plain { 0, 480, 1, 60, 100 };
+
+            Note rootOnly { 480, 480, 1, 62, 100 };
+            rootOnly.articulation.root = "Staccato";
+
+            Note full { 960, 480, 1, 64, 100 };
+            full.articulation.root = "Legato";
+            full.articulation.modifiers = { { "Release", "Short" }, { "Mute \"Pro\"", "Con sord" } };
+
+            // Names that aren't in any map are kept as they are (a visible error later, never erased)
+            Note orphan { 1440, 480, 1, 65, 100 };
+            orphan.articulation.root = "No such articulation";
+
+            const auto original = MidiSequence::create ({ plain, rootOnly, full, orphan }, {});
+            const auto xml = original->toXml();
+
+            // A note without an articulation writes no extra element (small files, old readers unaffected)
+            expect (xml->getChildWithTagNameIterator ("NOTE").begin() != xml->getChildWithTagNameIterator ("NOTE").end());
+            expect (xml->getChildByName ("NOTE")->getChildByName ("ARTICULATION") == nullptr);
+
+            const auto restored = MidiSequence::fromXml (*juce::XmlDocument::parse (xml->toString()));
+            expectEquals ((int) restored->getNotes().size(), 4);
+
+            auto& notes = restored->getNotes();
+            expect (notes[0].articulation.isEmpty());
+            expect (notes[1].articulation == rootOnly.articulation);
+            expect (notes[2].articulation == full.articulation);
+            expectEquals ((int) notes[2].articulation.modifiers.size(), 2);
+            expectEquals (notes[2].articulation.modifiers[1].first, juce::String ("Mute \"Pro\""));
+            expect (notes[3].articulation == orphan.articulation);
+
+            // Selections compare names ignoring case
+            auto lower = full.articulation;
+            lower.root = "legato";
+            lower.modifiers[0].second = "SHORT";
+            expect (lower == full.articulation);
+            lower.modifiers[0].second = "Long";
+            expect (lower != full.articulation);
+
+            // A project written before articulations existed loads with none
+            const auto old = juce::XmlDocument::parse ("<SEQUENCE><NOTE start=\"0\" length=\"480\" channel=\"1\" key=\"60\" velocity=\"100\"/></SEQUENCE>");
+            expect (MidiSequence::fromXml (*old)->getNotes().front().articulation.isEmpty());
         }
 
         beginTest ("no restrictions on combining keys, CCs and program changes (left to the user)");

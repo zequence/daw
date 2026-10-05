@@ -57,6 +57,60 @@ struct ExpressionMap
         std::vector<Articulation> articulations;
     };
 
+    // A note's articulation: one root articulation plus at most one modifier per
+    // group, by name (names are identifiers, compared ignoring case). Stored as
+    // chosen, never cleaned up: a name that isn't in the instrument's map is a
+    // visible error, not a reason to erase the note's data. Empty = none.
+    struct Selection
+    {
+        juce::String root;
+        std::vector<std::pair<juce::String, juce::String>> modifiers;   // (group, articulation)
+
+        bool isEmpty() const noexcept    { return root.trim().isEmpty() && modifiers.empty(); }
+
+        bool operator== (const Selection& other) const
+        {
+            if (! sameName (root, other.root) || modifiers.size() != other.modifiers.size())
+                return false;
+
+            for (size_t i = 0; i < modifiers.size(); ++i)
+                if (! sameName (modifiers[i].first, other.modifiers[i].first)
+                     || ! sameName (modifiers[i].second, other.modifiers[i].second))
+                    return false;
+
+            return true;
+        }
+
+        bool operator!= (const Selection& other) const    { return ! (*this == other); }
+
+        //   <ARTICULATION root="Legato"><MODIFIER group="Release" name="Short"/>...</ARTICULATION>
+        std::unique_ptr<juce::XmlElement> toXml() const
+        {
+            auto xml = std::make_unique<juce::XmlElement> ("ARTICULATION");
+            xml->setAttribute ("root", root);
+
+            for (auto& [group, articulationName] : modifiers)
+            {
+                auto* m = xml->createNewChildElement ("MODIFIER");
+                m->setAttribute ("group", group);
+                m->setAttribute ("name", articulationName);
+            }
+
+            return xml;
+        }
+
+        static Selection fromXml (const juce::XmlElement& xml)
+        {
+            Selection selection;
+            selection.root = xml.getStringAttribute ("root");
+
+            for (auto* m : xml.getChildWithTagNameIterator ("MODIFIER"))
+                selection.modifiers.emplace_back (m->getStringAttribute ("group"), m->getStringAttribute ("name"));
+
+            return selection;
+        }
+    };
+
     juce::String name;               // identifier of the map
     juce::String description;
     std::vector<Group> groups;       // [0] = the root group
