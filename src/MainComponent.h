@@ -91,7 +91,7 @@ private:
     // The transport unit: a visually grouped panel with the colorized transport
     // buttons, the position readout (bars.beats + time) and the tempo.
     juce::TextButton rtzButton { "|<" }, playButton { "Play" }, recordButton { "Rec" }, loopButton { "Loop" },
-                     perfButton { "Perf" }, returnOnStopButton { juce::String::fromUTF8 ("\xe2\x86\xa9") };   // the stop mode
+                     perfButton { "Perf" }, snapButton { "Snap" }, returnOnStopButton { juce::String::fromUTF8 ("\xe2\x86\xa9") };   // the stop mode
     juce::Label bpmLabel, positionLabel, timeLabel;
     juce::Rectangle<int> transportPanel;   // painted behind the unit
     int topbarSeparators[2] = { 0, 0 };    // lines between the topbar's groups

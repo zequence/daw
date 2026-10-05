@@ -160,7 +160,8 @@ void ArrangementView::mouseDrag (const juce::MouseEvent& event)
         return;
 
     const auto rawDelta = (juce::int64) ((event.x - dragStart.x) * axis.ticksPerPixel);
-    const auto target = nearestBar (dragging.startTick + rawDelta);
+    const auto target = axis.snap ? nearestBar (dragging.startTick + rawDelta)
+                                  : juce::jmax ((juce::int64) 0, dragging.startTick + rawDelta);
     dragDeltaTicks = target - dragging.startTick;
     didDrag = true;
     repaint();

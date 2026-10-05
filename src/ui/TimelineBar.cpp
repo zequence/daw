@@ -107,6 +107,10 @@ juce::int64 TimelineBar::nearestBeat (juce::int64 tick) const
 {
     const auto map = engine.getTransport().getTempoMap();
     const auto clamped = juce::jmax ((juce::int64) 0, tick);
+
+    if (! axis.snap)
+        return clamped;
+
     const auto beat = map->getTicksPerBeat (clamped);
     return ((clamped + beat / 2) / beat) * beat;
 }

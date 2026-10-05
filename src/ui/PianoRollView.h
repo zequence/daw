@@ -67,7 +67,7 @@ private:
     int keyToY (int key) const;
     juce::Rectangle<int> noteRect (const MidiSequence::Note&) const;
     juce::int64 snapTick (juce::int64 tick) const;
-    juce::int64 snapTicksOrZero() const;      // 0 when the Snap toggle is off
+    juce::int64 snapTicksOrZero() const;      // 0 when snapping is off (the transport's Snap button)
     juce::int64 gridTicks() const;            // the grid dropdown, regardless of the toggle
     juce::int64 newNoteTicks() const;         // the note-length dropdown
 
@@ -147,7 +147,7 @@ private:
     bool laneErasing = false;
 
     // Toolbar
-    juce::TextButton snapToggle { "Snap" }, auditionToggle { "Hear" }, inputToggle { "Input" };
+    juce::TextButton auditionToggle { "Hear" }, inputToggle { "Input" };
     juce::TextButton dotButton { "." };
     int noteDots = 0;                      // 0, 1 (x1.5) or 2 (x1.75): the note length's dots
     void setNoteDots (int);

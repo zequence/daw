@@ -80,13 +80,6 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     modeBox.setSelectedId (1, juce::dontSendNotification);
     addAndMakeVisible (modeBox);
 
-    snapToggle.setTooltip ("Snap to grid: new notes, moves and resizes lock to the grid division. "
-                           "Off: notes can be drawn and moved freely between grid lines");
-    snapToggle.setClickingTogglesState (true);
-    snapToggle.setToggleState (true, juce::dontSendNotification);
-    theme::setButtonRole (snapToggle, "accent");
-    addAndMakeVisible (snapToggle);
-
     snapBox.setTooltip ("Grid division (snapping and quantize)");
     addDivisionItems (snapBox);
     snapBox.setSelectedId (4, juce::dontSendNotification);     // 1/8
@@ -220,7 +213,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     trackLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (trackLabel);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &modeBox, &snapToggle, &auditionToggle, &inputToggle, &snapBox,
+    for (auto* c : std::initializer_list<juce::Component*> { &modeBox, &auditionToggle, &inputToggle, &snapBox,
                                                              &lengthBox, &dotButton, &laneBox, &quantizeButton, &undoButton,
                                                              &redoButton, &articulationButton, &colourBox })
         c->setWantsKeyboardFocus (false);
@@ -362,7 +355,7 @@ juce::int64 PianoRollView::newNoteTicks() const
 
 juce::int64 PianoRollView::snapTicksOrZero() const
 {
-    return snapToggle.getToggleState() ? gridTicks() : 0;
+    return axis.snap ? gridTicks() : 0;
 }
 
 juce::int64 PianoRollView::snapTick (juce::int64 tick) const
@@ -1441,8 +1434,6 @@ void PianoRollView::resized()
     auto toolbar = juce::Rectangle<int> (0, 0, getWidth(), toolbarHeight).reduced (6, 3);
     modeBox.setBounds (toolbar.removeFromLeft (78));
     toolbar.removeFromLeft (10);
-    snapToggle.setBounds (toolbar.removeFromLeft (52));
-    toolbar.removeFromLeft (4);
     snapBox.setBounds (toolbar.removeFromLeft (68));
     toolbar.removeFromLeft (10);
     lengthBox.setBounds (toolbar.removeFromLeft (68));

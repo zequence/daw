@@ -124,6 +124,19 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
             statusLabel.setText ("Add a track before recording", juce::dontSendNotification);
     };
 
+    snapButton.setTooltip ("Snap to grid: notes, clips and the playhead lock to the grid (piano roll division, "
+                           "bars in the arrangement, beats on the timeline). Off: free positions");
+    snapButton.setClickingTogglesState (true);
+    theme::setButtonRole (snapButton, "accent");
+    snapButton.setToggleState (engine.getSettingsFile().getBoolValue ("snapToGrid", true), juce::dontSendNotification);
+    timeAxis.snap = snapButton.getToggleState();
+    snapButton.onClick = [this]
+    {
+        timeAxis.snap = snapButton.getToggleState();
+        engine.getSettingsFile().setValue ("snapToGrid", timeAxis.snap);
+        engine.getSettingsFile().saveIfNeeded();
+    };
+
     loopButton.setTooltip ("Loop from the start to the end of the last clip");
     loopButton.setClickingTogglesState (true);
     theme::setButtonRole (loopButton, "loop");
@@ -333,7 +346,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     for (auto* c : std::initializer_list<juce::Component*> {
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
-             &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
+             &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
              &collapseButton, &trackList, &channelList, &sidebarResizer,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
              &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView, &settingsView,
@@ -342,7 +355,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     for (auto* b : std::initializer_list<juce::Component*> { &menuButton, &midiDomainButton, &audioDomainButton,
                                                              &instrumentsButton, &historyButton, &rtzButton,
-                                                             &playButton, &recordButton, &loopButton, &returnOnStopButton, &perfButton,
+                                                             &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &perfButton,
                                                              &collapseButton })
         b->setWantsKeyboardFocus (false);
 
@@ -1423,7 +1436,7 @@ void MainComponent::resized()
     // The transport unit: buttons + position readout + tempo, PERFECTLY centered
     // in the window. If it would collide, it shifts right of the view buttons and
     // the Perf button hides - the window's minimum width normally prevents both.
-    constexpr auto unitWidth = 34 + 4 + 54 + 4 + 46 + 4 + 48 + 4 + 28 + 14 + 76 + 6 + 92 + 10 + 56;
+    constexpr auto unitWidth = 34 + 4 + 54 + 4 + 46 + 4 + 48 + 4 + 28 + 4 + 48 + 14 + 76 + 6 + 92 + 10 + 56;
     auto unit = juce::Rectangle<int> ((getWidth() - unitWidth) / 2, toolbar.getY(),
                                       unitWidth, toolbar.getHeight());
 
@@ -1450,6 +1463,8 @@ void MainComponent::resized()
     loopButton.setBounds (unit.removeFromLeft (48));
     unit.removeFromLeft (4);
     returnOnStopButton.setBounds (unit.removeFromLeft (28));
+    unit.removeFromLeft (4);
+    snapButton.setBounds (unit.removeFromLeft (48));
     unit.removeFromLeft (14);
     positionLabel.setBounds (unit.removeFromLeft (76));
     unit.removeFromLeft (6);

@@ -14,6 +14,7 @@ struct TimeAxis
     double ticksPerPixel = 32000.0;          // ~30 px per quarter note initially
     juce::int64 scrollTick = 0;
     int revision = 0;                        // bumped on every change; views repaint when it moves
+    bool snap = true;                        // snap to grid (the transport's Snap button); off = free positions
 
     juce::int64 xToTick (int x) const noexcept
     {
