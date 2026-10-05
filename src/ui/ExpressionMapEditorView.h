@@ -78,6 +78,11 @@ public:
             addAndMakeVisible (b);
         }
 
+        libraryButton.setWantsKeyboardFocus (false);
+        libraryButton.setTooltip ("Maps kept in files: add one to the project, save this one for other projects, import and export");
+        libraryButton.onClick = [this] { showLibraryMenu(); };
+        addAndMakeVisible (libraryButton);
+
         newMap.onClick = [this] { createMap(); };
         duplicateMap.onClick = [this] { duplicateCurrentMap(); };
         deleteMap.onClick = [this] { deleteCurrentMap(); };
@@ -147,6 +152,7 @@ public:
         auto header = area.removeFromTop (34);
         backButton.setBounds (header.removeFromLeft (70));
         header.removeFromLeft (10);
+        libraryButton.setBounds (header.removeFromRight (90));
         titleLabel.setBounds (header);
 
         area.removeFromTop (6);
@@ -532,6 +538,137 @@ private:
         root.articulations.push_back (normal);
         map.groups.push_back (root);
         saveNewMap (map);
+    }
+
+    // Runs a library command; its error, if any, goes to the status line. True when it worked.
+    bool runLibraryCommand (const juce::String& command, std::initializer_list<std::pair<const char*, juce::var>> values)
+    {
+        auto params = new juce::DynamicObject();
+
+        for (auto& [key, value] : values)
+            params->setProperty (juce::Identifier (key), value);
+
+        const auto reply = dispatcher.run (command, juce::var (params));
+
+        if (! (bool) reply["ok"])
+        {
+            problems = { reply["error"].toString() };
+            updateStatus();
+            return false;
+        }
+
+        return true;
+    }
+
+    void showLibraryMenu()
+    {
+        juce::PopupMenu menu, add;
+        const auto library = dispatcher.run ("expressionmap.libraryList", {})["result"];
+        juce::StringArray names;
+
+        for (int i = 0; i < library.size(); ++i)
+        {
+            const auto name = library[i]["name"].toString();
+            names.add (name);
+            add.addItem (1000 + i, (bool) library[i]["template"] ? name + "  (template)" : name);
+        }
+
+        if (names.isEmpty())
+            add.addItem (-1, "(the library is empty)", false, false);
+
+        menu.addSubMenu ("Add to the project", add);
+        menu.addItem (1, "Save this map to the library", currentMap.isNotEmpty());
+        menu.addItem (2, "Delete from the library...", names.size() > 0);
+        menu.addSeparator();
+        menu.addItem (3, "Import from a file...");
+        menu.addItem (4, "Export this map to a file...", currentMap.isNotEmpty());
+
+        juce::Component::SafePointer<ExpressionMapEditorView> safe (this);
+
+        menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&libraryButton), [safe, names] (int result)
+        {
+            if (safe != nullptr && result != 0)
+                safe->libraryChoice (result, names);
+        });
+    }
+
+    void libraryChoice (int result, const juce::StringArray& names)
+    {
+        juce::Component::SafePointer<ExpressionMapEditorView> safe (this);
+
+        if (result >= 1000)
+        {
+            const auto name = names[result - 1000];
+
+            if (runLibraryCommand ("expressionmap.addFromLibrary", { { "name", name } }))
+            {
+                refresh();
+                selectMap (name, true);
+            }
+        }
+        else if (result == 1)
+        {
+            if (runLibraryCommand ("expressionmap.saveToLibrary", { { "name", currentMap } }))
+            {
+                problems = {};
+                updateStatus();
+            }
+        }
+        else if (result == 2)
+        {
+            juce::PopupMenu choose;
+
+            for (int i = 0; i < names.size(); ++i)
+                choose.addItem (1 + i, names[i]);
+
+            choose.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&libraryButton), [safe, names] (int picked)
+            {
+                if (safe == nullptr || picked == 0)
+                    return;
+
+                const auto name = names[picked - 1];
+
+                juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, "Delete from the library",
+                                                    "Delete '" + name + "' from the library? Projects keep their own copies.",
+                                                    "Delete", "Cancel", safe.getComponent(),
+                                                    juce::ModalCallbackFunction::create ([safe, name] (int ok)
+                {
+                    if (safe != nullptr && ok == 1)
+                        safe->runLibraryCommand ("expressionmap.deleteFromLibrary", { { "name", name } });
+                }));
+            });
+        }
+        else if (result == 3)
+        {
+            fileChooser = std::make_shared<juce::FileChooser> ("Import an expression map", juce::File(), "*.xml");
+
+            fileChooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                                      [safe] (const juce::FileChooser& chooser)
+            {
+                const auto file = chooser.getResult();
+
+                if (safe != nullptr && file != juce::File() && safe->runLibraryCommand ("expressionmap.import", { { "path", file.getFullPathName() } }))
+                    safe->refresh();
+            });
+        }
+        else if (result == 4)
+        {
+            const auto name = currentMap;
+            fileChooser = std::make_shared<juce::FileChooser> ("Export the expression map",
+                                                               juce::File::getSpecialLocation (juce::File::userDocumentsDirectory)
+                                                                   .getChildFile (juce::File::createLegalFileName (name) + ".xml"),
+                                                               "*.xml");
+
+            fileChooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
+                                          | juce::FileBrowserComponent::warnAboutOverwriting,
+                                      [safe, name] (const juce::FileChooser& chooser)
+            {
+                const auto file = chooser.getResult();
+
+                if (safe != nullptr && file != juce::File())
+                    safe->runLibraryCommand ("expressionmap.export", { { "name", name }, { "path", file.getFullPathName() } });
+            });
+        }
     }
 
     void duplicateCurrentMap()
@@ -1112,7 +1249,8 @@ private:
     Focus focus = Focus::map;
     bool programmatic = false;
 
-    juce::TextButton backButton { juce::String::fromUTF8 ("← Back") };
+    juce::TextButton backButton { juce::String::fromUTF8 ("← Back") }, libraryButton { "Library..." };
+    std::shared_ptr<juce::FileChooser> fileChooser;
     juce::Label titleLabel, status;
     ListModel mapModel, groupModel, articulationModel;
     juce::ListBox mapList, groupList, articulationList;

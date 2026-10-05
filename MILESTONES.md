@@ -433,6 +433,13 @@ selection. The UI is a client of the same commands.
    (phase 5); no drag-and-drop ordering (Up/Down buttons).
 5. Library, presets (Spitfire UACC, a generic keyswitch map), Cubase
    `.expressionmap` import (observed format only), Synchron detection, then
+   **Status of phase 5:** the library is done (5a): maps are XML files in the
+   user data folder's Maps; commands `expressionmap.libraryList / saveToLibrary /
+   addFromLibrary / deleteFromLibrary / export / import`; the map editor's
+   "Library..." menu. One built-in template ("Keyswitch starter", placeholder
+   keys). **Blocked on source data:** the Spitfire UACC preset (needs the
+   official table) and the Cubase `.expressionmap` import (needs sample files).
+   **Not done yet:** Synchron detection, programmed CC sequences.
    programmed CC sequences.
 
 ### Open questions
