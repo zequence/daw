@@ -35,6 +35,31 @@ namespace
         return map;
     }
 
+    // For the choosing rules: roots Staccato/Legato/Marcato; Release (Short and
+    // Soft for Staccato+Marcato, Long for Legato), Mute (everything), Dynamics (Marcato only)
+    Map selectionMap()
+    {
+        Map map;
+        map.name = "Rules";
+        map.groups.push_back ({ "Articulation", "", { art ("Staccato", Out::Type::controller, 32, 10),
+                                                      art ("Legato", Out::Type::controller, 32, 20),
+                                                      art ("Marcato", Out::Type::controller, 32, 30) } });
+
+        auto shortRelease = art ("Short", Out::Type::controller, 33, 10);
+        auto softRelease = art ("Soft", Out::Type::controller, 33, 20);
+        auto longRelease = art ("Long", Out::Type::controller, 33, 90);
+        shortRelease.appliesTo = softRelease.appliesTo = { "Staccato", "Marcato" };
+        longRelease.appliesTo = { "Legato" };
+        map.groups.push_back ({ "Release", "", { shortRelease, softRelease, longRelease } });
+
+        map.groups.push_back ({ "Mute", "", { art ("Con sord", Out::Type::keyswitch, 24) } });
+
+        auto sfz = art ("Sfz", Out::Type::controller, 34, 127);
+        sfz.appliesTo = { "Marcato" };
+        map.groups.push_back ({ "Dynamics", "", { sfz } });
+        return map;
+    }
+
     bool anyContains (const juce::StringArray& problems, const juce::String& text)
     {
         for (auto& p : problems)
@@ -305,6 +330,170 @@ public:
             // A project written before articulations existed loads with none
             const auto old = juce::XmlDocument::parse ("<SEQUENCE><NOTE start=\"0\" length=\"480\" channel=\"1\" key=\"60\" velocity=\"100\"/></SEQUENCE>");
             expect (MidiSequence::fromXml (*old)->getNotes().front().articulation.isEmpty());
+        }
+
+        beginTest ("choosing: roots switch directly and toggle off; the first choice needs no modifiers");
+        {
+            const auto map = selectionMap();
+            Map::Selection none;
+
+            auto choice = map.choose (none, "articulation", "STACCATO");   // names ignore case
+            expect (choice.ok(), choice.error);
+            expectEquals (choice.selection.root, juce::String ("Staccato"));   // stored with the map's spelling
+            expect (choice.dropped.empty());
+
+            // Another root replaces it, no unselecting first
+            choice = map.choose (choice.selection, "Articulation", "Legato");
+            expect (choice.ok() && choice.selection.root == "Legato", choice.error);
+
+            // Choosing the selected root again unselects it
+            choice = map.choose (choice.selection, "Articulation", "Legato");
+            expect (choice.ok() && choice.selection.isEmpty(), choice.error);
+        }
+
+        beginTest ("choosing: modifiers need a root, apply to it, and are exclusive within their group");
+        {
+            const auto map = selectionMap();
+
+            // No root yet
+            auto choice = map.choose ({}, "Release", "Short");
+            expect (! choice.ok() && choice.error.contains ("need a root"), choice.error);
+            expect (choice.selection.isEmpty());
+
+            Map::Selection staccato;
+            staccato.root = "Staccato";
+
+            // Doesn't apply to this root (and says what it applies to)
+            choice = map.choose (staccato, "Release", "Long");
+            expect (! choice.ok() && choice.error.contains ("doesn't apply to the root 'Staccato'")
+                      && choice.error.contains ("it applies to: Legato"), choice.error);
+
+            // Applies; chosen
+            choice = map.choose (staccato, "release", "short");
+            expect (choice.ok(), choice.error);
+            expectEquals ((int) choice.selection.modifiers.size(), 1);
+            expectEquals (choice.selection.modifiers[0].first, juce::String ("Release"));
+            expectEquals (choice.selection.modifiers[0].second, juce::String ("Short"));
+
+            // The group is exclusive: its other items are unavailable until this one is unselected
+            const auto withShort = choice.selection;
+            choice = map.choose (withShort, "Release", "Soft");
+            expect (! choice.ok() && choice.error.contains ("already has 'Short' chosen"), choice.error);
+            expect (choice.selection == withShort);   // unchanged on failure
+
+            // Choosing it again toggles it off, then the other one can be chosen
+            choice = map.choose (withShort, "Release", "Short");
+            expect (choice.ok() && choice.selection.modifiers.empty(), choice.error);
+            choice = map.choose (choice.selection, "Release", "Soft");
+            expect (choice.ok() && choice.selection.modifiers[0].second == "Soft", choice.error);
+
+            // Different groups don't exclude each other, and the order is the map's group order
+            auto both = map.choose (choice.selection, "Mute", "Con sord");
+            expect (both.ok(), both.error);
+            both = map.choose (map.choose (staccato, "Mute", "Con sord").selection, "Release", "Soft");
+            expect (both.ok(), both.error);
+            expectEquals (both.selection.modifiers[0].first, juce::String ("Release"));
+            expectEquals (both.selection.modifiers[1].first, juce::String ("Mute"));
+        }
+
+        beginTest ("choosing: changing the root keeps modifiers that still apply and reports the ones it would drop");
+        {
+            const auto map = selectionMap();
+            Map::Selection selection;
+            selection.root = "Staccato";
+            selection.modifiers = { { "Release", "Short" }, { "Mute", "Con sord" } };
+
+            // Legato: Con sord applies to every root and stays; Short is Staccato-only and would be dropped
+            auto choice = map.choose (selection, "Articulation", "Legato");
+            expect (choice.ok(), choice.error);
+            expectEquals (choice.selection.root, juce::String ("Legato"));
+            expectEquals ((int) choice.selection.modifiers.size(), 1);
+            expectEquals (choice.selection.modifiers[0].second, juce::String ("Con sord"));
+            expectEquals ((int) choice.dropped.size(), 1);
+            expectEquals (choice.dropped[0].second, juce::String ("Short"));
+
+            // Marcato also takes Short: nothing dropped
+            choice = map.choose (selection, "Articulation", "Marcato");
+            expect (choice.ok() && choice.dropped.empty() && choice.selection.modifiers.size() == 2, choice.error);
+
+            // Unselecting the root drops every modifier
+            choice = map.choose (selection, "Articulation", "Staccato");
+            expect (choice.ok() && choice.selection.isEmpty(), choice.error);
+            expectEquals ((int) choice.dropped.size(), 2);
+
+            // A modifier that isn't in the map at all is dropped too (it can't apply to anything)
+            selection.modifiers.emplace_back ("Release", "Vanished");
+            choice = map.choose (selection, "Articulation", "Marcato");
+            expect (choice.ok(), choice.error);
+            expectEquals ((int) choice.dropped.size(), 1);
+            expectEquals (choice.dropped[0].second, juce::String ("Vanished"));
+        }
+
+        beginTest ("choosing: unknown groups and articulations name what exists");
+        {
+            const auto map = selectionMap();
+            auto choice = map.choose ({}, "Dynamicss", "Soft");
+            expect (! choice.ok() && choice.error.contains ("no group 'Dynamicss'")
+                      && choice.error.contains ("Articulation, Release, Mute, Dynamics"), choice.error);
+
+            choice = map.choose ({}, "Articulation", "Pizz");
+            expect (! choice.ok() && choice.error.contains ("it has: Staccato, Legato, Marcato"), choice.error);
+
+            Map noGroups;
+            noGroups.name = "Empty";
+            expect (! noGroups.choose ({}, "A", "B").ok());
+        }
+
+        beginTest ("available modifiers: only those that apply to the root; groups with nothing left are left out");
+        {
+            const auto map = selectionMap();
+
+            // Staccato: Release (Short, Soft) and Mute; Dynamics only works with Marcato
+            const auto forStaccato = map.availableModifiers ("staccato");
+            expectEquals ((int) forStaccato.size(), 2);
+            expectEquals (forStaccato[0].group->name, juce::String ("Release"));
+            expectEquals ((int) forStaccato[0].articulations.size(), 2);
+            expectEquals (forStaccato[1].group->name, juce::String ("Mute"));
+
+            // Legato: Release has only Long for it, plus Mute; no Dynamics
+            const auto forLegato = map.availableModifiers ("Legato");
+            expectEquals ((int) forLegato.size(), 2);
+            expectEquals ((int) forLegato[0].articulations.size(), 1);
+            expectEquals (forLegato[0].articulations[0]->name, juce::String ("Long"));
+
+            // Marcato: Release (Short, Soft), Mute and Dynamics
+            expectEquals ((int) map.availableModifiers ("Marcato").size(), 3);
+        }
+
+        beginTest ("problems of a selection: missing root, group or articulation, inapplicable and doubled modifiers");
+        {
+            const auto map = selectionMap();
+
+            Map::Selection fine;
+            fine.root = "Staccato";
+            fine.modifiers = { { "Release", "Short" } };
+            expect (map.problemsOf (fine).isEmpty());
+            expect (map.problemsOf ({}).isEmpty());   // none is fine
+
+            Map::Selection noRoot;
+            noRoot.modifiers = { { "Mute", "Con sord" } };
+            expect (anyContains (map.problemsOf (noRoot), "need a root"));
+
+            Map::Selection missingRoot;
+            missingRoot.root = "Pizzicato";
+            const auto missing = map.problemsOf (missingRoot);
+            expect (anyContains (missing, "root articulation 'Pizzicato' is not in map"));
+            expect (anyContains (missing, "it has: Staccato, Legato, Marcato"));
+
+            Map::Selection bad;
+            bad.root = "Staccato";
+            bad.modifiers = { { "Nowhere", "X" }, { "Release", "Nope" }, { "Release", "Long" }, { "Articulation", "Legato" } };
+            const auto problems = map.problemsOf (bad);
+            expect (anyContains (problems, "group 'Nowhere' is not in map"));
+            expect (anyContains (problems, "'Nope' is not in group 'Release'"));
+            expect (anyContains (problems, "two articulations are chosen from group 'Release'"));
+            expect (anyContains (problems, "'Long' (group 'Release') doesn't apply to the root 'Staccato'"));
+            expect (anyContains (problems, "'Articulation' is the root group"));
         }
 
         beginTest ("no restrictions on combining keys, CCs and program changes (left to the user)");

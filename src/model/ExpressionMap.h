@@ -249,6 +249,193 @@ struct ExpressionMap
     bool isValid() const    { return validate().isEmpty(); }
 
     //==========================================================================
+    // Choosing articulations. The editor's menu and the API share these rules:
+    //  - every item toggles (choose it again to unselect it);
+    //  - a modifier group is exclusive: once an item is chosen, the group's other
+    //    items are unavailable until it is unselected;
+    //  - the root group is not: choosing another root switches to it directly;
+    //  - modifiers only exist together with a root, and only those that apply to
+    //    it are offered;
+    //  - when the root changes, modifiers that still apply are kept and the others
+    //    would be dropped - reported in 'dropped', so the caller can ask the user
+    //    first or just accept it (a setting).
+    struct Choice
+    {
+        Selection selection;     // the result (the input, unchanged, when it failed)
+        std::vector<std::pair<juce::String, juce::String>> dropped;   // (group, articulation) that the change removes
+        juce::String error;      // empty = done
+
+        bool ok() const noexcept    { return error.isEmpty(); }
+    };
+
+    Choice choose (const Selection& current, const juce::String& groupName, const juce::String& articulationName) const
+    {
+        Choice result;
+        result.selection = current;
+
+        // A refusal leaves the selection as it was
+        const auto refuse = [&result] (const juce::String& message)
+        {
+            result.error = message;
+            return result;
+        };
+
+        const auto* group = findGroup (groupName);
+
+        if (group == nullptr)
+            return refuse ("no group '" + groupName + "' in map '" + name + "' (groups: " + groupNames() + ")");
+
+        const auto* articulation = findArticulation (*group, articulationName);
+
+        if (articulation == nullptr)
+            return refuse ("no articulation '" + articulationName + "' in group '" + group->name
+                                                   + "' (it has: " + names (*group) + ")");
+
+
+        if (group == &groups.front())
+        {
+            if (sameName (current.root, articulation->name))
+            {
+                // Unselecting the root: no root, so no modifiers either
+                result.selection = {};
+                result.dropped = current.modifiers;
+                return result;
+            }
+
+            result.selection = {};
+            result.selection.root = articulation->name;
+
+            for (auto& modifier : current.modifiers)
+            {
+                const auto* existing = findArticulation (modifier.first, modifier.second);
+
+                if (existing != nullptr && appliesToRoot (*existing, articulation->name))
+                    result.selection.modifiers.push_back (modifier);
+                else
+                    result.dropped.push_back (modifier);
+            }
+
+            return result;
+        }
+
+        // A modifier
+        if (current.root.trim().isEmpty())
+            return refuse ("modifiers need a root articulation; choose one from '" + groups.front().name
+                                                   + "' first (" + names (groups.front()) + ")");
+
+        if (findArticulation (groups.front(), current.root) == nullptr)
+            return refuse ("the root articulation '" + current.root + "' is not in map '" + name
+                                                   + "'; choose a root from '" + groups.front().name + "' first");
+
+        if (! appliesToRoot (*articulation, current.root))
+            return refuse ("'" + articulation->name + "' (group '" + group->name
+                                                   + "') doesn't apply to the root '" + current.root + "'; it applies to: "
+                                                   + articulation->appliesTo.joinIntoString (", "));
+
+        for (size_t i = 0; i < current.modifiers.size(); ++i)
+        {
+            if (! sameName (current.modifiers[i].first, group->name))
+                continue;
+
+            if (sameName (current.modifiers[i].second, articulation->name))
+            {
+                result.selection.modifiers.erase (result.selection.modifiers.begin() + (std::ptrdiff_t) i);   // toggled off
+                return result;
+            }
+
+            return refuse ("group '" + group->name + "' already has '" + current.modifiers[i].second
+                                                   + "' chosen; unselect it first (choosing it again toggles it off)");
+        }
+
+        result.selection.modifiers.emplace_back (group->name, articulation->name);
+
+        // Canonical order: the groups' order in the map (so equal choices compare equal)
+        std::stable_sort (result.selection.modifiers.begin(), result.selection.modifiers.end(),
+                          [this] (const auto& a, const auto& b) { return groupIndex (a.first) < groupIndex (b.first); });
+        return result;
+    }
+
+    // The modifiers the root allows, per group, for the menu. Groups with
+    // nothing left are omitted.
+    struct Available
+    {
+        const Group* group = nullptr;
+        std::vector<const Articulation*> articulations;
+    };
+
+    std::vector<Available> availableModifiers (const juce::String& rootName) const
+    {
+        std::vector<Available> result;
+
+        for (size_t g = 1; g < groups.size(); ++g)
+        {
+            Available available;
+            available.group = &groups[g];
+
+            for (auto& articulation : groups[g].articulations)
+                if (appliesToRoot (articulation, rootName))
+                    available.articulations.push_back (&articulation);
+
+            if (! available.articulations.empty())
+                result.push_back (std::move (available));
+        }
+
+        return result;
+    }
+
+    // Everything wrong with a note's choice against this map (empty = fine).
+    // The editor marks these notes as errors; nothing is erased.
+    juce::StringArray problemsOf (const Selection& selection) const
+    {
+        juce::StringArray problems;
+
+        if (groups.empty())
+        {
+            if (! selection.isEmpty())
+                problems.add ("map '" + name + "' has no groups");
+
+            return problems;
+        }
+
+        const auto* root = selection.root.trim().isEmpty() ? nullptr : findArticulation (groups.front(), selection.root);
+
+        if (selection.root.trim().isEmpty() && ! selection.modifiers.empty())
+            problems.add ("modifiers need a root articulation");
+
+        if (selection.root.trim().isNotEmpty() && root == nullptr)
+            problems.add ("root articulation '" + selection.root + "' is not in map '" + name + "' (it has: "
+                          + names (groups.front()) + ")");
+
+        juce::StringArray seenGroups;
+
+        for (auto& [groupName, articulationName] : selection.modifiers)
+        {
+            const auto* group = findGroup (groupName);
+
+            if (group == nullptr || group == &groups.front())
+            {
+                problems.add (group == nullptr ? "group '" + groupName + "' is not in map '" + name + "'"
+                                               : "'" + groupName + "' is the root group, not a modifier group");
+                continue;
+            }
+
+            if (seenGroups.contains (group->name, true))
+                problems.add ("two articulations are chosen from group '" + group->name + "' (only one is allowed)");
+
+            seenGroups.add (group->name);
+            const auto* articulation = findArticulation (*group, articulationName);
+
+            if (articulation == nullptr)
+                problems.add ("'" + articulationName + "' is not in group '" + group->name + "' (it has: " + names (*group) + ")");
+            else if (root != nullptr && ! appliesToRoot (*articulation, root->name))
+                problems.add ("'" + articulation->name + "' (group '" + group->name + "') doesn't apply to the root '"
+                              + root->name + "'");
+        }
+
+        return problems;
+    }
+
+    //==========================================================================
     // Project / library files. Group order is preserved (the first is the root
     // group). Reading is forgiving: missing attributes take their defaults and
     // unknown output types are skipped; validate() says what is wrong.
@@ -347,6 +534,25 @@ struct ExpressionMap
     }
 
 private:
+    juce::String groupNames() const
+    {
+        juce::StringArray list;
+
+        for (auto& group : groups)
+            list.add (group.name);
+
+        return list.joinIntoString (", ");
+    }
+
+    size_t groupIndex (const juce::String& groupName) const
+    {
+        for (size_t g = 0; g < groups.size(); ++g)
+            if (sameName (groups[g].name, groupName))
+                return g;
+
+        return groups.size();
+    }
+
     static const char* typeToString (Output::Type type)
     {
         switch (type)
