@@ -409,6 +409,46 @@ public:
             expect (keyswitchIndex < noteIndex, "...and the keyswitch comes first");
             expectEquals (cc32At, noteOn);
         }
+
+        beginTest ("a map with sound slots: the combination's slot sends its outputs and has its own timing offset");
+        {
+            Map slots;
+            slots.name = "Synchron";
+            slots.groups.push_back ({ "Color", "", { art ("Regular", 0.0, {}) } });
+            slots.groups.push_back ({ "Main", "", { art ("Long", 0.0, {}), art ("Staccato", 0.0, {}) } });
+
+            const auto slot = [] (const char* main, std::vector<int> programs, double offsetMs)
+            {
+                Map::Slot s;
+                s.selection.root = "Regular";
+                s.selection.modifiers.emplace_back ("Main", main);
+                s.timingOffsetMs = offsetMs;
+
+                for (auto p : programs)
+                    s.outputs.push_back ({ Out::Type::programChange, p, 0, false, -1 });
+
+                return s;
+            };
+
+            slots.slots = { slot ("Long", { 112, 0 }, 0.0), slot ("Staccato", { 112, 3 }, -20.0) };
+
+            const auto written = MidiSequence::create ({ note (0, 60, "Regular", { { "Main", "Long" } }),
+                                                         note (Q, 62, "Regular", { { "Main", "Long" } }),
+                                                         note (2 * Q, 64, "Regular", { { "Main", "Staccato" } }),
+                                                         note (3 * Q, 65, "Regular", { { "Main", "Pizz." } }) }, {});
+            const auto result = playback::build (written, &slots, *tempo, false);
+
+            juce::Array<int> programs;
+
+            for (auto& c : result.sequence->getControls())
+                if (c.type == MidiSequence::ControlType::programChange)
+                    programs.add (c.value);
+
+            expect (programs == juce::Array<int> ({ 112, 0, 112, 3 }), "the second Long sends nothing; no slot sends nothing");
+            expectEquals (findNote (*result.sequence, 64)->startTick, 2 * Q - Q / 25);   // 20 ms at 120 bpm
+            expectEquals (findNote (*result.sequence, 65)->startTick, 3 * Q);
+            expectEquals (result.earliestOffsetMs, -20.0);
+        }
     }
 };
 

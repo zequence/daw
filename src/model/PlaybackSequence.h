@@ -77,10 +77,21 @@ namespace playback
             const auto resolved = ! selection.isEmpty() && articulations::resolves (*map, selection);
 
             std::vector<const ExpressionMap::Articulation*> chain;   // the root, then the modifiers in the map's group order
+            std::vector<ExpressionMap::Output> outputs;               // what an articulation change sends, in series
             double offsetMs = 0.0;
             juce::String key;
 
-            if (resolved)
+            if (map->hasSlots())
+            {
+                // A map with sound slots: the combination's own slot says everything
+                if (const auto* slot = resolved ? map->findSlot (selection) : nullptr)
+                {
+                    outputs = slot->outputs;
+                    offsetMs = slot->timingOffsetMs;
+                    key = ExpressionMap::labelOf (map->canonical (selection)).toLowerCase();
+                }
+            }
+            else if (resolved)
             {
                 chain.push_back (ExpressionMap::findArticulation (map->groups.front(), selection.root));
 
@@ -93,6 +104,7 @@ namespace playback
                 {
                     offsetMs += articulation->timingOffsetMs;
                     key += articulation->name.toLowerCase() + "|";
+                    outputs.insert (outputs.end(), articulation->outputs.begin(), articulation->outputs.end());
                 }
             }
 
@@ -101,52 +113,51 @@ namespace playback
             result.earliestOffsetMs = juce::jmin (result.earliestOffsetMs, offsetMs);
 
             // The articulation changed: send its outputs, in order, at the note's own tick
-            if (resolved && key != previousKey)
+            if (resolved && key.isNotEmpty() && key != previousKey)
             {
                 closeHeld (scheduled);
 
-                for (auto* articulation : chain)
-                    for (auto& output : articulation->outputs)
+                for (auto& output : outputs)
+                {
+                    switch (output.type)
                     {
-                        switch (output.type)
+                        case Output::Type::keyswitch:
                         {
-                            case Output::Type::keyswitch:
+                            MidiSequence::Note keyswitch;
+                            keyswitch.startTick = scheduled;
+                            keyswitch.sourceTick = writtenTick;
+                            keyswitch.isKeyswitch = true;
+                            keyswitch.channel = original.channel;
+                            keyswitch.key = output.number;
+                            keyswitch.velocity = output.value;
+                            keyswitch.lengthTicks = juce::jmax ((juce::int64) 1, shifted (scheduled, tappedKeyswitchMs) - scheduled);
+                            notes.push_back (keyswitch);
+
+                            if (output.held)
+                                held.push_back ({ notes.size() - 1 });
+
+                            break;
+                        }
+
+                        case Output::Type::controller:
+                            controls.push_back ({ scheduled, MidiSequence::ControlType::controller, original.channel,
+                                                  output.number, output.value, writtenTick });
+                            break;
+
+                        case Output::Type::programChange:
+                            if (output.bank >= 0)
                             {
-                                MidiSequence::Note keyswitch;
-                                keyswitch.startTick = scheduled;
-                                keyswitch.sourceTick = writtenTick;
-                                keyswitch.isKeyswitch = true;
-                                keyswitch.channel = original.channel;
-                                keyswitch.key = output.number;
-                                keyswitch.velocity = output.value;
-                                keyswitch.lengthTicks = juce::jmax ((juce::int64) 1, shifted (scheduled, tappedKeyswitchMs) - scheduled);
-                                notes.push_back (keyswitch);
-
-                                if (output.held)
-                                    held.push_back ({ notes.size() - 1 });
-
-                                break;
+                                controls.push_back ({ scheduled, MidiSequence::ControlType::controller, original.channel, 0,
+                                                      (output.bank >> 7) & 127, writtenTick });
+                                controls.push_back ({ scheduled, MidiSequence::ControlType::controller, original.channel, 32,
+                                                      output.bank & 127, writtenTick });
                             }
 
-                            case Output::Type::controller:
-                                controls.push_back ({ scheduled, MidiSequence::ControlType::controller, original.channel,
-                                                      output.number, output.value, writtenTick });
-                                break;
-
-                            case Output::Type::programChange:
-                                if (output.bank >= 0)
-                                {
-                                    controls.push_back ({ scheduled, MidiSequence::ControlType::controller, original.channel, 0,
-                                                          (output.bank >> 7) & 127, writtenTick });
-                                    controls.push_back ({ scheduled, MidiSequence::ControlType::controller, original.channel, 32,
-                                                          output.bank & 127, writtenTick });
-                                }
-
-                                controls.push_back ({ scheduled, MidiSequence::ControlType::programChange, original.channel,
-                                                      0, output.number, writtenTick });
-                                break;
-                        }
+                            controls.push_back ({ scheduled, MidiSequence::ControlType::programChange, original.channel,
+                                                  0, output.number, writtenTick });
+                            break;
                     }
+                }
 
                 previousKey = key;
             }
