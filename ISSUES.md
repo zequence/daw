@@ -17,6 +17,9 @@ Claude is unsure of an issue they will pose a question.
 
 - [ ] New category: Theming. Selectable themes. Colors for certain areas, buttons, etc. Ability to save custom themes. (Milestone "Theming" in MILESTONES.md; plan in THEMING.md.)
 
+# Instruments
+
+
 # Timeline bar
 
 # Sidebar
@@ -43,6 +46,7 @@ Claude is unsure of an issue they will pose a question.
 
 # Midi editor
 
+- [ ] Change pointer to a pen when in draw mode
 - [ ] Show midi for multiple tracks. Midi for the selected channel is normal, while other channel midi is greyed out.
 - [ ] A dropdown in the top editor bar to select which channel to edit. It will only show the selected midi channels.
 - [ ] A button for enabling editing on multi-channel (for example copy paste)

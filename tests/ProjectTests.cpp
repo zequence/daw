@@ -110,7 +110,19 @@ public:
 
         auto* pluginBefore = engine.getInstrumentPlugin (instrumentId);
         expect (pluginBefore != nullptr && pluginBefore->getParameters().size() > 4);
+        // A VST3 plugin takes a host-set parameter into its processor on its next audio block, and
+        // its saved state comes from the processor: wait until the state has it (slow Debug builds
+        // could otherwise save before a block ran)
+        juce::MemoryBlock stateBefore;
+        pluginBefore->getStateInformation (stateBefore);
         pluginBefore->getParameters()[4]->setValue (0.731f);
+
+        pumpUntil ([pluginBefore, &stateBefore]
+        {
+            juce::MemoryBlock now;
+            pluginBefore->getStateInformation (now);
+            return now != stateBefore;
+        }, 5000);
 
         // --- Save ---
         const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory)

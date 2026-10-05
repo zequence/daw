@@ -68,6 +68,7 @@ private:
     void applyLoadedProject (const juce::File&, bool ok, const juce::String& warnings);
     void updateWindowTitle();
     static juce::File getProjectsDirectory();
+    void removeInstrumentAsking (AudioEngine::InstrumentId);
     static juce::File startupProjectFile()    { return UserData::getDir().getChildFile ("Startup.odaw"); }
     void openSettings();
     void closeSettings();

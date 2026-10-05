@@ -22,7 +22,7 @@ public:
         addAndMakeVisible (viewport);
     }
 
-    std::function<void (AudioEngine::InstrumentId)> onOpenPluginGui, onEditInstrument;
+    std::function<void (AudioEngine::InstrumentId)> onOpenPluginGui, onEditInstrument, onRemoveInstrument;
     std::function<void()> onAddInstrument, onVeproSync;
 
     // Instruments fed by this track float to the top and get a highlight.
@@ -90,6 +90,11 @@ private:
             editButton.setWantsKeyboardFocus (false);
             editButton.onClick = [this] { if (owner.onEditInstrument) owner.onEditInstrument (instrumentId); };
             addAndMakeVisible (editButton);
+
+            removeButton.setWantsKeyboardFocus (false);
+            removeButton.setTooltip ("Remove this instrument (asks what to do with the tracks playing it)");
+            removeButton.onClick = [this] { if (owner.onRemoveInstrument) owner.onRemoveInstrument (instrumentId); };
+            addAndMakeVisible (removeButton);
         }
 
         void refresh() { repaint(); }
@@ -137,6 +142,8 @@ private:
         void resized() override
         {
             auto area = getLocalBounds().reduced (12, 14);
+            removeButton.setBounds (area.removeFromRight (70));
+            area.removeFromRight (6);
             editButton.setBounds (area.removeFromRight (54));
             area.removeFromRight (6);
             guiButton.setBounds (area.removeFromRight (54));
@@ -144,7 +151,7 @@ private:
 
         InstrumentsView& owner;
         const AudioEngine::InstrumentId instrumentId;
-        juce::TextButton guiButton { "GUI" }, editButton { "Edit" };
+        juce::TextButton guiButton { "GUI" }, editButton { "Edit" }, removeButton { "Remove" };
     };
 
     std::vector<AudioEngine::InstrumentId> sortedIds() const

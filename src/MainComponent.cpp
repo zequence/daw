@@ -262,6 +262,8 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     };
 
     instrumentsView.onOpenPluginGui = [this] (auto id) { openPluginWindow (id); };
+    commandDispatcher.onBeforeInstrumentRemove = [this] (int id) { pluginWindows.erase (id); };
+    instrumentsView.onRemoveInstrument = [this] (auto id) { removeInstrumentAsking (id); };
     instrumentsView.onEditInstrument = [this] (auto id)
     {
         instrumentEditorView.setInstrument (id);
@@ -427,6 +429,65 @@ void MainComponent::createDefaultTrack()
             if (entries.getArray() == nullptr || entries.getArray()->size() <= 3)
                 safe->engine.markProjectClean();
         });
+}
+
+// Remove an instrument; when tracks play it, ask whether they go too (ISSUES.md "Instruments")
+void MainComponent::removeInstrumentAsking (AudioEngine::InstrumentId id)
+{
+    juce::StringArray playing;
+
+    for (auto trackId : engine.getTrackIds())
+        for (auto& output : engine.getTrackOutputs (trackId))
+            if (output.instrument == id)
+            {
+                playing.addIfNotAlreadyThere (engine.getTrackName (trackId));
+                break;
+            }
+
+    const auto name = engine.getInstrumentName (id);
+
+    const auto remove = [safe = juce::Component::SafePointer<MainComponent> (this), id, name] (bool removeTracks)
+    {
+        if (safe == nullptr)
+            return;
+
+        auto params = new juce::DynamicObject();
+        params->setProperty ("instrumentId", id);
+        params->setProperty ("removeTracks", removeTracks);
+        const auto reply = safe->commandDispatcher.run ("instrument.remove", juce::var (params));
+
+        if (! (bool) reply["ok"])
+        {
+            safe->statusLabel.setText ("Couldn't remove " + name + ": " + reply["error"].toString(), juce::dontSendNotification);
+            return;
+        }
+
+        const auto trackIds = safe->engine.getTrackIds();
+
+        if (std::find (trackIds.begin(), trackIds.end(), safe->selectedTrack) == trackIds.end())
+            safe->selectTrack (trackIds.empty() ? 0 : trackIds.front(), false);
+
+        safe->statusLabel.setText ("Removed " + name, juce::dontSendNotification);
+    };
+
+    if (playing.isEmpty())
+    {
+        juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, "Remove instrument",
+                                            "Remove '" + name + "'? No tracks play it.", "Remove", "Cancel", this,
+                                            juce::ModalCallbackFunction::create ([remove] (int result) { if (result == 1) remove (false); }));
+        return;
+    }
+
+    juce::AlertWindow::showYesNoCancelBox (juce::MessageBoxIconType::QuestionIcon, "Remove instrument",
+                                           "'" + name + "' is played by " + juce::String (playing.size())
+                                               + (playing.size() == 1 ? " track: " : " tracks: ") + playing.joinIntoString (", ")
+                                               + ".\n\nRemove those tracks too, or keep them without an output?",
+                                           "Remove the tracks too", "Keep the tracks", "Cancel", this,
+                                           juce::ModalCallbackFunction::create ([remove] (int result)
+                                           {
+                                               if (result == 1)       remove (true);
+                                               else if (result == 2)  remove (false);
+                                           }));
 }
 
 MainComponent::~MainComponent()

@@ -2,6 +2,11 @@
 #include <juce_events/juce_events.h>
 #include <cstdio>
 
+#if JUCE_WINDOWS && JUCE_DEBUG
+ #include <crtdbg.h>
+ #include <windows.h>
+#endif
+
 #include "../src/model/TempoMap.h"
 
 namespace
@@ -168,6 +173,20 @@ static TempoMapTests tempoMapTests;
 
 int main (int argc, char* argv[])
 {
+   #if JUCE_WINDOWS && JUCE_DEBUG
+    // Debug checks of the C runtime (asserts, "vector subscript out of range", abort()) report to
+    // stderr instead of a modal dialog, and a crash ends the run instead of opening an error box:
+    // test runs are unattended
+    for (auto type : { _CRT_WARN, _CRT_ERROR, _CRT_ASSERT })
+    {
+        _CrtSetReportMode (type, _CRTDBG_MODE_FILE);
+        _CrtSetReportFile (type, _CRTDBG_FILE_STDERR);
+    }
+
+    _set_abort_behavior (0, _WRITE_ABORT_MSG | _CALL_REPORTFAULT);
+    SetErrorMode (SEM_FAILCRITICALERRORS | SEM_NOGPFAULTERRORBOX);
+   #endif
+
     for (int i = 1; i < argc; ++i)
         if (juce::String (argv[i]) == "--quiet")
             skipAudibleTests = true;

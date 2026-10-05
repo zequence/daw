@@ -67,6 +67,15 @@ resolution notes. Newest additions go at the top of each chapter.
       (Instruments and History toggle back to the current domain's arrange view
       when clicked while open; Escape still works too)
 
+# Instruments
+
+- [x] Need a way to delete instruments. Ask to remove connected midi channels, if any.
+      (Instruments view: a Remove button per instrument. When tracks play it,
+      a prompt lists them and offers "Remove the tracks too" (tracks that play
+      only this instrument go; tracks with other outputs just lose this one)
+      or "Keep the tracks" (they stay, without that output). Its plugin window
+      closes. API: instrument.remove {instrumentId, removeTracks?}.)
+
 # Timeline bar
 
 - [x] Right-click menu for enabling, disabling the different rows. At the bottom of the menu, add "Preferences", which opens a sub-UI for the global "Settings".

@@ -494,6 +494,39 @@ private:
                                                         params ({ { "group", "Tempo" }, { "name", "130" } }) } } }) } }));
             expect (slotReply["ok"], errorOf (slotReply));
         }
+
+        beginTest ("instrument.remove: tracks that play only it go with removeTracks, the others lose that output");
+        {
+            std::atomic<int> first { -1 }, second { -1 };
+            engine.addInstrument (description, [&first] (auto id, const juce::String&) { first = id; });
+            engine.addInstrument (description, [&second] (auto id, const juce::String&) { second = id; });
+            pumpUntil ([&] { return first.load() != -1 && second.load() != -1; });
+            expect (first > 0 && second > 0);
+
+            const auto only = engine.addTrack ("Only");
+            engine.addTrackOutput (only, first, 1);
+            const auto both = engine.addTrack ("Both");
+            engine.addTrackOutput (both, first, 2);
+            engine.addTrackOutput (both, second, 1);
+
+            auto removeReply = api.run ("instrument.remove", params ({ { "instrumentId", 9999 } }));
+            expect (! removeReply["ok"] && errorOf (removeReply).contains ("existing:"), errorOf (removeReply));
+
+            removeReply = api.run ("instrument.remove", params ({ { "instrumentId", first.load() }, { "removeTracks", true } }));
+            expect (removeReply["ok"], errorOf (removeReply));
+            expect (removeReply["result"]["removedTracks"].size() == 1 && (int) removeReply["result"]["removedTracks"][0] == only);
+            expect (removeReply["result"]["unroutedTracks"].size() == 1 && (int) removeReply["result"]["unroutedTracks"][0] == both);
+
+            const auto trackIds = engine.getTrackIds();
+            expect (std::find (trackIds.begin(), trackIds.end(), only) == trackIds.end(), "the track that played only it is gone");
+            expect (engine.getTrackOutputs (both).size() == 1 && engine.getTrackOutputs (both)[0].instrument == second);
+            expect (engine.getInstrumentPlugin (first) == nullptr);
+
+            removeReply = api.run ("instrument.remove", params ({ { "instrumentId", second.load() } }));
+            expect (removeReply["ok"] && engine.getTrackOutputs (both).empty(), "without removeTracks the track stays, unrouted");
+            const auto remaining = engine.getTrackIds();
+            expect (std::find (remaining.begin(), remaining.end(), both) != remaining.end());
+        }
     }
 };
 

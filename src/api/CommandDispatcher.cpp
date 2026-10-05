@@ -1940,6 +1940,57 @@ void CommandDispatcher::registerCommands()
              respond (ok (juce::var (o.get())));
          });
 
+    add ("instrument.remove",
+         "Remove an instrument (its plugin and audio channel). The tracks playing it lose that output; with "
+         "removeTracks, the tracks that play only this instrument are removed too. Replies {removedTracks:[ids], "
+         "unroutedTracks:[ids]}",
+         "instrumentId:int [removeTracks:bool=false]",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const auto id = (int) params.getProperty ("instrumentId", 0);
+
+             if (engine.getInstrumentPlugin (id) == nullptr && engine.getInstrumentName (id).isEmpty())
+             {
+                 juce::StringArray existing;
+
+                 for (auto& [instrumentId, name] : engine.getInstruments())
+                     existing.add (juce::String (instrumentId) + " " + name);
+
+                 return respond (fail ("no instrument " + juce::String (id) + " (existing: "
+                                       + (existing.isEmpty() ? juce::String ("none") : existing.joinIntoString (", ")) + ")"));
+             }
+
+             juce::Array<juce::var> removed, unrouted;
+             const auto removeTracks = (bool) params.getProperty ("removeTracks", false);
+
+             for (auto trackId : engine.getTrackIds())
+             {
+                 const auto outputs = engine.getTrackOutputs (trackId);
+                 const auto plays = std::count_if (outputs.begin(), outputs.end(), [id] (const auto& o) { return o.instrument == id; });
+
+                 if (plays == 0)
+                     continue;
+
+                 if (removeTracks && plays == (long) outputs.size())
+                     removed.add (trackId);
+                 else
+                     unrouted.add (trackId);
+             }
+
+             if (onBeforeInstrumentRemove)
+                 onBeforeInstrumentRemove (id);
+
+             for (auto& trackId : removed)
+                 engine.removeTrack ((int) trackId);
+
+             engine.removeInstrument (id);
+
+             auto result = object();
+             result->setProperty ("removedTracks", removed);
+             result->setProperty ("unroutedTracks", unrouted);
+             respond (ok (juce::var (result.get())));
+         });
+
     add ("instrument.setState",
          "Apply a previously captured base64 state to the plugin (same plugin type!)",
          "instrumentId:int stateBase64:string",
