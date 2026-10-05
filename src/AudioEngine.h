@@ -5,6 +5,7 @@
 
 #include "engine/Transport.h"
 #include "engine/MidiRecorder.h"
+#include "model/ExpressionMap.h"
 #include "model/MidiSequence.h"
 
 class AudioChannelProcessor;
@@ -74,6 +75,11 @@ public:
         // key range once fetched (-1 = unknown; Synchron Player only)
         juce::String veproInstanceId, veproChannelAddress, veproPluginId;
         int keyLow = -1, keyHigh = -1;
+
+        // The expression map this instrument channel uses (a project map, by name;
+        // empty = none). Every track playing this channel shares it. Editable on
+        // synced channels too: it is the one thing sync does not own.
+        juce::String expressionMap;
     };
 
     // How many MIDI ports the plugin itself offers (its VST3 MIDI event input
@@ -89,6 +95,19 @@ public:
 
     // The channel info behind a track's first output (nullopt when it has none)
     std::optional<MidiChannelInfo> getTrackChannelInfo (TrackId) const;
+
+    //==============================================================================
+    // Expression maps (MILESTONES.md "Articulation / expression maps"). Maps are
+    // project data, named (case-insensitive); instrument channels refer to them
+    // by name, so several channels can share one. The mutating calls return an
+    // error sentence (empty = done) that names what exists.
+    std::vector<ExpressionMap> getExpressionMaps() const;
+    std::optional<ExpressionMap> getExpressionMap (const juce::String& name) const;
+    juce::String setExpressionMap (ExpressionMap);                                   // add, or replace the map of that name; must validate
+    juce::String removeExpressionMap (const juce::String& name);                     // channels using it keep the name (shown as a missing map)
+    juce::String renameExpressionMap (const juce::String& name, const juce::String& newName);   // channels follow the rename
+    juce::String setInstrumentChannelMap (InstrumentId, int midiPort, int midiChannel, const juce::String& mapName);   // "" = none
+    std::optional<ExpressionMap> getTrackExpressionMap (TrackId) const;              // the map of the track's channel, if it has a valid one
 
     //==============================================================================
     // Audio channels (one per instrument for now; device inputs and summing later)
@@ -513,6 +532,7 @@ private:
     std::map<TrackId, Track> tracks;
     std::map<InstrumentId, Instrument> instruments;
     std::vector<Marker> markers;
+    std::vector<ExpressionMap> expressionMaps;   // project data; instrument channels refer to them by name
     std::map<AudioChannelId, AudioChannel> audioChannels;
     std::map<FolderId, Folder> folders;
     TrackId nextTrackId = 1;

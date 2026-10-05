@@ -446,7 +446,8 @@ bool AudioEngine::setInstrumentChannelName (InstrumentId id, int midiChannel, co
             if (it->synced)
                 return false;   // inherited from the VE Pro server: immutable
 
-            if (name.isEmpty())
+            // An unnamed channel that has no expression map either holds nothing
+            if (name.isEmpty() && it->expressionMap.isEmpty())
                 instrument->midiChannels.erase (it);
             else
                 it->name = name;
@@ -506,6 +507,7 @@ void AudioEngine::setSyncedInstrumentChannels (InstrumentId id, std::vector<Midi
             {
                 channel.keyLow = old.keyLow;
                 channel.keyHigh = old.keyHigh;
+                channel.expressionMap = old.expressionMap;   // the one thing sync doesn't own
             }
 
         channel.synced = true;
@@ -561,6 +563,164 @@ std::optional<AudioEngine::MidiChannelInfo> AudioEngine::getTrackChannelInfo (Tr
         for (auto& channel : instrument->midiChannels)
             if (channel.midiPort == output.midiPort && channel.midiChannel == output.midiChannel)
                 return channel;
+
+    return std::nullopt;
+}
+
+//==============================================================================
+// Expression maps
+std::vector<ExpressionMap> AudioEngine::getExpressionMaps() const
+{
+    return expressionMaps;
+}
+
+std::optional<ExpressionMap> AudioEngine::getExpressionMap (const juce::String& name) const
+{
+    for (auto& map : expressionMaps)
+        if (ExpressionMap::sameName (map.name, name))
+            return map;
+
+    return std::nullopt;
+}
+
+namespace
+{
+    juce::String existingMapNames (const std::vector<ExpressionMap>& maps)
+    {
+        juce::StringArray names;
+
+        for (auto& map : maps)
+            names.add (map.name);
+
+        return names.isEmpty() ? "none exist yet" : "existing: " + names.joinIntoString (", ");
+    }
+}
+
+juce::String AudioEngine::setExpressionMap (ExpressionMap map)
+{
+    map.name = map.name.trim();
+
+    if (const auto problems = map.validate(); ! problems.isEmpty())
+        return "expression map '" + map.name + "' is not valid: " + problems.joinIntoString ("; ");
+
+    const auto existing = std::find_if (expressionMaps.begin(), expressionMaps.end(),
+                                        [&] (const ExpressionMap& m) { return ExpressionMap::sameName (m.name, map.name); });
+
+    if (existing != expressionMaps.end())
+        *existing = map;
+    else
+        expressionMaps.push_back (map);
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("name", map.name);
+    emitEvent ("expressionMapChanged", data);
+    return {};
+}
+
+juce::String AudioEngine::removeExpressionMap (const juce::String& name)
+{
+    const auto before = expressionMaps.size();
+    const auto listing = existingMapNames (expressionMaps);
+
+    std::erase_if (expressionMaps, [&] (const ExpressionMap& m) { return ExpressionMap::sameName (m.name, name); });
+
+    if (expressionMaps.size() == before)
+        return "no expression map '" + name + "' (" + listing + ")";
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("name", name);
+    emitEvent ("expressionMapRemoved", data);
+    return {};
+}
+
+juce::String AudioEngine::renameExpressionMap (const juce::String& name, const juce::String& newName)
+{
+    const auto clean = newName.trim();
+
+    if (clean.isEmpty())
+        return "an expression map needs a name";
+
+    ExpressionMap* target = nullptr;
+
+    for (auto& map : expressionMaps)
+    {
+        if (ExpressionMap::sameName (map.name, name))
+            target = &map;
+        else if (ExpressionMap::sameName (map.name, clean))
+            return "there is already an expression map '" + map.name + "' (names ignore case)";
+    }
+
+    if (target == nullptr)
+        return "no expression map '" + name + "' (" + existingMapNames (expressionMaps) + ")";
+
+    target->name = clean;
+
+    for (auto& [id, instrument] : instruments)
+        for (auto& channel : instrument.midiChannels)
+            if (ExpressionMap::sameName (channel.expressionMap, name))
+                channel.expressionMap = clean;
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("name", clean);
+    data->setProperty ("oldName", name);
+    emitEvent ("expressionMapChanged", data);
+    return {};
+}
+
+juce::String AudioEngine::setInstrumentChannelMap (InstrumentId id, int midiPort, int midiChannel, const juce::String& mapName)
+{
+    auto* instrument = findInstrument (id);
+
+    if (instrument == nullptr)
+        return "no instrument with id " + juce::String (id);
+
+    juce::String canonical;
+
+    if (mapName.trim().isNotEmpty())
+    {
+        const auto map = getExpressionMap (mapName);
+
+        if (! map.has_value())
+            return "no expression map '" + mapName + "' (" + existingMapNames (expressionMaps) + ")";
+
+        canonical = map->name;
+    }
+
+    auto it = std::find_if (instrument->midiChannels.begin(), instrument->midiChannels.end(),
+                            [&] (const MidiChannelInfo& c) { return c.midiPort == midiPort && c.midiChannel == midiChannel; });
+
+    if (it == instrument->midiChannels.end())
+    {
+        if (canonical.isEmpty())
+            return {};   // nothing to clear
+
+        MidiChannelInfo channel;
+        channel.midiPort = midiPort;
+        channel.midiChannel = midiChannel;
+        instrument->midiChannels.push_back (channel);
+        it = std::prev (instrument->midiChannels.end());
+    }
+
+    if (it->expressionMap == canonical)
+        return {};
+
+    it->expressionMap = canonical;
+
+    // A manual channel that holds nothing any more is not kept
+    if (! it->synced && it->name.isEmpty() && it->expressionMap.isEmpty())
+        instrument->midiChannels.erase (it);
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    data->setProperty ("change", "expressionMap");
+    emitEvent ("instrumentChanged", data);
+    return {};
+}
+
+std::optional<ExpressionMap> AudioEngine::getTrackExpressionMap (TrackId trackId) const
+{
+    if (const auto info = getTrackChannelInfo (trackId); info.has_value() && info->expressionMap.isNotEmpty())
+        return getExpressionMap (info->expressionMap);
 
     return std::nullopt;
 }
@@ -1722,6 +1882,9 @@ bool AudioEngine::saveProject (const juce::File& file)
         m->setAttribute ("name", marker.name);
     }
 
+    for (auto& map : expressionMaps)
+        root.addChildElement (map.toXml().release());
+
     for (auto& [id, folder] : folders)
     {
         auto* f = root.createNewChildElement ("FOLDER");
@@ -1758,6 +1921,9 @@ bool AudioEngine::saveProject (const juce::File& file)
             c->setAttribute ("channel", channel.midiChannel);
             c->setAttribute ("name", channel.name);
             c->setAttribute ("synced", channel.synced);
+
+            if (channel.expressionMap.isNotEmpty())
+                c->setAttribute ("expressionMap", channel.expressionMap);
 
             if (channel.veproChannelAddress.isNotEmpty())
             {
@@ -1858,6 +2024,7 @@ void AudioEngine::clearProject()
     armedTrack = 0;
     armedTracks.clear();
     markers.clear();
+    expressionMaps.clear();
     folders.clear();
     masterTempoMap = TempoMap::create (120.0);
     transport.setTempoMap (masterTempoMap);
@@ -1887,6 +2054,9 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
         masterTempoMap = TempoMap::fromXml (*tempoXml);
         transport.setTempoMap (masterTempoMap);
     }
+
+    for (auto* m : xml->getChildWithTagNameIterator ("EXPRESSIONMAP"))
+        expressionMaps.push_back (ExpressionMap::fromXml (*m));   // as saved: validity is reported on demand, never a load failure
 
     for (auto* m : xml->getChildWithTagNameIterator ("MARKER"))
         addMarker (m->getStringAttribute ("tick").getLargeIntValue(), m->getStringAttribute ("name"));
@@ -2018,6 +2188,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
                         channel.veproPluginId = c->getStringAttribute ("veproPlugin");
                         channel.keyLow = c->getIntAttribute ("slotKeyLow", -1);
                         channel.keyHigh = c->getIntAttribute ("slotKeyHigh", -1);
+                        channel.expressionMap = c->getStringAttribute ("expressionMap");
                         loadedInstrument->midiChannels.push_back (channel);
                     }
 
