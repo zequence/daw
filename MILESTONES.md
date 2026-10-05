@@ -191,10 +191,18 @@ slots); choosing "Long notes" offers Legato, Lyrical, Slur, Portamento and the
 releases. Legato on "Tremolo" and Legato on "Long notes" are two slots with
 different programs under the same label.
 
-Phase 6 (to do): model, XML/JSON, validation, tests; the menu rules from the slots;
-playback and the pre-roll from the slots; the slot list in the map editor; the
-generator in vsl-manager writing slots (with key ranges); then the DAW+ map is
-regenerated.
+Phase 6. **Delivered 2026-10-05:** the model (slots, defaults, `offeredModifiers`,
+choosing with defaults - filled-in defaults that no longer fit drop silently, your
+own choices are reported - validation, XML/JSON, renames into slots and defaults);
+the menu follows the slots; playback sends the slot's outputs with its timing
+offset and the editor's key range is the slot's; commands `expressionmap.slots /
+setSlot / removeSlot / offered`; vsl-manager `tools/daw_maps.py` writes slot maps
+(the merged Duality 1st Violins: 177 slots, groups Color / Main / Legato / Release /
+Tempo), checked against the app's model by a test with the generated file.
+**Still to do:** the slot list in the map editor (today it edits the old
+per-articulation outputs, which validation refuses in a slot map); defaults in the
+editor; the keyswitch template as slots; then the old model (outputs and applies-to
+on articulations) goes.
 
 ### Timing offset (working name)
 

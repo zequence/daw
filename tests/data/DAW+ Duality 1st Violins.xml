@@ -1,0 +1,1833 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EXPRESSIONMAP name="DAW+ Duality 1st Violins" description="Generated from the DAW+ preset 11 Strings/Synchron/31 Duality 1st Violins (tools/daw_maps.py): one sound slot per combination the preset plays. Every slot sends the colour first (program 113-116, as the player numbers them), then the articulation's program path.">
+  <GROUP name="Color" description="The colour layer, sent first in every slot.">
+    <ARTICULATION name="Regular" symbol="Reg." description="Regular (program 113)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+      <DEFAULT group="Main" name="Long"/>
+    </ARTICULATION>
+    <ARTICULATION name="Con sordino" symbol="Sord." description="Con sordino (program 114)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+      <DEFAULT group="Main" name="Long"/>
+    </ARTICULATION>
+    <ARTICULATION name="Flautando" symbol="Flaut." description="Flautando (program 115)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+      <DEFAULT group="Main" name="Long"/>
+    </ARTICULATION>
+    <ARTICULATION name="Ponticello" symbol="Pont." description="Ponticello (program 116)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+      <DEFAULT group="Main" name="Long"/>
+    </ARTICULATION>
+  </GROUP>
+  <GROUP name="Main" description="The articulation.">
+    <ARTICULATION name="Long" symbol="Long" description="Long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Cresc." symbol="Cresc." description="Crescendo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Cresc. short" symbol="Cresc. S" description="Crescendo, short" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Cresc. medium" symbol="Cresc. M" description="Crescendo, medium" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Cresc. long" symbol="Cresc. L" description="Crescendo, long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Dim." symbol="Dim." description="Diminuendo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Dim. short" symbol="Dim. S" description="Diminuendo, short" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Dim. medium" symbol="Dim. M" description="Diminuendo, medium" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Dim. long" symbol="Dim. L" description="Diminuendo, long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Swell" symbol="Swell" description="Swell" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Portato long" symbol="Port. L" description="Portato long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Portato" symbol="Port." description="Portato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Detache soft" symbol="Det. soft" description="Detache soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Martele" symbol="Mart." description="Martele" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Staccato" symbol="Stacc." description="Staccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Staccato hard" symbol="Stacc. hard" description="Staccato hard" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Spiccato" symbol="Spicc." description="Spiccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Spiccato tight" symbol="Spicc. tight" description="Spiccato tight" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Saltando" symbol="Salt." description="Saltando" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Ricochet a1" symbol="Ric. a1" description="Ricochet a1" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Ricochet a2" symbol="Ric. a2" description="Ricochet a2" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Ricochet a3" symbol="Ric. a3" description="Ricochet a3" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Ricochet a4" symbol="Ric. a4" description="Ricochet a4" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Rep." symbol="Rep." description="Repetitions" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+      <DEFAULT group="Tempo" name="120"/>
+    </ARTICULATION>
+    <ARTICULATION name="Tremolo / Flutter" symbol="Trem." description="Tremolo / Flutter" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Tremolo long XF" symbol="Trem. XF" description="Tremolo long crossfade" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Trill ½" symbol="Trill ½" description="Trill half-tone" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Trill 1" symbol="Trill 1" description="Trill whole-tone" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Trill min. 3rd" symbol="Trill min. 3rd" description="Trill minor third" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Trill maj. 3rd" symbol="Trill maj. 3rd" description="Trill major third" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Pizz." symbol="Pizz." description="Pizzicato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Snap pizz." symbol="Snap pizz." description="Snap pizzicato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Col legno" symbol="Col legno" description="Col legno" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Harm. long" symbol="Harm. long" description="Harmonics long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Harm. staccato" symbol="Harm. staccato" description="Harmonics staccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Harm. tremolo" symbol="Harm. tremolo" description="Harmonics tremolo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+  </GROUP>
+  <GROUP name="Legato" description="Legato type (with Long), or the legato / slurred transition (repetitions, tremolo, trills).">
+    <ARTICULATION name="Legato" symbol="Legato" description="Legato type: legato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Lyrical" symbol="Lyrical" description="Legato type: lyrical" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Slur" symbol="Slur" description="Legato type: slur" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Portamento" symbol="Portam." description="Legato type: portamento" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+  </GROUP>
+  <GROUP name="Release" description="The release sample (none = normal).">
+    <ARTICULATION name="Soft" symbol="Soft" description="Release: Soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Very soft" symbol="Very soft" description="Release: Very soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Cut" symbol="Cut" description="Release: Cut" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+  </GROUP>
+  <GROUP name="Tempo" description="Repetition tempo (bpm).">
+    <ARTICULATION name="120" symbol="120" description="120 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="130" symbol="130" description="130 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="140" symbol="140" description="140 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="160" symbol="160" description="160 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="180" symbol="180" description="180 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+  </GROUP>
+  <SLOTS>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="0" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="0" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="0" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Cresc."/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="32" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Cresc. short"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="32" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Cresc. medium"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="33" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Cresc. long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="34" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Dim."/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="32" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Dim. short"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="32" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Dim. medium"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="33" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Dim. long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="34" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Swell"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Swell"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Swell"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Portato long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Portato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Detache soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Martele"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="23" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Staccato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="97">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Staccato hard"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="21" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Spiccato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Spiccato tight"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="22" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Saltando"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="25" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Ricochet a1"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="24" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="32" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Ricochet a2"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="24" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="33" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Ricochet a3"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="24" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="34" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Ricochet a4"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="24" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="35" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Tempo" name="120"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Tempo" name="130"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Tempo" name="140"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Tempo" name="160"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Tempo" name="180"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Release" name="Cut"/>
+        <MODIFIER group="Tempo" name="120"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Release" name="Cut"/>
+        <MODIFIER group="Tempo" name="130"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Release" name="Cut"/>
+        <MODIFIER group="Tempo" name="140"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Release" name="Cut"/>
+        <MODIFIER group="Tempo" name="160"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Release" name="Cut"/>
+        <MODIFIER group="Tempo" name="180"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="5" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Tremolo long XF"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="5" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill ½"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill 1"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill min. 3rd"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Pizz."/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="7" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Snap pizz."/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="7" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Col legno"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="7" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Harm. long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Harm. staccato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Harm. tremolo"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Tempo" name="120"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Tempo" name="130"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Tempo" name="140"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Tempo" name="160"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Tempo" name="180"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="5" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Tremolo long XF"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="5" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Lyrical"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Lyrical"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Lyrical"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Tempo" name="120"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Tempo" name="130"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Tempo" name="140"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Tempo" name="160"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Tempo" name="180"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="5" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Tremolo long XF"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="5" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Portamento"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Portamento"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Regular">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Portamento"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="0" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="0" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="0" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Swell"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Swell"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Swell"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Portato long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Portato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Detache soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Staccato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Spiccato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Spiccato tight"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="21" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Tempo" name="120"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Tempo" name="130"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Tempo" name="140"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Tempo" name="160"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Tempo" name="180"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Release" name="Cut"/>
+        <MODIFIER group="Tempo" name="120"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Release" name="Cut"/>
+        <MODIFIER group="Tempo" name="130"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Release" name="Cut"/>
+        <MODIFIER group="Tempo" name="140"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Release" name="Cut"/>
+        <MODIFIER group="Tempo" name="160"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Release" name="Cut"/>
+        <MODIFIER group="Tempo" name="180"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="5" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill ½"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill 1"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill min. 3rd"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Pizz."/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="7" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Col legno"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="7" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Harm. long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Harm. staccato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Harm. tremolo"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Tempo" name="120"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Tempo" name="130"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Tempo" name="140"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Tempo" name="160"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Legato"/>
+        <MODIFIER group="Tempo" name="180"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="5" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Lyrical"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Lyrical"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Lyrical"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Tempo" name="120"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Tempo" name="130"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Tempo" name="140"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Tempo" name="160"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Rep."/>
+        <MODIFIER group="Legato" name="Slur"/>
+        <MODIFIER group="Tempo" name="180"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="5" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="6" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Portamento"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="64" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Portamento"/>
+        <MODIFIER group="Release" name="Soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="65" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Con sordino">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Portamento"/>
+        <MODIFIER group="Release" name="Very soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="66" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="0" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Portato long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Portato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Detache soft"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill ½"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill 1"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill min. 3rd"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Long"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96">
+      <ARTICULATION root="Flautando">
+        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="4" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Ponticello">
+        <MODIFIER group="Main" name="Long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="115" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="0" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Ponticello">
+        <MODIFIER group="Main" name="Portato long"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="115" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Ponticello">
+        <MODIFIER group="Main" name="Portato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="115" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Ponticello">
+        <MODIFIER group="Main" name="Staccato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="115" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="18" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Ponticello">
+        <MODIFIER group="Main" name="Spiccato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="115" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="19" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Ponticello">
+        <MODIFIER group="Main" name="Spiccato tight"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="115" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="1" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="20" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Ponticello">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="115" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Ponticello">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+        <MODIFIER group="Legato" name="Legato"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="115" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="81" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+    </SLOT>
+    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98">
+      <ARTICULATION root="Ponticello">
+        <MODIFIER group="Main" name="Tremolo / Flutter"/>
+        <MODIFIER group="Legato" name="Slur"/>
+      </ARTICULATION>
+      <OUTPUT type="programChange" number="115" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="82" value="0" held="0" bank="-1"/>
+      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
+    </SLOT>
+  </SLOTS>
+</EXPRESSIONMAP>
