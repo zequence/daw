@@ -232,11 +232,6 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
             engine.setArmedTracks (selection, selection.count (selectedTrack) ? selectedTrack : *selection.begin());
     };
     trackList.onArm = [this] (auto id) { selectTrack (id, true); };
-    trackList.onOpenInstrument = [this] (auto id)
-    {
-        selectTrack (id, false);
-        openTrackPluginWindow (id);
-    };
     trackList.onShowContextMenu = [this] (auto id) { showTrackContextMenu (id); };
 
     // --- Content views ---
@@ -630,6 +625,15 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     juce::PopupMenu menu;
 
     menu.addItem ("Set output...", [safe, id] { if (safe != nullptr) safe->chooseTrackOutput (id); });
+    menu.addItem ("Show/hide instrument GUI (I)", ! engine.getTrackOutputs (id).empty(), false,
+                  [safe, id] { if (safe != nullptr) safe->openTrackPluginWindow (id); });
+    menu.addItem ("Record mode: replace", true, engine.isTrackRecordReplace (id), [safe, id]
+    {
+        // Off = Add (new takes merge into the clip); on = from the first played note,
+        // existing material is replaced until you stop
+        if (safe != nullptr)
+            safe->engine.setTrackRecordReplace (id, ! safe->engine.isTrackRecordReplace (id));
+    });
     menu.addItem ("Port and channel...", [safe, id] { if (safe != nullptr) safe->showTrackOutputConfig (id); });
     menu.addSeparator();
 

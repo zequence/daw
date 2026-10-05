@@ -77,7 +77,7 @@ juce::Rectangle<int> ArrangementView::blockRect (const BlockRef& block, int lane
 {
     const auto x = tickToX (block.startTick);
     const auto right = tickToX (block.endTick);
-    return { x, laneTop + 6, juce::jmax (8, right - x), sidebar::trackRowHeight - 12 };
+    return { x, laneTop + 4, juce::jmax (8, right - x), sidebar::trackRowHeight - 8 };
 }
 
 ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)

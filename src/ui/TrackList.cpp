@@ -17,7 +17,7 @@ public:
         nameLabel.setText (engine.getTrackName (trackId), juce::dontSendNotification);
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
-        nameLabel.setFont (juce::FontOptions (14.0f));
+        nameLabel.setFont (juce::FontOptions (13.5f));
         nameLabel.onTextChange = [this]
         {
             engine.setTrackName (trackId, nameLabel.getText());
@@ -39,18 +39,7 @@ public:
         theme::setButtonRole (muteButton, "mute");
         muteButton.onClick = [this] { engine.setTrackMuted (trackId, muteButton.getToggleState()); };
 
-        instrumentButton.setTooltip ("Show/hide this track's instrument GUI (I)");
-        instrumentButton.onClick = [this] { if (owner.onOpenInstrument) owner.onOpenInstrument (trackId); };
-
-        recordModeButton.setTooltip ("Recording mode - Add: merge new takes into the clip. "
-                                     "Rpl: from your first played note, existing material is replaced until you stop.");
-        recordModeButton.onClick = [this]
-        {
-            engine.setTrackRecordReplace (trackId, ! engine.isTrackRecordReplace (trackId));
-        };
-
-        for (auto* c : std::initializer_list<juce::Component*> { &armButton, &soloButton,
-                                                                 &muteButton, &instrumentButton, &recordModeButton })
+        for (auto* c : std::initializer_list<juce::Component*> { &armButton, &soloButton, &muteButton })
         {
             c->setWantsKeyboardFocus (false);
             addAndMakeVisible (c);
@@ -67,12 +56,6 @@ public:
         armButton.setToggleState (isArmed, juce::dontSendNotification);
         muteButton.setToggleState (engine.isTrackMuted (trackId), juce::dontSendNotification);
         soloButton.setToggleState (engine.isTrackSoloed (trackId), juce::dontSendNotification);
-        instrumentButton.setEnabled (! engine.getTrackOutputs (trackId).empty());
-
-        const auto replace = engine.isTrackRecordReplace (trackId);
-        recordModeButton.setButtonText (replace ? "Rpl" : "Add");
-        recordModeButton.setColour (juce::TextButton::buttonColourId,
-                                    replace ? juce::Colours::darkred.darker (0.3f) : juce::Colour (0xff333842));
 
         if (! nameLabel.isBeingEdited())
             nameLabel.setText (engine.getTrackName (trackId), juce::dontSendNotification);
@@ -123,20 +106,18 @@ public:
 
     void resized() override
     {
-        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).reduced (8, 4);
-        nameLabel.setBounds (area.removeFromTop (22));
-        area.removeFromTop (2);
+        // One line: R S M, then the name
+        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).reduced (8, 0);
+        area = area.withSizeKeepingCentre (area.getWidth(), 22);
 
-        auto buttons = area.removeFromTop (22);
-
-        for (auto* b : std::initializer_list<juce::TextButton*> { &armButton, &soloButton,
-                                                                  &muteButton, &instrumentButton })
+        for (auto* b : std::initializer_list<juce::TextButton*> { &armButton, &soloButton, &muteButton })
         {
-            b->setBounds (buttons.removeFromLeft (26));
-            buttons.removeFromLeft (3);
+            b->setBounds (area.removeFromLeft (22));
+            area.removeFromLeft (2);
         }
 
-        recordModeButton.setBounds (buttons.removeFromLeft (34));
+        area.removeFromLeft (4);
+        nameLabel.setBounds (area);
     }
 
 private:
@@ -146,8 +127,7 @@ private:
     const int depth;
 
     juce::Label nameLabel;
-    juce::TextButton armButton { "R" }, soloButton { "S" },
-                     muteButton { "M" }, instrumentButton { "I" }, recordModeButton { "Add" };
+    juce::TextButton armButton { "R" }, soloButton { "S" }, muteButton { "M" };
     bool selected = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Row)
