@@ -22,6 +22,7 @@ class CommandDispatcher;
 //   lane drag             velocity: set values; CC/bend: draw a curve (one undo step per stroke)
 //   lane right-drag       CC/bend: erase the dragged range
 class PianoRollView final : public juce::Component,
+                            public juce::SettableTooltipClient,
                             private juce::Timer
 {
 public:

@@ -1024,6 +1024,20 @@ void PianoRollView::mouseDoubleClick (const juce::MouseEvent& event)
 
 void PianoRollView::mouseMove (const juce::MouseEvent& event)
 {
+    // The keys column explains named keys (the instruction), like a drum map's note names
+    juce::String tip;
+
+    if (event.x < keysWidth)
+        if (const auto* map = currentMap())
+        {
+            juce::String instruction;
+            const auto label = map->keyLabel (yToKey (event.y), &instruction);
+            tip = instruction.isNotEmpty() ? label + ": " + instruction : label;
+        }
+
+    if (tip != getTooltip())
+        setTooltip (tip);
+
     bool onRightEdge = false;
     noteIndexAt (event.getPosition(), onRightEdge);
     setMouseCursor (onRightEdge ? juce::MouseCursor::LeftRightResizeCursor : juce::MouseCursor::NormalCursor);
@@ -1165,14 +1179,29 @@ void PianoRollView::paint (juce::Graphics& g)
     const auto seq = sequence();
     const auto map = engine.getTransport().getTempoMap();
 
-    // Playable range of the track's player (Synchron via VE Pro); unknown = all
-    int playableLow = 0, playableHigh = 127;
+    const auto* articulationMap = currentMap();
+    const auto useFirstRoot = editorSettings::firstRootIsDefault (engine.getSettingsFile());
 
-    if (auto info = engine.getTrackChannelInfo (trackId); info.has_value() && info->keyLow >= 0)
+    // Playable range: the articulation in effect (the selected notes' if they agree, else the
+    // one new notes get) when the map gives it a range, else the track's player (Synchron via
+    // VE Pro); unknown = all
+    int playableLow = 0, playableHigh = 127;
+    bool rangeFromArticulation = false;
+
+    if (articulationMap != nullptr)
     {
-        playableLow = info->keyLow;
-        playableHigh = info->keyHigh;
+        const auto targets = articulationTargets (*articulationMap);
+
+        if (articulations::allEqual (targets))
+            rangeFromArticulation = articulationMap->playableRange (targets.front(), playableLow, playableHigh);
     }
+
+    if (! rangeFromArticulation)
+        if (auto info = engine.getTrackChannelInfo (trackId); info.has_value() && info->keyLow >= 0)
+        {
+            playableLow = info->keyLow;
+            playableHigh = info->keyHigh;
+        }
 
     const auto playable = [&] (int key) { return key >= playableLow && key <= playableHigh; };
 
@@ -1228,8 +1257,6 @@ void PianoRollView::paint (juce::Graphics& g)
     if (seq != nullptr)
     {
         const auto& notes = seq->getNotes();
-        const auto* articulationMap = currentMap();
-        const auto useFirstRoot = editorSettings::firstRootIsDefault (engine.getSettingsFile());
 
         for (int i = 0; i < (int) notes.size(); ++i)
         {
@@ -1425,7 +1452,29 @@ void PianoRollView::paint (juce::Graphics& g)
 
         g.fillRect (keys.getX(), y, keys.getWidth() - 2, keyHeight - 1);
 
-        if (key % 12 == 0)
+        // Keys the map names (a keyswitch is named after its articulation) get their name, and
+        // keyswitches a mark on the left
+        if (articulationMap != nullptr)
+        {
+            const auto label = articulationMap->keyLabel (key);
+
+            if (articulationMap->isKeyswitch (key))
+            {
+                g.setColour (juce::Colours::orange);
+                g.fillRect (keys.getX(), y, 3, keyHeight - 1);
+            }
+
+            if (label.isNotEmpty())
+            {
+                g.setColour (isBlackKey (key) || ! playable (key) ? juce::Colours::white.withAlpha (0.85f)
+                                                                  : juce::Colour (0xff202225));
+                g.setFont (juce::FontOptions (9.0f));
+                g.drawText (label, keys.getX() + 5, y, keys.getWidth() - 9, keyHeight,
+                            juce::Justification::centredLeft, true);
+            }
+        }
+
+        if (key % 12 == 0 && (articulationMap == nullptr || articulationMap->keyLabel (key).isEmpty()))   // a name outranks the octave label
         {
             g.setColour (juce::Colours::grey);
             g.setFont (juce::FontOptions (10.0f));
