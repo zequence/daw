@@ -1321,6 +1321,10 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         return false;
     }
 
+    // Note input's keys (note length, rest) wherever the focus is, while the editor shows
+    if (pianoRollView.isShowing() && pianoRollView.noteInputKey (key))
+        return true;
+
     // An articulation's key command (in the current track's expression map)
     if (triggerArticulation ([&key] (const ExpressionMap& map) { return map.findByKeyCommand (key.getTextDescription()); }))
         return true;

@@ -32,6 +32,9 @@ namespace
             case 4: return Q / 2;
             case 5: return Q / 4;
             case 6: return Q / 8;       // 1/32
+            case 7: return Q / 16;      // 1/64
+            case 8: return Q / 32;      // 1/128
+            case 9: return Q / 64;      // 1/256
             default: return Q / 2;
         }
     }
@@ -44,6 +47,9 @@ namespace
         box.addItem ("1/8", 4);
         box.addItem ("1/16", 5);
         box.addItem ("1/32", 6);
+        box.addItem ("1/64", 7);
+        box.addItem ("1/128", 8);
+        box.addItem ("1/256", 9);
     }
 
     juce::String controllerName (int cc)
@@ -1268,8 +1274,40 @@ void PianoRollView::mouseWheelMove (const juce::MouseEvent& event, const juce::M
     repaint();
 }
 
+// Note input: keys 1-9 set the note length (1 = whole, 2 = half ... 9 = 1/256: the length
+// box's items in order), 0 enters a rest (the playhead moves on by the length)
+bool PianoRollView::noteInputKey (const juce::KeyPress& key)
+{
+    if (! inputToggle.getToggleState() || key.getModifiers().isAnyModifierKeyDown())
+        return false;
+
+    const auto c = key.getTextCharacter();
+
+    if (c >= '1' && c <= '9')
+    {
+        lengthBox.setSelectedId (c - '0', juce::sendNotificationSync);
+        return true;
+    }
+
+    if (c == '0')
+    {
+        auto& transport = engine.getTransport();
+
+        if (! transport.isPlaying())
+            transport.locate (transport.getPositionTicks() + newNoteTicks());
+
+        chordTick = -1;
+        return true;
+    }
+
+    return false;
+}
+
 bool PianoRollView::keyPressed (const juce::KeyPress& key)
 {
+    if (noteInputKey (key))
+        return true;
+
     if (key == juce::KeyPress::deleteKey || key == juce::KeyPress::backspaceKey)
     {
         deleteSelection();

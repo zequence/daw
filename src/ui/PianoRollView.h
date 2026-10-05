@@ -48,6 +48,9 @@ public:
     // new-note choice afterwards (what plays live), unless notes were changed instead.
     std::optional<ExpressionMap::Selection> remoteChoose (const juce::String& group, const juce::String& name);
 
+    // Note input's keys (1-9 note length, 0 rest) when Input is on; false when not handled
+    bool noteInputKey (const juce::KeyPress&);
+
 private:
     enum class Drag { none, marquee, move, resize, lane, draw };
     enum class LaneMode { velocity, pitchBend, controller };

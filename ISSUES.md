@@ -44,7 +44,6 @@ Claude is unsure of an issue they will pose a question.
 
 # Midi editor
 
-- [ ] Note input mode. Note length is controlled with keys 1-9. 0 is pause. 1 - whole note, 2 - half note, etc.
 - [ ] CC edits are done by adding points rather then drawing. CC is either in staircase steps, ramps or "bent" ramps. The possible position of points is determined by Q and grid settings.
       (Written up: milestone "CC editing with points" in MILESTONES.md.)
 - [ ] Show midi for multiple tracks. Midi for the selected channel is normal, while other channel midi is greyed out.

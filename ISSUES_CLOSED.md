@@ -276,6 +276,12 @@ resolution notes. Newest additions go at the top of each chapter.
 
 ## Midi editor
 
+- [x] Note input mode. Note length is controlled with keys 1-9. 0 is pause. 1 - whole note, 2 - half note, etc.
+      (the MIDI editor's Input toggle (off by default): notes played on the MIDI
+      keyboard are written at the playhead, chords within 60 ms; with Input on,
+      keys 1-9 set the note length (1/1 ... 1/256 - the length box got 1/64,
+      1/128, 1/256), 0 moves the playhead on by the length (a rest). Plain
+      digits only, so key commands with modifiers still work.)
 - [x] Change pointer to a pen when in draw mode
       (a pencil cursor drawn in code, its tip at the hotspot, over the grid in
       Draw mode; the resize cursor still wins at a note's right edge.)
