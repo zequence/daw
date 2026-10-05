@@ -44,7 +44,7 @@ The timeline bar (done 2026-10-03) displays the tempo and time-signature
 tracks; editing changes there (insert/drag/remove tempo and meter changes,
 ramps) lands in the bar later.
 
-## Articulation / expression maps (drafted 2026-10-05)
+## Articulation / expression maps (drafted 2026-10-05, revised: maps on instruments)
 
 A custom system inspired by standard expression maps. Standard maps have four
 fixed articulation groups; ours has any number. The point: pick how a note
@@ -83,9 +83,23 @@ An articulation's output is one of:
 - a **CC** (number, value) - e.g. Spitfire UACC on CC32,
 - a **program change** (with optional bank).
 
-The active combination's output is the root's, then its modifiers' in group
-order; if two target the same keyswitch/CC, the later group wins. An articulation
-may also have a **lead time** (the keyswitch must arrive slightly before the note).
+The active combination's output is the root's, then its modifiers'.
+
+**Conflicts are errors, not "last one wins".** Articulations in the same group
+may share a CC or keyswitch freely (only one of them is active at a time; UACC
+uses CC32 with a different value for each). But two articulations that can be
+active TOGETHER - a root and a modifier that applies to it, or modifiers from two
+different groups - must not target the same CC number, keyswitch key or program
+change. That is a bug in the map and is reported with an error message naming
+both articulations:
+- when the map is edited (the command refuses it, the editor shows it - helpful
+  failure, DESIGN.md), and `expressionmap.validate` lists every conflict;
+- at load/import, if a map arrives with one anyway: the map stays usable but the
+  conflicting combination sends nothing and a message says why, instead of
+  playing the wrong sound silently.
+
+An articulation may also have a **lead time**: how far ahead of its note the
+output is sent, because a library needs a moment to switch. See open questions.
 
 ### Key ranges and named keys
 
@@ -110,40 +124,55 @@ separate kind of output.
 
 ### Where things live
 
-- **Maps belong to MIDI tracks, for now.** The map is saved with the track
-  (`<TRACK>`), so a project is self-contained, tracks are already in the history
-  snapshot (assignment and edits are undoable), and VE Pro re-syncs keep it
-  (sync never deletes tracks). `MidiSourceProcessor` is per track, so playback
-  gets the map directly. A **user library** of maps (user data folder, like
-  themes) lets maps be copied to tracks, exported and imported. Whether maps
-  later move up to the instrument channel is an open question.
+- **Maps belong to instruments.** An instrument here is the sound a track plays
+  through: one MIDI channel of an instrument plugin (one VE Pro player, one
+  Kontakt channel). One plugin hosts many different sounds, so the assignment is
+  per instrument channel (`MidiChannelInfo`, next to its name and key range), not
+  per plugin and not per track. Every track playing that instrument uses its map.
+  - The **maps themselves are project data**: a named collection saved in the
+    project (`<EXPRESSIONMAPS>`), referenced by name from the instrument
+    channels, so several instruments (1st and 2nd violins) can share one map and
+    editing it changes them all. A **user library** of maps (user data folder, like
+    themes) lets maps be copied into a project, exported and imported.
+  - The assignment is saved on the channel's `<MIDICHANNEL>`; synced (VE Pro)
+    channels keep their immutable name/port/channel but their map stays editable,
+    and `setSyncedInstrumentChannels` carries it over on every re-sync (as it
+    does the key range).
+  - **Undo**: history snapshots do not cover instrument channels today (channel
+    names are not undoable either). Maps and assignments need to be added to the
+    snapshot.
 - **Notes carry the choice.** `MidiSequence::Note` gets a trailing
   `articulation` member (default none), stored in `<NOTE>` as names, so old
   projects load unchanged. In memory it should be a small interned id into the
   map's combination table, not a vector per note. **Renaming** a group or
   articulation (including a case-only change) is a command that rewrites every
-  note using it, in one undo step.
+  note using it, across all tracks on the instruments using the map, in one undo
+  step. If a track is moved to an instrument with a different map, its notes keep
+  their articulation names; those that don't exist in the new map are shown as
+  unresolved and send nothing (open question).
 
 ### The editor
 
 - An **articulation dropdown in the MIDI editor's top bar** (before the track
-  label, wired like the other boxes; disabled when the track has no map). It
-  opens a menu: the root articulations first (symbol + name, description as
-  tooltip); once a root is chosen, the modifier groups with applicable
-  modifiers appear as further sections. It edits the **selected notes**; with
-  nothing selected it sets the articulation new notes are drawn with. A
-  selection that mixes articulations shows "Mixed".
+  label, wired like the other boxes; disabled when the track's instrument has no
+  map). It opens a menu: the root articulations first (symbol + name,
+  description as tooltip); once a root is chosen, the modifier groups with
+  applicable modifiers appear as further sections. It edits the **selected
+  notes**; with nothing selected it sets the articulation new notes are drawn
+  with. A selection that mixes articulations shows "Mixed".
 - Notes show their **symbol** in the piano roll (colour per articulation later).
 - Articulation changes are undoable edits like any other (clip commands).
 
 ### Playback
 
-`MidiSourceProcessor` already emits controls before note-ons and chases state
-on locate. With the track's map it emits the output whenever the active
+`MidiSourceProcessor` is one per track and already emits controls before
+note-ons and chases state on locate. The track's instrument channel (output
+instrument + port + channel) tells which map applies; it reaches the processor
+as an immutable snapshot, like `setSequence`, and is refreshed when the
+assignment or the map changes. The output goes out whenever the active
 articulation changes from one note to the next, just before the note-on (minus
 the lead time). Locating mid-song chases the last articulation before the
-playhead. The map reaches the audio thread as an immutable snapshot, like
-`setSequence`. Live playing uses the editor's current articulation (later).
+playhead. Live playing uses the editor's current articulation (later).
 
 ### Dynamics, velocity layers and CC sequences
 
@@ -158,32 +187,33 @@ CC curves the user draws).
 ### Command-first (DESIGN.md)
 
 Everything lands as API commands first: `expressionmap.list/get/create/delete/
-rename`, group and articulation add/update/remove/reorder (including a modifier's
-applicable roots), `track.setExpressionMap`, and `clip.addNotes` /
+rename/validate`, group and articulation add/update/remove/reorder (including a
+modifier's applicable roots), `instrument.setChannelMap`, and `clip.addNotes` /
 `clip.updateNotes` accepting an `articulation`, plus `clip.setArticulation` for a
 selection. The UI is a client of the same commands.
 
 ### Phases
 
 1. Model + persistence + commands + tests (case-insensitive names, applicability
-   and drop-on-root-change rules, one modifier per group, project round trip,
-   rename rewriting, sync keeps maps). No UI.
+   and drop-on-root-change rules, one modifier per group, conflict validation,
+   project round trip, rename rewriting, sync keeps assignments, snapshots cover
+   maps and assignments). No UI.
 2. Editor: the dropdown, note assignment, symbols on notes, named keys and
    per-articulation key ranges.
 3. Playback: output, lead time, chase on locate.
-4. Map editor UI and the channel configuration view (own milestone below).
+4. The two configuration views (own milestone below) and the map editor UI.
 5. Library, presets (Spitfire UACC, a generic keyswitch map), Cubase
    `.expressionmap` import (observed format only), Synchron detection, then
    programmed CC sequences.
 
 ### Open questions
 
-- Two selected articulations setting the same CC/keyswitch: "later group wins" as
-  drafted - enough?
-- Copying a map to another track: copy by value (as drafted) or share a reference?
-- Should maps move up to the instrument channel later, so every track on a
-  channel shares one?
-- Default lead time and whether it is per articulation or per map.
+- **Lead time**: per articulation, per map, or a map default with per-articulation
+  overrides (the leaning)? In milliseconds, so it doesn't depend on tempo. CC and
+  program changes usually need less than keyswitches.
+- Notes whose articulation doesn't exist in the instrument's map (track moved,
+  map changed): keep and show as unresolved (as drafted), or clear them?
+- Does a map ever need to differ per track on the same instrument?
 
 ### Key ranges must follow articulation changes
 
@@ -199,26 +229,30 @@ look up the range at the playhead or edit position instead of re-querying
 the server on each switch, and refresh the cache when the player's setup
 changes (e.g. on sync, or with `refresh`).
 
-## MIDI channel configuration view (drafted 2026-10-05)
+## MIDI track and instrument configuration views (drafted 2026-10-05)
 
-A separate piece of work from the map system, but the place where maps get
-assigned. A configuration view for a track's MIDI channel. Today
-`InstrumentEditorView` shows 16 channels of port 1 only, with name editing and
-nothing else; the track output choice is a popup in `MainComponent`.
+Two separate, small configuration views, the places where routing and maps get
+set. Today `InstrumentEditorView` shows 16 channels of port 1 only, with name
+editing and nothing else; the track output choice is a popup in `MainComponent`.
 
-Per MIDI channel it sets:
-- **Port** and **channel**, beyond port 1 (the plugin's event buses, e.g. 16 for a
-  VE Pro plugin - `getInstrumentMidiPortCount`),
-- **Name**,
-- **Expression map** (the track's map, for now: pick one from the library,
-  create or edit it, or none).
+**MIDI track configuration** - for now only:
+- **Port** and **channel** of the track's output, beyond port 1 (the plugin's
+  event buses, e.g. 16 for a VE Pro plugin - `getInstrumentMidiPortCount`).
+- Greyed out when they are immutable (tracks created by "Sync to VE Pro
+  Server": their instrument, port and channel come from the server).
 
-Notes:
-- Synced (VE Pro) channels stay immutable for port, channel and name; only the map
-  can be set. Manual channels need to exist without a name (a channel is only kept
-  today if it has a name).
-- Needs `track.setExpressionMap` (and friends) as commands first.
-- The view also hosts the key range display for Synchron channels.
+**Instrument configuration** - for now only:
+- **Expression map** selection: pick one of the project's maps (or none), with
+  a way into the map editor to create or edit one.
+- Applies to the instrument channel, so it is shown per channel (synced channels
+  included: only the map can be set on them).
+
+Later additions can go in both views (name, colour, key range display for
+Synchron channels...); manual channels also need to exist without a name (a
+channel is only kept today if it has a name).
+
+Needs `instrument.setChannelMap` (and a way to set a track's port/channel)
+as commands first.
 
 ## Parameter automation lanes
 
