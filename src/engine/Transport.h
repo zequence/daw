@@ -52,6 +52,11 @@ public:
     double getPreRollMs() const             { return preRollMs.load(); }
 
     void setLooping (bool shouldLoop)       { looping.store (shouldLoop); }
+
+    // The transport mode: on stop, return to where playback started (or was last located to
+    // while playing) - or stay where it is (the default)
+    void setReturnOnStop (bool shouldReturn)  { returnOnStop.store (shouldReturn); }
+    bool isReturnOnStop() const               { return returnOnStop.load(); }
     bool isLooping() const                  { return looping.load(); }
     juce::int64 getLoopStart() const        { return loopStartTick.load(); }
     juce::int64 getLoopEnd() const          { return loopEndTick.load(); }
@@ -131,6 +136,7 @@ private:
     std::atomic<juce::int64> locateTarget { -1 };
     std::atomic<juce::int64> loopStartTick { 0 }, loopEndTick { 0 };
     std::atomic<bool> looping { false };
+    std::atomic<bool> returnOnStop { true };
     std::atomic<double> preRollMs { 0.0 };
 
     // Published for the UI
@@ -144,6 +150,7 @@ private:
     bool playing = false;
     double sampleRate = 48000.0;
     juce::int64 startPosition = 0;     // where playback really begins (the first sample after the pre-roll)
+    juce::int64 playedFrom = 0;        // where play was pressed or last located to while playing (return on stop)
     bool preRolling = false;
 
     JUCE_DECLARE_NON_COPYABLE (Transport)

@@ -55,6 +55,7 @@ public:
         {
             Transport t;
             t.prepare (rate);
+            t.setReturnOnStop (false);   // stop at current time
             t.play();
             t.beginBlock (4800);
             t.stop();
@@ -64,6 +65,21 @@ public:
             expect (! b.playing && b.killAtStart);
             expectEquals (b.numSegments, 0);
             expectEquals (t.getPositionTicks(), (juce::int64) 192000);
+        }
+
+        beginTest ("stop returns to where playback started (the default mode)");
+        {
+            Transport t;
+            t.prepare (rate);
+            t.locate (96000);
+            t.beginBlock (0);
+            t.play();
+            t.beginBlock (4800);
+            t.beginBlock (4800);
+            t.stop();
+            t.beginBlock (4800);
+
+            expectEquals (t.getPositionTicks(), (juce::int64) 96000);
         }
 
         beginTest ("locate while playing requests kill and chase");

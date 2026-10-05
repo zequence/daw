@@ -84,6 +84,11 @@ resolution notes. Newest additions go at the top of each chapter.
       or "Keep the tracks" (they stay, without that output). Its plugin window
       closes. API: instrument.remove {instrumentId, removeTracks?}.)
 
+# Transport
+
+- [x] Add button for transport mode. The two stopping choices are "return to starting position" and "stop at current time". Reword those to tooltips and make the button something minimal.
+  - Resolved: a small toggle button (an arrow) next to Loop. Lit = return to starting position (Stop goes back to where playback started), off = stop at current time; the tooltip explains both. Return is the default; the choice is saved in settings ("transportReturnOnStop").
+
 # Timeline bar
 
 - [x] Right-click menu for enabling, disabling the different rows. At the bottom of the menu, add "Preferences", which opens a sub-UI for the global "Settings".

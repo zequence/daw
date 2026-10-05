@@ -45,6 +45,7 @@ void Transport::beginBlock (int numSamples)
     {
         position = m->ticksToSamples (located, sampleRate);
         startPosition = position;
+        playedFrom = position;
         preRolling = false;
 
         if (playing)
@@ -59,6 +60,7 @@ void Transport::beginBlock (int numSamples)
     {
         playing = true;
         block.chaseAtStart = true;
+        playedFrom = position;
         beginPreRoll();
     }
     else if (cmd == cmdStop && playing)
@@ -71,6 +73,9 @@ void Transport::beginBlock (int numSamples)
             position = startPosition;
             preRolling = false;
         }
+
+        if (returnOnStop.load())   // the transport mode: back to where playback started
+            position = playedFrom;
     }
 
     if (playing && numSamples > 0)

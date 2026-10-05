@@ -134,6 +134,20 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         transport.setLooping (loopButton.getToggleState());
     };
 
+    // The transport mode: what Stop does (minimal; the tooltip says it)
+    returnOnStopButton.setTooltip (juce::String::fromUTF8 ("Stop mode. Lit: return to starting position - Stop goes back to where "
+                                                           "playback started. Off: stop at current time - Stop leaves the playhead where it is."));
+    returnOnStopButton.setClickingTogglesState (true);
+    theme::setButtonRole (returnOnStopButton, "loop");
+    returnOnStopButton.setToggleState (engine.getSettingsFile().getBoolValue ("transportReturnOnStop", true), juce::dontSendNotification);
+    engine.getTransport().setReturnOnStop (returnOnStopButton.getToggleState());
+    returnOnStopButton.onClick = [this]
+    {
+        engine.getTransport().setReturnOnStop (returnOnStopButton.getToggleState());
+        engine.getSettingsFile().setValue ("transportReturnOnStop", returnOnStopButton.getToggleState());
+        engine.getSettingsFile().saveIfNeeded();
+    };
+
     bpmLabel.setTooltip ("Tempo (double-click to edit)");
     bpmLabel.setEditable (false, true);
     bpmLabel.setJustificationType (juce::Justification::centred);
@@ -319,7 +333,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     for (auto* c : std::initializer_list<juce::Component*> {
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
-             &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
+             &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
              &collapseButton, &trackList, &channelList, &sidebarResizer,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
              &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView, &settingsView,
@@ -328,7 +342,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     for (auto* b : std::initializer_list<juce::Component*> { &menuButton, &midiDomainButton, &audioDomainButton,
                                                              &instrumentsButton, &historyButton, &rtzButton,
-                                                             &playButton, &recordButton, &loopButton, &perfButton,
+                                                             &playButton, &recordButton, &loopButton, &returnOnStopButton, &perfButton,
                                                              &collapseButton })
         b->setWantsKeyboardFocus (false);
 
@@ -1409,7 +1423,7 @@ void MainComponent::resized()
     // The transport unit: buttons + position readout + tempo, PERFECTLY centered
     // in the window. If it would collide, it shifts right of the view buttons and
     // the Perf button hides - the window's minimum width normally prevents both.
-    constexpr auto unitWidth = 34 + 4 + 54 + 4 + 46 + 4 + 48 + 14 + 76 + 6 + 92 + 10 + 56;
+    constexpr auto unitWidth = 34 + 4 + 54 + 4 + 46 + 4 + 48 + 4 + 28 + 14 + 76 + 6 + 92 + 10 + 56;
     auto unit = juce::Rectangle<int> ((getWidth() - unitWidth) / 2, toolbar.getY(),
                                       unitWidth, toolbar.getHeight());
 
@@ -1434,6 +1448,8 @@ void MainComponent::resized()
     recordButton.setBounds (unit.removeFromLeft (46));
     unit.removeFromLeft (4);
     loopButton.setBounds (unit.removeFromLeft (48));
+    unit.removeFromLeft (4);
+    returnOnStopButton.setBounds (unit.removeFromLeft (28));
     unit.removeFromLeft (14);
     positionLabel.setBounds (unit.removeFromLeft (76));
     unit.removeFromLeft (6);
