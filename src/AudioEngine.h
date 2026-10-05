@@ -116,6 +116,14 @@ public:
     juce::String setInstrumentChannelMap (InstrumentId, int midiPort, int midiChannel, const juce::String& mapName);   // "" = none
     std::optional<ExpressionMap> getTrackExpressionMap (TrackId) const;              // the map of the track's channel, if it has a valid one
 
+    // What the audio thread plays for a track: its written sequence with the articulations' timing
+    // offsets applied and their outputs inserted (model/PlaybackSequence.h). It is rebuilt whenever
+    // the sequence, the track's map or channel, the tempo or the editor setting "first root as default"
+    // changes; refreshAllPlayback() is for the callers that change one of the last (a setting).
+    // The transport's pre-roll follows: the most negative offset any track uses.
+    MidiSequence::Ptr getTrackPlaybackSequence (TrackId) const;
+    void refreshAllPlayback();
+
     //==============================================================================
     // Audio channels (one per instrument for now; device inputs and summing later)
     AudioChannelProcessor* getAudioChannel (AudioChannelId) const;
@@ -453,6 +461,7 @@ private:
         FolderId folder = 0;                        // 0 = root
         int position = 0;                           // order among siblings
         juce::String colour;                        // "#rrggbb"; empty = none
+        double preRollNeededMs = 0.0;               // the most negative timing offset its notes use (see refreshPlayback)
     };
 
     // Runs the transport once per device callback, before the graph renders the block.
@@ -501,6 +510,9 @@ private:
     void restoreProjectTracks (const juce::XmlElement& root, const std::map<int, InstrumentId>& instrumentIds,
                                const std::map<int, FolderId>& folderIds, juce::StringArray& warnings);
     void applySequence (Track&, MidiSequence::Ptr);   // pushes to the source node, no history
+    std::optional<ExpressionMap> mapForTrack (const Track&) const;   // the map of the channel its first output plays
+    void refreshPlayback (Track&);                                   // rebuild this track's playback sequence
+    void updatePreRoll();                                            // the transport's pre-roll: the largest any track needs
     static MidiSequence::Ptr eraseRangeFrom (const MidiSequence::Ptr&, juce::int64 start, juce::int64 end);
     MidiSourceProcessor* getSource (TrackId) const;
     void updateMidiRouting();                 // keeps midiIn -> route connections matching the armed track

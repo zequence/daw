@@ -1,4 +1,6 @@
 #include "AudioEngine.h"
+#include "model/PlaybackSequence.h"
+#include "ui/EditorSettings.h"
 #include "UserData.h"
 #include "engine/AudioChannelProcessor.h"
 #include "engine/MidiSourceProcessor.h"
@@ -380,6 +382,7 @@ void AudioEngine::removeInstrument (InstrumentId id)
     instruments.erase (id);
 
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    refreshAllPlayback();   // tracks that played it lose their channel
     data->setProperty ("id", id);
     emitEvent ("instrumentRemoved", data);
 }
@@ -521,6 +524,7 @@ void AudioEngine::setSyncedInstrumentChannels (InstrumentId id, std::vector<Midi
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
     data->setProperty ("id", id);
     data->setProperty ("change", "channels");
+    refreshAllPlayback();   // a re-sync can change which channel a track plays
     emitEvent ("instrumentChanged", data);
 }
 
@@ -613,6 +617,7 @@ juce::String AudioEngine::setExpressionMap (ExpressionMap map)
 
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
     data->setProperty ("name", map.name);
+    refreshAllPlayback();   // the tracks playing a channel that uses it
     emitEvent ("expressionMapChanged", data);
     return {};
 }
@@ -629,6 +634,7 @@ juce::String AudioEngine::removeExpressionMap (const juce::String& name)
 
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
     data->setProperty ("name", name);
+    refreshAllPlayback();
     emitEvent ("expressionMapRemoved", data);
     return {};
 }
@@ -663,6 +669,7 @@ juce::String AudioEngine::renameExpressionMap (const juce::String& name, const j
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
     data->setProperty ("name", clean);
     data->setProperty ("oldName", name);
+    refreshAllPlayback();   // the tracks playing a channel that uses it
     emitEvent ("expressionMapChanged", data);
     return {};
 }
@@ -744,6 +751,7 @@ juce::String AudioEngine::renameExpressionMapItem (const juce::String& mapName, 
     data->setProperty ("name", stored->name);
     data->setProperty ("renamedFrom", oldName);
     data->setProperty ("renamedTo", clean);
+    refreshAllPlayback();   // the tracks playing a channel that uses it
     emitEvent ("expressionMapChanged", data);
 
     for (auto& rewrite : rewrites)
@@ -801,6 +809,7 @@ juce::String AudioEngine::setInstrumentChannelMap (InstrumentId id, int midiPort
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
     data->setProperty ("id", id);
     data->setProperty ("change", "expressionMap");
+    refreshAllPlayback();
     emitEvent ("instrumentChanged", data);
     return {};
 }
@@ -984,6 +993,8 @@ void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, in
     juce::Logger::writeToLog ("Track " + juce::String (trackId) + " output -> " + instrument->name
                               + " port " + juce::String (output.midiPort)
                               + " ch " + juce::String (output.midiChannel));
+    refreshPlayback (*track);   // its channel may carry an expression map
+    updatePreRoll();
     emitTrackChanged (trackId, "outputs");
 }
 
@@ -995,6 +1006,8 @@ void AudioEngine::clearTrackOutputs (TrackId id)
             graph.removeNode (output.routeNode, updateKind());
 
         track->outputs.clear();
+        refreshPlayback (*track);
+        updatePreRoll();
         emitTrackChanged (id, "outputs");
     }
 }
@@ -1075,11 +1088,67 @@ void AudioEngine::applyMuteAndSolo()
 //==============================================================================
 void AudioEngine::applySequence (Track& track, MidiSequence::Ptr sequence)
 {
-    track.sequence = sequence;
+    track.sequence = std::move (sequence);
+    refreshPlayback (track);
+    updatePreRoll();
+}
+
+std::optional<ExpressionMap> AudioEngine::mapForTrack (const Track& track) const
+{
+    if (track.outputs.empty())
+        return std::nullopt;
+
+    const auto& output = track.outputs.front();
+
+    if (auto* instrument = findInstrument (output.instrument))
+        for (auto& channel : instrument->midiChannels)
+            if (channel.midiPort == output.midiPort && channel.midiChannel == output.midiChannel)
+                return channel.expressionMap.isNotEmpty() ? getExpressionMap (channel.expressionMap) : std::nullopt;
+
+    return std::nullopt;
+}
+
+// The audio thread plays the written sequence shifted by the articulations' timing offsets, with their
+// switch events inserted (see model/PlaybackSequence.h); the written one stays what the user edits.
+void AudioEngine::refreshPlayback (Track& track)
+{
+    const auto map = mapForTrack (track);
+    const auto built = playback::build (track.sequence, map.has_value() ? &*map : nullptr, *masterTempoMap,
+                                        editorSettings::firstRootIsDefault (settings));
+    track.preRollNeededMs = -built.earliestOffsetMs;
 
     if (auto* node = graph.getNodeForId (track.midiSourceNode))
         if (auto* source = dynamic_cast<MidiSourceProcessor*> (node->getProcessor()))
-            source->setSequence (std::move (sequence));
+            source->setSequence (built.sequence);
+}
+
+// The pre-roll covers the earliest any note of any track is scheduled before where it is written
+void AudioEngine::updatePreRoll()
+{
+    auto needed = 0.0;
+
+    for (auto& entry : tracks)
+        needed = juce::jmax (needed, entry.second.preRollNeededMs);
+
+    transport.setPreRollMs (needed);
+}
+
+void AudioEngine::refreshAllPlayback()
+{
+    for (auto& entry : tracks)
+        refreshPlayback (entry.second);
+
+    updatePreRoll();
+}
+
+MidiSequence::Ptr AudioEngine::getTrackPlaybackSequence (TrackId id) const
+{
+    if (auto* track = findTrack (id))
+        if (auto* node = graph.getNodeForId (track->midiSourceNode))
+            if (auto* source = dynamic_cast<MidiSourceProcessor*> (node->getProcessor()))
+                return source->getSequence();
+
+    return nullptr;
 }
 
 void AudioEngine::setTrackSequence (TrackId id, MidiSequence::Ptr sequence)
@@ -1162,6 +1231,7 @@ void AudioEngine::setTempoBpm (double bpm)
 
     masterTempoMap = masterTempoMap->withTempoChange (0, bpm);
     transport.setTempoMap (masterTempoMap);
+    refreshAllPlayback();   // the offsets are milliseconds: their length in ticks follows the tempo
     transport.locate (tick);
 
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
@@ -1313,6 +1383,7 @@ void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
         }
     }
 
+    refreshAllPlayback();   // the maps, the assignments and the tempo came back
     historySuppress = false;
     juce::Logger::writeToLog ("History: travelled (" + juce::String ((int) snapshot.tracks.size()) + " tracks)");
     emitEvent ("historyTravelled");
@@ -2159,6 +2230,7 @@ void AudioEngine::clearProject()
     masterTempoMap = TempoMap::create (120.0);
     transport.setTempoMap (masterTempoMap);
 
+    refreshAllPlayback();
     juce::Logger::writeToLog ("Project cleared");
     emitEvent ("projectCleared");
     markProjectClean();
@@ -2249,6 +2321,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
             beginGraphBatch();
             restoreProjectTracks (*state->xml, state->idMap, state->folderIdMap, state->warnings);
             endGraphBatch();
+            refreshAllPlayback();   // maps, assignments and sequences are all in place now
             busyStatus.end();
 
             auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());

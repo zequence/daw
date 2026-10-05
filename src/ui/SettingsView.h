@@ -103,6 +103,7 @@ public:
         {
             engine.getSettingsFile().setValue (editorSettings::firstRootIsDefaultKey, defaultRootToggle.getToggleState());
             engine.getSettingsFile().saveIfNeeded();
+            engine.refreshAllPlayback();   // notes with no articulation now play as the first root, or no longer
         };
 
         // --- Agents (MCP) ---
