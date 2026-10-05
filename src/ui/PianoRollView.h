@@ -27,6 +27,11 @@ class PianoRollView final : public juce::Component,
 {
 public:
     PianoRollView (AudioEngine&, CommandDispatcher&, TimeAxis&);
+
+    // Draw: click adds a note at the length dropdown's value, dragging stretches it.
+    // Edit (select): drag selects, double-click adds.
+    void setDrawMode (bool shouldDraw)   { drawMode = shouldDraw; setMouseCursor (juce::MouseCursor::NormalCursor); }
+    bool isDrawMode() const              { return drawMode; }
     ~PianoRollView() override;
 
     void setTrack (AudioEngine::TrackId);
@@ -158,7 +163,8 @@ private:
     juce::int64 chordTick = -1;            // where the current chord is written (-1: none yet)
     double chordStartMs = 0.0;             // when its first note arrived
     void noteInput (const juce::MidiMessage&, double receivedMs);
-    juce::ComboBox modeBox, snapBox, lengthBox, laneBox, colourBox;
+    bool drawMode = false;   // the top bar's Draw (pen) vs Edit (select)
+    juce::ComboBox snapBox, lengthBox, laneBox, colourBox;
     juce::TextButton quantizeButton { "Q" }, undoButton { "Undo" }, redoButton { "Redo" };
     juce::TextButton articulationButton { "Articulation" };
     ExpressionMap::Selection newNoteArticulation;   // what new notes are drawn with (nothing selected)

@@ -73,12 +73,6 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
 {
     setWantsKeyboardFocus (true);
 
-    modeBox.setTooltip ("Edit mode (keys: S = select, D = draw). Select: drag selects, double-click adds. "
-                        "Draw: click adds a note at the length dropdown's value, keep dragging to stretch it.");
-    modeBox.addItem ("Select", 1);
-    modeBox.addItem ("Draw", 2);
-    modeBox.setSelectedId (1, juce::dontSendNotification);
-    addAndMakeVisible (modeBox);
 
     snapBox.setTooltip ("Grid division (snapping and quantize)");
     addDivisionItems (snapBox);
@@ -213,7 +207,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     trackLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (trackLabel);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &modeBox, &auditionToggle, &inputToggle, &snapBox,
+    for (auto* c : std::initializer_list<juce::Component*> { &auditionToggle, &inputToggle, &snapBox,
                                                              &lengthBox, &dotButton, &laneBox, &quantizeButton, &undoButton,
                                                              &redoButton, &articulationButton, &colourBox })
         c->setWantsKeyboardFocus (false);
@@ -987,7 +981,7 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
 
         drag = onRightEdge ? Drag::resize : Drag::move;
     }
-    else if (modeBox.getSelectedId() == 2)
+    else if (drawMode)
     {
         // Draw mode: preview a note here; stretch while dragging; ONE event on mouse up.
         pendingNote = { snapTick (xToTick (position.x)), newNoteTicks(), 1,
@@ -1203,7 +1197,7 @@ void PianoRollView::mouseMove (const juce::MouseEvent& event)
 
     if (onRightEdge)
         setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
-    else if (overGrid && modeBox.getSelectedId() == 2)
+    else if (overGrid && drawMode)
         setMouseCursor (penCursor());
     else
         setMouseCursor (juce::MouseCursor::NormalCursor);
@@ -1379,18 +1373,6 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
         if (key.isKeyCode (juce::KeyPress::rightKey)) { nudgeSelection (gridTicks(), 0);  return true; }
     }
 
-    if (key == juce::KeyPress ('s'))
-    {
-        modeBox.setSelectedId (1);
-        return true;
-    }
-
-    if (key == juce::KeyPress ('d'))
-    {
-        modeBox.setSelectedId (2);
-        return true;
-    }
-
     return false;   // space, Home etc. bubble up to the shell
 }
 
@@ -1432,8 +1414,6 @@ void PianoRollView::timerCallback()
 void PianoRollView::resized()
 {
     auto toolbar = juce::Rectangle<int> (0, 0, getWidth(), toolbarHeight).reduced (6, 3);
-    modeBox.setBounds (toolbar.removeFromLeft (78));
-    toolbar.removeFromLeft (10);
     snapBox.setBounds (toolbar.removeFromLeft (68));
     toolbar.removeFromLeft (10);
     lengthBox.setBounds (toolbar.removeFromLeft (68));
