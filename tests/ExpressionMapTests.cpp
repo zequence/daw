@@ -560,6 +560,91 @@ public:
             expectEquals (selection.modifiers[1].second, juce::String ("Con sord"));
         }
 
+        beginTest ("key names: explicit names win, keyswitches are named after their articulations");
+        {
+            auto map = selectionMap();
+            map.groups[0].articulations[0].outputs = { { Out::Type::keyswitch, 24, 100, false, -1 } };   // Staccato on C0... key 24
+            map.groups[0].articulations[1].outputs = { { Out::Type::keyswitch, 25, 100, false, -1 } };   // Legato on 25
+            map.groups[2].articulations[0].outputs = { { Out::Type::keyswitch, 25, 100, false, -1 } };   // Con sord shares 25
+
+            juce::String instruction;
+            expectEquals (map.keyLabel (24, &instruction), juce::String ("Staccato"));
+            expectEquals (instruction, juce::String ("Keyswitch for Staccato"));
+            expectEquals (map.keyLabel (25), juce::String ("Legato / Con sord"));   // shared: both named
+            expectEquals (map.keyLabel (60), juce::String());                       // nothing to say
+            expect (map.isKeyswitch (24) && map.isKeyswitch (25) && ! map.isKeyswitch (26));
+
+            // An explicit name replaces the automatic one and brings its instruction
+            map.keyNames.push_back ({ 24, "Short notes", "Hold for staccato, release for legato" });
+            expectEquals (map.keyLabel (24, &instruction), juce::String ("Short notes"));
+            expectEquals (instruction, juce::String ("Hold for staccato, release for legato"));
+
+            // A key can be named without being a keyswitch (instructions for the player)
+            map.keyNames.push_back ({ 26, "Repeat once", "" });
+            expectEquals (map.keyLabel (26), juce::String ("Repeat once"));
+            expect (! map.isKeyswitch (26));
+
+            expect (map.isValid(), map.validate().joinIntoString ("; "));
+        }
+
+        beginTest ("key names are checked, and saved in both XML and JSON");
+        {
+            auto map = spitfireLike();
+            map.keyNames = { { 12, "Legato", "Hold" }, { 12, "Again", "" }, { 200, "High", "" }, { 14, "  ", "" } };
+            const auto problems = map.validate();
+            expect (anyContains (problems, "key 12 is named twice ('Legato' and 'Again')"));
+            expect (anyContains (problems, "outside 0-127"));
+            expect (anyContains (problems, "the name of key 14 is empty"));
+
+            map.keyNames = { { 12, "Legato", "Hold the key\nthen play" }, { 13, "Repeat", "" } };
+            expect (map.isValid(), map.validate().joinIntoString ("; "));
+
+            const auto viaXml = Map::fromXml (*juce::XmlDocument::parse (map.toXml()->toString()));
+            expectEquals ((int) viaXml.keyNames.size(), 2);
+            expectEquals (viaXml.keyNames[0].instruction, juce::String ("Hold the key\nthen play"));
+
+            Map viaJson;
+            expectEquals (Map::fromVar (map.toVar(), viaJson), juce::String());
+            expectEquals ((int) viaJson.keyNames.size(), 2);
+            expectEquals (viaJson.keyNames[1].name, juce::String ("Repeat"));
+
+            Map bad;
+            const auto json = map.toVar();
+            json.getDynamicObject()->setProperty ("keyNames", juce::Array<juce::var> { juce::var (5) });
+            expect (Map::fromVar (json, bad).contains ("every key name needs a key"));
+        }
+
+        beginTest ("playable range of a choice: the intersection of what the root and the modifiers define");
+        {
+            const auto sel = [] (const char* root, std::initializer_list<std::pair<const char*, const char*>> modifiers = {})
+            {
+                Map::Selection s;
+                s.root = root;
+
+                for (auto& [group, articulation] : modifiers)
+                    s.modifiers.emplace_back (group, articulation);
+
+                return s;
+            };
+
+            auto map = selectionMap();
+            map.groups[0].articulations[0].keyLow = 40;     // Staccato 40-90
+            map.groups[0].articulations[0].keyHigh = 90;
+            map.groups[1].articulations[0].keyLow = 50;     // Short 50-100
+            map.groups[1].articulations[0].keyHigh = 100;
+
+            int low = -1, high = -1;
+            expect (map.playableRange (sel ("Staccato"), low, high) && low == 40 && high == 90);
+            expect (map.playableRange (sel ("Staccato", { { "Release", "Short" } }), low, high) && low == 50 && high == 90);   // both narrow it
+
+            // A modifier alone defines nothing without a root; a root without a range defines nothing either
+            expect (! map.playableRange (sel ("Legato"), low, high));
+            expect (map.playableRange (sel ("Legato", { { "Release", "Long" } }), low, high) == false);   // Long has no range
+            expect (! map.playableRange ({}, low, high));
+            expectEquals (low, 0);    // untouched defaults when nothing defines a range
+            expectEquals (high, 127);
+        }
+
         beginTest ("no restrictions on combining keys, CCs and program changes (left to the user)");
         {
             // A root and a modifier that works with it on the same CC

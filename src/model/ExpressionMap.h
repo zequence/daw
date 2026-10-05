@@ -202,6 +202,18 @@ struct ExpressionMap
     juce::String description;
     std::vector<Group> groups;       // [0] = the root group
 
+    // A name (and instructions) for a key: the keys libraries label on their
+    // keyboards ("C0: Legato", "C#0: repeat once"). The editor shows them on the
+    // piano keys. A keyswitch articulation's key is named automatically (keyLabel).
+    struct KeyName
+    {
+        int key = 0;                 // 0..127, unique in the map
+        juce::String name;
+        juce::String instruction;    // longer text, shown as the key's tooltip
+    };
+
+    std::vector<KeyName> keyNames;
+
     //==========================================================================
     static bool sameName (const juce::String& a, const juce::String& b)
     {
@@ -330,10 +342,96 @@ struct ExpressionMap
             }
         }
 
+        for (size_t k = 0; k < keyNames.size(); ++k)
+        {
+            auto& keyName = keyNames[k];
+
+            if (keyName.key < 0 || keyName.key > 127)
+                problems.add ("key name '" + keyName.name + "' is on key " + juce::String (keyName.key) + ", outside 0-127");
+
+            if (keyName.name.trim().isEmpty())
+                problems.add ("the name of key " + juce::String (keyName.key) + " is empty");
+
+            for (size_t other = 0; other < k; ++other)
+                if (keyNames[other].key == keyName.key)
+                    problems.add ("key " + juce::String (keyName.key) + " is named twice ('" + keyNames[other].name
+                                  + "' and '" + keyName.name + "')");
+        }
+
         return problems;
     }
 
     bool isValid() const    { return validate().isEmpty(); }
+
+    //==========================================================================
+    // What the editor writes on a piano key: its explicit name, else the
+    // articulation(s) it switches to as a keyswitch ("Legato", or "Legato / Marcato"
+    // when several share the key). 'instruction' receives the key's longer text.
+    // Empty when the key has nothing to say.
+    juce::String keyLabel (int key, juce::String* instruction = nullptr) const
+    {
+        for (auto& keyName : keyNames)
+            if (keyName.key == key)
+            {
+                if (instruction != nullptr)
+                    *instruction = keyName.instruction;
+
+                return keyName.name;
+            }
+
+        juce::StringArray switched;
+
+        for (auto& group : groups)
+            for (auto& articulation : group.articulations)
+                for (auto& output : articulation.outputs)
+                    if (output.type == Output::Type::keyswitch && output.number == key && ! switched.contains (articulation.name))
+                        switched.add (articulation.name);
+
+        if (instruction != nullptr)
+            *instruction = switched.isEmpty() ? juce::String() : "Keyswitch for " + switched.joinIntoString (", ");
+
+        return switched.joinIntoString (" / ");
+    }
+
+    // The keys that are keyswitches (so they can be marked on the keyboard)
+    bool isKeyswitch (int key) const
+    {
+        for (auto& group : groups)
+            for (auto& articulation : group.articulations)
+                for (auto& output : articulation.outputs)
+                    if (output.type == Output::Type::keyswitch && output.number == key)
+                        return true;
+
+        return false;
+    }
+
+    // The playable key range of a choice: the intersection of the ranges that the
+    // root and the chosen modifiers define. false when none of them defines one
+    // (the caller falls back to the channel's own range).
+    bool playableRange (const Selection& selection, int& low, int& high) const
+    {
+        low = 0;
+        high = 127;
+        auto defined = false;
+
+        const auto narrow = [&] (const Articulation* articulation)
+        {
+            if (articulation == nullptr || articulation->keyLow < 0 || articulation->keyHigh < articulation->keyLow)
+                return;
+
+            low = juce::jmax (low, articulation->keyLow);
+            high = juce::jmin (high, articulation->keyHigh);
+            defined = true;
+        };
+
+        if (! groups.empty() && selection.root.trim().isNotEmpty())
+            narrow (findArticulation (groups.front(), selection.root));
+
+        for (auto& [groupName, articulationName] : selection.modifiers)
+            narrow (findArticulation (groupName, articulationName));
+
+        return defined;
+    }
 
     //==========================================================================
     // JSON for the API (the same shape as the XML). Unlike reading a file, parsing
@@ -393,6 +491,19 @@ struct ExpressionMap
         }
 
         map->setProperty ("groups", groupList);
+
+        juce::Array<juce::var> keyList;
+
+        for (auto& keyName : keyNames)
+        {
+            auto k = new juce::DynamicObject();
+            k->setProperty ("key", keyName.key);
+            k->setProperty ("name", keyName.name);
+            k->setProperty ("instruction", keyName.instruction);
+            keyList.add (juce::var (k));
+        }
+
+        map->setProperty ("keyNames", keyList);
         return juce::var (map);
     }
 
@@ -492,6 +603,21 @@ struct ExpressionMap
 
             map.groups.push_back (std::move (group));
         }
+
+        const auto keyList = json.getProperty ("keyNames", {});
+
+        if (! keyList.isVoid() && ! keyList.isArray())
+            return "'keyNames' must be an array of {key, name, instruction?}";
+
+        if (auto* keys = keyList.getArray())
+            for (auto& k : *keys)
+            {
+                if (! k.isObject() || ! k.hasProperty ("key") || ! k.hasProperty ("name"))
+                    return "every key name needs a key (0-127) and a name: {key, name, instruction?}";
+
+                map.keyNames.push_back ({ (int) k.getProperty ("key", 0), k.getProperty ("name", {}).toString(),
+                                          k.getProperty ("instruction", {}).toString() });
+            }
 
         out = std::move (map);
         return {};
@@ -794,6 +920,14 @@ struct ExpressionMap
             }
         }
 
+        for (auto& keyName : keyNames)
+        {
+            auto* k = xml->createNewChildElement ("KEYNAME");
+            k->setAttribute ("key", keyName.key);
+            k->setAttribute ("name", keyName.name);
+            k->setAttribute ("instruction", keyName.instruction);
+        }
+
         return xml;
     }
 
@@ -841,6 +975,9 @@ struct ExpressionMap
 
             map.groups.push_back (std::move (group));
         }
+
+        for (auto* k : xml.getChildWithTagNameIterator ("KEYNAME"))
+            map.keyNames.push_back ({ k->getIntAttribute ("key", 0), k->getStringAttribute ("name"), k->getStringAttribute ("instruction") });
 
         return map;
     }
