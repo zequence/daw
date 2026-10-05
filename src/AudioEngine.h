@@ -7,6 +7,7 @@
 #include "engine/MidiRecorder.h"
 #include "model/ExpressionMap.h"
 #include "model/MidiSequence.h"
+#include "UserData.h"
 
 class AudioChannelProcessor;
 class MidiSourceProcessor;
@@ -349,6 +350,11 @@ public:
     void saveSettings();
     juce::PropertiesFile& getSettingsFile()   { return settings; }
 
+    // Where the library of expression maps lives (model/ExpressionMapLibrary.h): the user data folder'"'"'s Maps
+    // unless a test points it elsewhere. Projects hold their own copies of maps.
+    juce::File getMapLibraryDir() const              { return mapLibraryDir; }
+    void setMapLibraryDir (const juce::File& dir)    { mapLibraryDir = dir; }
+
     //==============================================================================
     // Observable state (DESIGN.md): every mutation emits an event here (message
     // thread). The API server forwards them to subscribed connections.
@@ -524,6 +530,7 @@ private:
     void enableAllMidiInputsIfFirstRun (bool hadSavedState);
 
     juce::PropertiesFile& settings;
+    juce::File mapLibraryDir = UserData::getDir().getChildFile ("Maps");
     juce::AudioDeviceManager deviceManager;
     juce::AudioPluginFormatManager formatManager;
     juce::KnownPluginList knownPlugins;

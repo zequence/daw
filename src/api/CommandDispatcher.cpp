@@ -2,6 +2,7 @@
 #include "../integrations/VeproState.h"
 #include "../integrations/VeproServer.h"
 #include "../integrations/VeproKeyRange.h"
+#include "../model/ExpressionMapLibrary.h"
 #include <AppVersion.h>
 #include "../engine/AudioChannelProcessor.h"
 #include "../engine/HistoryManager.h"
@@ -1374,6 +1375,140 @@ void CommandDispatcher::registerCommands()
              result->setProperty ("valid", problems.isEmpty());
              result->setProperty ("problems", list);
              respond (ok (juce::var (result.get())));
+         });
+
+    //--- The library: maps kept in files, copied into projects (model/ExpressionMapLibrary.h)
+    const auto summary = [] (const ExpressionMap& map, bool isTemplate)
+    {
+        int articulations = 0;
+
+        for (auto& group : map.groups)
+            articulations += (int) group.articulations.size();
+
+        auto o = object();
+        o->setProperty ("name", map.name);
+        o->setProperty ("description", map.description);
+        o->setProperty ("groups", (int) map.groups.size());
+        o->setProperty ("articulations", articulations);
+        o->setProperty ("template", isTemplate);
+        return juce::var (o.get());
+    };
+
+    // Puts a map into the project under its own name, or under 'as'; refuses to replace one
+    const auto intoProject = [this] (ExpressionMap map, const juce::String& as, Respond& respond)
+    {
+        if (as.trim().isNotEmpty())
+            map.name = as.trim();
+
+        if (engine.getExpressionMap (map.name).has_value())
+            return respond (fail ("the project already has an expression map '" + map.name
+                                  + "'; give 'as' a different name, or remove that one first"));
+
+        if (auto error = engine.setExpressionMap (map); error.isNotEmpty())
+            return respond (fail (error));
+
+        auto result = object();
+        result->setProperty ("name", map.name);
+        respond (ok (juce::var (result.get())));
+    };
+
+    add ("expressionmap.libraryList",
+         "The library of expression maps (files in the user data folder's Maps) and the built-in templates, "
+         "each {name, description, groups, articulations, template}",
+         "",
+         [this, summary] (const juce::var&, Respond respond)
+         {
+             juce::Array<juce::var> list;
+
+             for (auto& t : expressionMapLibrary::templates())
+                 list.add (summary (t, true));
+
+             for (auto& map : expressionMapLibrary::list (engine.getMapLibraryDir()))
+                 list.add (summary (map, false));
+
+             respond (ok (list));
+         });
+
+    add ("expressionmap.saveToLibrary", "Save a project map to the library (replacing the library map of that name)", "name:string",
+         [this, existingMaps] (const juce::var& params, Respond respond)
+         {
+             const auto name = params.getProperty ("name", {}).toString();
+             const auto map = engine.getExpressionMap (name);
+
+             if (! map.has_value())
+                 return respond (fail ("no expression map '" + name + "' in the project (" + existingMaps() + ")"));
+
+             if (auto error = expressionMapLibrary::save (engine.getMapLibraryDir(), *map); error.isNotEmpty())
+                 return respond (fail (error));
+
+             respond (ok());
+         });
+
+    add ("expressionmap.addFromLibrary",
+         "Copy a library map (or a built-in template) into the project. Refused if the project already has a map of that "
+         "name; 'as' gives the copy another name",
+         "name:string [as:string]",
+         [this, intoProject] (const juce::var& params, Respond respond)
+         {
+             const auto name = params.getProperty ("name", {}).toString();
+             const auto map = expressionMapLibrary::find (engine.getMapLibraryDir(), name);
+
+             if (! map.has_value())
+             {
+                 juce::StringArray names;
+
+                 for (auto& t : expressionMapLibrary::templates())
+                     names.add (t.name);
+
+                 for (auto& m : expressionMapLibrary::list (engine.getMapLibraryDir()))
+                     names.add (m.name);
+
+                 return respond (fail ("no library map '" + name + "' (existing: " + names.joinIntoString (", ") + ")"));
+             }
+
+             intoProject (*map, params.getProperty ("as", {}).toString(), respond);
+         });
+
+    add ("expressionmap.deleteFromLibrary", "Delete a map from the library (the project's copies stay; templates can't be deleted)",
+         "name:string",
+         [this] (const juce::var& params, Respond respond)
+         {
+             if (auto error = expressionMapLibrary::remove (engine.getMapLibraryDir(), params.getProperty ("name", {}).toString());
+                 error.isNotEmpty())
+                 return respond (fail (error));
+
+             respond (ok());
+         });
+
+    add ("expressionmap.export", "Write a project map to a file (XML) that can be imported into another project", "name:string path:string",
+         [this, existingMaps] (const juce::var& params, Respond respond)
+         {
+             const auto name = params.getProperty ("name", {}).toString();
+             const auto map = engine.getExpressionMap (name);
+
+             if (! map.has_value())
+                 return respond (fail ("no expression map '" + name + "' in the project (" + existingMaps() + ")"));
+
+             if (auto error = expressionMapLibrary::exportTo (juce::File (params.getProperty ("path", {}).toString()), *map);
+                 error.isNotEmpty())
+                 return respond (fail (error));
+
+             respond (ok());
+         });
+
+    add ("expressionmap.import",
+         "Read an expression map file (XML, as written by expressionmap.export) into the project. Refused if the project "
+         "already has a map of that name; 'as' gives it another name",
+         "path:string [as:string]",
+         [this, intoProject] (const juce::var& params, Respond respond)
+         {
+             juce::String error;
+             const auto map = expressionMapLibrary::readFile (juce::File (params.getProperty ("path", {}).toString()), error);
+
+             if (! map.has_value())
+                 return respond (fail (error));
+
+             intoProject (*map, params.getProperty ("as", {}).toString(), respond);
          });
 
     add ("expressionmap.choose",
