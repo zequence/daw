@@ -111,9 +111,8 @@ So one articulation can send, say, a keyswitch, then a CC, then a program change
 The list may be empty (an articulation that needs nothing sent). Repeating a CC
 inside one articulation is the author's explicit sequence, not a conflict.
 
-The active combination's outputs are the root's, then its modifiers'. (For maps
-that have sound slots this is replaced: see "Sound slots" below. A map with no
-slots keeps this rule.)
+The active combination's outputs are the root's, then its modifiers'. (Replaced
+by "Sound slots" below: outputs belong to slots, not to articulations.)
 
 **No restrictions on combining outputs.** Any articulation may use any key, CC or
 program change, including the same one as another articulation, even one that
@@ -152,10 +151,18 @@ says "slot" it means an **expression-map sound slot**.
   has with it. Choosing a root keeps the modifiers that still lead to a slot and
   drops the rest (ask or drop, as today). A note's stored selection is always the
   combination of one slot.
-- **Playback finds the slot of the note's combination** and sends its outputs
-  exactly before the note, shifted by the slot's timing offset. A selection with
-  no slot (the map was edited, the project was loaded without it) plays as having
-  none and shows as an error, as missing articulations do today.
+- **Defaults.** An articulation can name a default articulation per group
+  (Rep. -> Tempo 120; colour Con sordino -> Main Long notes). Choosing it fills its
+  defaults into the groups that have nothing chosen, and the defaults' own defaults
+  after them, so what is stored is always a complete combination with a slot; the
+  filled-in choices show as chosen and can be changed. Validation: every default
+  must lead to an existing slot.
+- **Playback sends the outputs of the note's slot** exactly before the note,
+  shifted by the slot's timing offset. In normal use every note has a slot (the UI
+  offers nothing else). Only a later change can leave a note without one: a slot
+  removed from the map, the track moved to an instrument with another map, a
+  project loaded without its map. Such a note plays with no articulation and is
+  marked as an error so it can be repaired.
 - **Key range follows the slot**: the editor greys out what the slot in effect
   can't play (replaces the per-articulation range and the one-range-per-channel
   stopgap).
@@ -164,18 +171,16 @@ says "slot" it means an **expression-map sound slot**.
   combination, so a map's slots can be generated from them. `vsl-manager`
   (`tools/daw_maps.py`) already enumerates them for the Cubase maps (185 for the
   merged Duality 1st Violins). "Synchron detection" (below) produces slots, too.
-- **Maps without slots keep working**: all the combinations their applies-to lists
-  allow are slots implicitly, with the outputs added up as today. Nothing is
-  converted when a project loads. Hand-made maps (a keyswitch map, Spitfire UACC)
-  stay as small as they are; a map with a `<SLOTS>` list uses the slots.
+- **Every map uses slots**; the outputs-on-articulations model and applies-to lists
+  go (no maps of that kind are in use). The built-in keyswitch template becomes a
+  map of slots.
 - **Validation** (slots): each slot names an existing root and existing modifiers,
   one per group at most, a root is required, no two slots have the same
   combination, every output and range is in range. Renaming a group or an
   articulation rewrites the slots that use it; deleting an articulation is refused
   while a slot uses it (or removes those slots, on request).
 - **Editor**: the map editor gets a slot list (combination, outputs, range, offset)
-  with a filter, add / remove / duplicate, and "make slots for all combinations"
-  for an additive map. Commands: `expressionmap.setSlot`, `removeSlot`, `slots`
+  with a filter, add / remove / duplicate, and defaults per articulation. Commands: `expressionmap.setSlot`, `removeSlot`, `slots`
   (list, filterable by a selection), and `expressionmap.available` (what the menu
   would offer for a selection).
 
@@ -513,11 +518,6 @@ selection. The UI is a client of the same commands.
 
 ### Open questions
 
-- **Root alone**: a root with no slot of its own (every slot also has a Main, say)
-  can't be a note's whole selection. Proposed: the menu still lets it be picked as
-  the start of a combination, the note stores only complete combinations, and the
-  generators add a root-only slot where the root is meaningful alone (the colour
-  Regular = just its program).
 - **Timing offset**: what it is called. (The pre-roll for negative offsets is
   decided; its transport, loop and locate details are in "Timing offset".)
 
