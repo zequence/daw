@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <bitset>
+#include "MidiMonitor.h"
 
 // One MIDI track output: sits between a track's MIDI source (plus live input when the
 // track is armed) and an instrument, rewriting every channel message to the output's
@@ -55,6 +56,15 @@ public:
     // its live-input arming while keys were held).
     void killHeldNotes()                     { killRequest.store (true); }
 
+    // The MIDI monitor records what this route hands the instrument (set once, at creation)
+    void setMonitor (MidiMonitor* monitorToUse, std::function<juce::int64()> transportTick, int trackId, int instrumentId)
+    {
+        monitor = monitorToUse;
+        tickNow = std::move (transportTick);
+        monitorTrack = trackId;
+        monitorInstrument = instrumentId;
+    }
+
     //==============================================================================
     void processBlock (juce::AudioBuffer<float>&, juce::MidiBuffer& midi) override
     {
@@ -96,13 +106,49 @@ public:
 
         lastChannel = channel;
         midi.swapWith (scratch);
+
+        if (monitor != nullptr && monitor->isEnabled() && ! midi.isEmpty())
+        {
+            MidiMonitor::Event event;
+            event.blockMs = juce::Time::getMillisecondCounterHiRes();
+            event.sampleRate = sampleRate;
+            event.tick = tickNow ? tickNow() : 0;
+            event.trackId = monitorTrack;
+            event.instrumentId = monitorInstrument;
+            event.port = port;
+
+            for (const auto metadata : midi)
+            {
+                // record the plain message (port >= 2 traffic is wrapped for the VST3 host)
+                const auto* raw = metadata.data;
+                const auto wrapped = metadata.numBytes >= 7 && raw[0] == 0xf0 && raw[1] == 0x7d && raw[2] == 0x50;
+                event.offset = metadata.samplePosition;
+                event.size = 0;
+
+                if (wrapped)
+                {
+                    event.bytes[0] = (juce::uint8) ((raw[4] << 4) | (raw[5] & 0x0f));
+                    event.size = 1;
+
+                    for (int i = 6; i < metadata.numBytes - 1 && event.size < 3; ++i)
+                        event.bytes[event.size++] = raw[i];
+                }
+                else
+                {
+                    for (int i = 0; i < metadata.numBytes && event.size < 3; ++i)
+                        event.bytes[event.size++] = raw[i];
+                }
+
+                monitor->push (event);
+            }
+        }
     }
 
     //==============================================================================
     const juce::String getName() const override              { return "MIDI Route"; }
     bool acceptsMidi() const override                        { return true; }
     bool producesMidi() const override                       { return true; }
-    void prepareToPlay (double, int) override                {}
+    void prepareToPlay (double rate, int) override           { sampleRate = rate; }
     void releaseResources() override                         {}
     double getTailLengthSeconds() const override             { return 0.0; }
     juce::AudioProcessorEditor* createEditor() override      { return nullptr; }
@@ -120,6 +166,11 @@ private:
     std::atomic<int> targetPort { 1 };
     std::atomic<bool> routeEnabled { true };
     std::atomic<bool> killRequest { false };
+
+    MidiMonitor* monitor = nullptr;
+    std::function<juce::int64()> tickNow;
+    int monitorTrack = 0, monitorInstrument = 0;
+    double sampleRate = 48000.0;
 
     // Audio-thread state
     std::bitset<128> heldKeys;

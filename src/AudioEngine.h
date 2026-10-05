@@ -5,6 +5,7 @@
 
 #include "engine/Transport.h"
 #include "engine/MidiRecorder.h"
+#include "engine/MidiMonitor.h"
 #include "model/ExpressionMap.h"
 #include "model/MidiSequence.h"
 #include "UserData.h"
@@ -336,6 +337,9 @@ public:
 
     BusyStatus& getBusyStatus() noexcept    { return busyStatus; }
 
+    // What the routes hand the instruments, when recording (midi.monitor)
+    MidiMonitor& getMidiMonitor() noexcept  { return midiMonitor; }
+
     // True when anything changed since the last save/load/clear (every emitted
     // mutation marks the project dirty).
     bool isProjectDirty() const noexcept    { return projectDirty; }
@@ -534,6 +538,7 @@ private:
     juce::AudioDeviceManager deviceManager;
     juce::AudioPluginFormatManager formatManager;
     juce::KnownPluginList knownPlugins;
+    MidiMonitor midiMonitor;                  // outlives the graph: its routes point at it
     juce::AudioProcessorGraph graph;
     juce::AudioProcessorPlayer player;
     TempoMap::Ptr masterTempoMap;             // message-thread authority; transport gets snapshots

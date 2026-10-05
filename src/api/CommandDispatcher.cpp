@@ -3,6 +3,7 @@
 #include "../integrations/VeproServer.h"
 #include "../integrations/VeproKeyRange.h"
 #include "../model/ExpressionMapLibrary.h"
+#include "../model/NoteNames.h"
 #include <AppVersion.h>
 #include "../engine/AudioChannelProcessor.h"
 #include "../engine/HistoryManager.h"
@@ -1938,6 +1939,84 @@ void CommandDispatcher::registerCommands()
              o->setProperty ("bytes", (juce::int64) state.getSize());
              o->setProperty ("stateBase64", juce::Base64::toBase64 (state.getData(), state.getSize()));
              respond (ok (juce::var (o.get())));
+         });
+
+    add ("midi.monitor",
+         "The MIDI monitor: what the track routes hand the instruments (notes, program changes, CCs), with exact "
+         "order and spacing. action 'start' clears and starts recording, 'stop' stops, 'read' returns what was "
+         "recorded (since 'from', an index): {events:[{index, ms (from the first), tick, trackId, instrumentId, port, "
+         "channel, type, text}], dropped, recording}",
+         "action:start|stop|read [from:int]",
+         [this] (const juce::var& params, Respond respond)
+         {
+             auto& monitor = engine.getMidiMonitor();
+             const auto action = params.getProperty ("action", "read").toString();
+
+             for (auto& event : monitor.drain())   // whatever came in before this command
+                 if (monitorHistory.size() < 50000)
+                     monitorHistory.push_back (event);
+
+             if (action == "start")
+             {
+                 monitorHistory.clear();
+                 monitor.takeDropped();
+                 monitorDropped = 0;
+                 monitor.setEnabled (true);
+             }
+             else if (action == "stop")
+             {
+                 monitor.setEnabled (false);
+             }
+             else if (action != "read")
+             {
+                 return respond (fail ("action must be start, stop or read"));
+             }
+
+             monitorDropped += monitor.takeDropped();
+
+             const auto describe = [] (const MidiMonitor::Event& e)
+             {
+                 const auto message = e.size >= 3 ? juce::MidiMessage (e.bytes[0], e.bytes[1], e.bytes[2])
+                                    : e.size == 2 ? juce::MidiMessage (e.bytes[0], e.bytes[1])
+                                                  : juce::MidiMessage (e.bytes[0] == 0 ? 0xf8 : e.bytes[0]);
+                 juce::String type, text;
+
+                 if (message.isNoteOn())             { type = "noteOn";  text = "Note on " + noteNames::name (message.getNoteNumber()) + " (" + juce::String (message.getNoteNumber()) + ") vel " + juce::String (message.getVelocity()); }
+                 else if (message.isNoteOff())       { type = "noteOff"; text = "Note off " + noteNames::name (message.getNoteNumber()) + " (" + juce::String (message.getNoteNumber()) + ")"; }
+                 else if (message.isProgramChange()) { type = "program"; text = "Program " + juce::String (message.getProgramChangeNumber() + 1) + " (sent " + juce::String (message.getProgramChangeNumber()) + ")"; }
+                 else if (message.isController())    { type = "controller"; text = "CC" + juce::String (message.getControllerNumber()) + " = " + juce::String (message.getControllerValue()); }
+                 else if (message.isPitchWheel())    { type = "pitchBend"; text = "Pitch bend " + juce::String (message.getPitchWheelValue()); }
+                 else                                { type = "other"; text = juce::String::toHexString (e.bytes, e.size); }
+
+                 return std::make_pair (type, text);
+             };
+
+             const auto from = juce::jmax (0, (int) params.getProperty ("from", 0));
+             const auto firstMs = monitorHistory.empty() ? 0.0 : monitorHistory.front().timeMs();
+             juce::Array<juce::var> list;
+
+             for (size_t i = (size_t) from; i < monitorHistory.size(); ++i)
+             {
+                 const auto& e = monitorHistory[i];
+                 const auto [type, text] = describe (e);
+                 auto o = object();
+                 o->setProperty ("index", (int) i);
+                 o->setProperty ("ms", std::round ((e.timeMs() - firstMs) * 100.0) / 100.0);
+                 o->setProperty ("tick", e.tick);
+                 o->setProperty ("trackId", e.trackId);
+                 o->setProperty ("instrumentId", e.instrumentId);
+                 o->setProperty ("port", e.port);
+                 o->setProperty ("channel", (e.bytes[0] & 0x0f) + 1);
+                 o->setProperty ("type", type);
+                 o->setProperty ("text", text);
+                 list.add (juce::var (o.get()));
+             }
+
+             auto result = object();
+             result->setProperty ("events", list);
+             result->setProperty ("dropped", monitorDropped);
+             result->setProperty ("recording", monitor.isEnabled());
+             respond (ok (juce::var (result.get())));
          });
 
     add ("instrument.remove",

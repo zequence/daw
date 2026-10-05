@@ -59,6 +59,10 @@ private:
     std::map<juce::String, Command> commands;
     bool veproSyncRunning = false;
 
+    // midi.monitor: what has been read from the engine's monitor so far
+    std::vector<MidiMonitor::Event> monitorHistory;
+    int monitorDropped = 0;
+
     // The server address the last sync/fetch resolved ("auto" -> discovered IP),
     // so per-player queries skip discovery
     juce::String veproResolvedHost;

@@ -48,6 +48,7 @@ Quick test from a terminal while the app is running:
 | ui | `ui.selectTrack` (select a track exactly like a sidebar click: arms it with auto-arm, the open editor follows; replies with the time it took) |
 | colors | `track.setColor` / `folder.setColor` ('#rrggbb', empty = none); shown as sidebar left borders and region borders, opacity in Settings > Theming; vepro.sync seeds them from the server's instance/player colors on creation |
 | recording | `record.start`, `record.stop` |
+| debugging | `midi.monitor` (`action`: `start` clears and records, `stop`, `read` [`from`]): what the track routes hand the instruments - notes, program changes, CCs - in exact order, with ms spacing (block time + sample offset), transport tick, track, instrument, port and channel |
 | projects | `project.save`, `project.load`, `project.new` |
 | history | `history.list` (filter by category/trackId), `history.travel` (time-travel to an entry) |
 

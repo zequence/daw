@@ -971,8 +971,9 @@ void AudioEngine::addTrackOutput (TrackId trackId, InstrumentId instrumentId, in
     // The route node tags port >= 2 traffic for the plugin's VST3 event bus
     // 'port - 1' (see MidiRouteProcessor::wrapForPort) - like Cubase, the
     // plugin's own MIDI ports are addressed directly, no helper plugins.
-    output.routeNode = graph.addNode (std::make_unique<MidiRouteProcessor> (output.midiChannel, output.midiPort),
-                                      std::nullopt, updateKind())->nodeID;
+    auto routeProcessor = std::make_unique<MidiRouteProcessor> (output.midiChannel, output.midiPort);
+    routeProcessor->setMonitor (&midiMonitor, [this] { return transport.getPositionTicks(); }, trackId, instrumentId);
+    output.routeNode = graph.addNode (std::move (routeProcessor), std::nullopt, updateKind())->nodeID;
 
     graph.addConnection ({ { track->midiSourceNode, midiChannelIndex }, { output.routeNode, midiChannelIndex } },
                          updateKind());
