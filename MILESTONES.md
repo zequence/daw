@@ -133,8 +133,35 @@ it is heard on the beat.
   - Loop wraps and locates need nothing special - the events are where they are.
     Switch events are tagged so the existing chase-on-locate can replay the
     last one when the playhead lands mid-phrase.
-- A note at the very start with a negative offset has nowhere to go (clamp at the
-  start, or start playback with a short pre-roll).
+- **A negative offset at the very start grows the playback sequence backwards,
+  and playback starts before the transport moves.** The playback sequence may
+  hold events at negative times (the written sequence never does; today
+  `MidiSequence::create` clamps every tick to >= 0, so the playback sequence
+  needs to be allowed to go negative). Pressing Play then starts a **pre-roll**:
+  the engine runs from -N ms (N = the largest negative offset the track
+  maps use) up to the start position while the transport bar and position
+  readout stay put, and only then begins to move. This is potentially a hard
+  problem (see below) but it is the right behaviour.
+  - **It is not only the start of the song.** Playing from bar 5 has the same
+    problem: a legato written at bar 5 is triggered 70 ms before the playhead
+    gets there, and when playback starts AT bar 5 those events lie before the
+    start position. So every Play start gets the pre-roll (nothing is added when
+    no map has a negative offset).
+  - The **transport** needs a pre-roll phase: a position that counts from -N up to
+    the start position at the normal speed (tempo map extrapolated from the first
+    tempo before the start), a displayed position held at the start meanwhile,
+    and the recorder, metronome and anything else that reads the position told
+    which of the two it gets.
+  - **Loops**: a note written at the loop start whose trigger lies before it
+    must play near the END of the previous lap. The loop is effectively circular
+    for the playback sequence: at the wrap the early events of the next lap
+    are due before the wrap itself.
+  - **Locating while playing** is a restart with the pre-roll, or a short gap -
+    to decide.
+  - Rendering/bouncing includes the pre-roll.
+  - **Spike first**: before committing, prove the pre-roll in `Transport` +
+    `MidiSourceProcessor` with a hard-coded negative offset, since everything
+    else in this section depends on it.
 - Notes shifted by different amounts can overlap or reorder (a shifted legato
   overlapping the previous note). That is usually the point, but the playback
   sequence must keep each note's on/off pair together.
@@ -246,8 +273,10 @@ selection. The UI is a client of the same commands.
    maps and assignments). No UI.
 2. Editor: the dropdown, note assignment, symbols on notes, named keys and
    per-articulation key ranges.
-3. Playback: the generated playback sequence (switch events and timing
-   offsets), regenerated on change, and the chase of the last switch on locate.
+3. Playback: first the pre-roll spike (transport counting from -N, playback
+   sequence with negative times, loop wrap); then the generated playback sequence
+   (switch events and timing offsets), regenerated on change, and the chase of
+   the last switch on locate.
 4. The two configuration views (own milestone below) and the map editor UI.
 5. Library, presets (Spitfire UACC, a generic keyswitch map), Cubase
    `.expressionmap` import (observed format only), Synchron detection, then
@@ -255,8 +284,8 @@ selection. The UI is a client of the same commands.
 
 ### Open questions
 
-- **Timing offset**: what it is called, and what happens to a negative offset at
-  the very start of the song (clamp, or pre-roll on playback start).
+- **Timing offset**: what it is called. (The pre-roll for negative offsets is
+  decided; its transport, loop and locate details are in "Timing offset".)
 - Notes whose articulation doesn't exist in the instrument's map (track moved,
   map changed): keep and show as unresolved (as drafted), or clear them?
 - Which events does the playback sequence need to keep in sync when the user
