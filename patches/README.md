@@ -11,5 +11,15 @@ already applied), so a fresh clone builds with them.
   MIDI ports (Vienna Ensemble Pro: up to 16) are addressed directly, like
   Cubase does. Plugins never see the wrapper.
 
+  The same patch delivers **program changes** and makes **CC mappings per
+  port**. VST3 has no program change event: a plugin takes it as the
+  program-change parameter (`kIsProgramChange`) of the unit its event bus and
+  channel belong to. Stock JUCE sends a LegacyMIDICCOut event instead, which
+  plugins ignore (VE Pro never switched Synchron articulations), and looks up
+  CC mappings on bus 0 only. The host now finds the program-change parameter
+  per bus and channel (`IUnitInfo::getUnitByBus`; plugins that don't report
+  units but have one per port and channel, like VE Pro's "PrgCh 01-01" ...
+  "PrgCh 16-16", get them in order) and sets it sample-accurately.
+
 Re-create after editing JUCE:
 `git -C external/JUCE diff -- <file> > patches/<name>.patch`

@@ -1,8 +1,143 @@
 diff --git a/modules/juce_audio_processors_headless/format_types/juce_VST3Common.h b/modules/juce_audio_processors_headless/format_types/juce_VST3Common.h
-index f6d23b6ed4..f4d71ed461 100644
+index f6d23b6ed4..a0ea45f943 100644
 --- a/modules/juce_audio_processors_headless/format_types/juce_VST3Common.h
 +++ b/modules/juce_audio_processors_headless/format_types/juce_VST3Common.h
-@@ -1247,7 +1247,24 @@ private:
+@@ -1090,21 +1090,58 @@ class StoredMidiMapping
+ public:
+     StoredMidiMapping()
+     {
+-        for (auto& channel : channels)
+-            channel.resize (Steinberg::Vst::kCountCtrlNumber);
++        buses.resize (1);
++
++        for (auto& channel : buses.front())
++            channel.resize (Steinberg::Vst::kCountCtrlNumber, Steinberg::Vst::kNoParamId);
+     }
+ 
+-    void storeMappings (Steinberg::Vst::IMidiMapping& mapping)
++    // [orchestral-daw patch] One mapping per MIDI event input bus (multiport plugins map
++    // the same controller on each port to a different parameter)
++    void storeMappings (Steinberg::Vst::IMidiMapping& mapping, int numBuses = 1)
+     {
+-        for (size_t channelIndex = 0; channelIndex < channels.size(); ++channelIndex)
+-            storeControllers (mapping, channels[channelIndex], channelIndex);
++        buses.resize ((size_t) jmax (1, numBuses));
++
++        for (size_t bus = 0; bus < buses.size(); ++bus)
++            for (size_t channelIndex = 0; channelIndex < buses[bus].size(); ++channelIndex)
++            {
++                buses[bus][channelIndex].resize (Steinberg::Vst::kCountCtrlNumber);
++                storeControllers (mapping, buses[bus][channelIndex], (Steinberg::int32) bus, channelIndex);
++            }
+     }
+ 
+     /* Returns kNoParamId if there is no mapping for this controller. */
+-    Steinberg::Vst::ParamID getMapping (Steinberg::int16 channel,
++    Steinberg::Vst::ParamID getMapping (Steinberg::int32 bus,
++                                        Steinberg::int16 channel,
+                                         Steinberg::Vst::CtrlNumber controller) const noexcept
+     {
+-        return channels[(size_t) channel][(size_t) controller];
++        if (bus < 0 || (size_t) bus >= buses.size())
++            return Steinberg::Vst::kNoParamId;
++
++        const auto& controllers = buses[(size_t) bus][(size_t) channel];
++        return (size_t) controller < controllers.size() ? controllers[(size_t) controller] : Steinberg::Vst::kNoParamId;
++    }
++
++    // [orchestral-daw patch] VST3 has no program change event: a plugin takes it as its
++    // program-change parameter (ParameterInfo::kIsProgramChange) of the unit that the
++    // event bus and channel belong to. Filled by the host from the plugin's unit info.
++    struct ProgramParameter
++    {
++        Steinberg::Vst::ParamID id = Steinberg::Vst::kNoParamId;
++        Steinberg::int32 stepCount = 127;   // value = program / stepCount
++    };
++
++    void storeProgramParameters (std::vector<std::array<ProgramParameter, 16>> table)
++    {
++        programParameters = std::move (table);
++    }
++
++    ProgramParameter getProgramParameter (Steinberg::int32 bus, Steinberg::int16 channel) const noexcept
++    {
++        if (bus < 0 || (size_t) bus >= programParameters.size() || channel < 0 || channel > 15)
++            return {};
++
++        return programParameters[(size_t) bus][(size_t) channel];
+     }
+ 
+ private:
+@@ -1114,18 +1151,19 @@ private:
+     // Each channel may have a different CC mapping
+     using Channels = std::array<Controllers, 16>;
+ 
+-    static void storeControllers (Steinberg::Vst::IMidiMapping& mapping, Controllers& channel, size_t channelIndex)
++    static void storeControllers (Steinberg::Vst::IMidiMapping& mapping, Controllers& channel, Steinberg::int32 bus, size_t channelIndex)
+     {
+         for (size_t controllerIndex = 0; controllerIndex < channel.size(); ++controllerIndex)
+-            channel[controllerIndex] = getSingleMapping (mapping, channelIndex, controllerIndex);
++            channel[controllerIndex] = getSingleMapping (mapping, bus, channelIndex, controllerIndex);
+     }
+ 
+     static Steinberg::Vst::ParamID getSingleMapping (Steinberg::Vst::IMidiMapping& mapping,
++                                                     Steinberg::int32 bus,
+                                                      size_t channelIndex,
+                                                      size_t controllerIndex)
+     {
+         Steinberg::Vst::ParamID result{};
+-        const auto returnCode = mapping.getMidiControllerAssignment (0,
++        const auto returnCode = mapping.getMidiControllerAssignment (bus,
+                                                                      (int16) channelIndex,
+                                                                      (Steinberg::Vst::CtrlNumber) controllerIndex,
+                                                                      result);
+@@ -1133,7 +1171,8 @@ private:
+         return returnCode == Steinberg::kResultTrue ? result : Steinberg::Vst::kNoParamId;
+     }
+ 
+-    Channels channels;
++    std::vector<Channels> buses;
++    std::vector<std::array<ProgramParameter, 16>> programParameters;
+ };
+ 
+ //==============================================================================
+@@ -1221,18 +1260,34 @@ private:
+ 
+     template <typename Callback>
+     static bool sendMappedParameter (const MidiMessage& msg,
++                                     Steinberg::int32 eventBus,
+                                      StoredMidiMapping* midiMapping,
+                                      Callback&& callback)
+     {
+         if (midiMapping == nullptr)
+             return false;
+ 
++        // [orchestral-daw patch] A program change goes to the program-change parameter of
++        // the bus and channel (stock JUCE sends a LegacyMIDICCOut event, which plugins ignore)
++        if (msg.isProgramChange())
++        {
++            const auto program = midiMapping->getProgramParameter (eventBus, createSafeChannel (msg.getChannel()));
++
++            if (program.id == Steinberg::Vst::kNoParamId)
++                return false;
++
++            const auto value = program.stepCount > 0 ? jmin (1.0, msg.getProgramChangeNumber() / (double) program.stepCount) : 0.0;
++            callback (program.id, (float) value, msg.getTimeStamp());
++            return true;
++        }
++
+         const auto controlEvent = toVst3ControlEvent (msg);
+ 
+         if (! controlEvent.has_value())
+             return false;
+ 
+-        const auto controlParamID = midiMapping->getMapping (createSafeChannel (msg.getChannel()),
++        const auto controlParamID = midiMapping->getMapping (eventBus,
++                                                             createSafeChannel (msg.getChannel()),
+                                                              controlEvent->controllerNumber);
+ 
+         if (controlParamID != Steinberg::Vst::kNoParamId)
+@@ -1247,20 +1302,37 @@ private:
                                      StoredMidiMapping* midiMapping,
                                      Callback&& callback)
      {
@@ -26,9 +161,10 @@ index f6d23b6ed4..f4d71ed461 100644
 +                                 : MidiMessage (status, msg.getTimeStamp());
 +        }
  
-         if (sendMappedParameter (msg, midiMapping, std::forward<Callback> (callback)))
+-        if (sendMappedParameter (msg, midiMapping, std::forward<Callback> (callback)))
++        if (sendMappedParameter (msg, eventBus, midiMapping, std::forward<Callback> (callback)))
              return;
-@@ -1255,12 +1272,12 @@ private:
+ 
          const auto kind = midiMapping != nullptr ? EventConversionKind::hostToPlugin
                                                   : EventConversionKind::pluginToHost;
  
@@ -43,3 +179,93 @@ index f6d23b6ed4..f4d71ed461 100644
          maybeEvent->sampleOffset = metadata.samplePosition;
          result.addEvent (*maybeEvent);
      }
+diff --git a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
+index feeb930012..c7f44b7c8b 100644
+--- a/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
++++ b/modules/juce_audio_processors_headless/format_types/juce_VST3PluginFormatImpl.h
+@@ -2251,10 +2251,84 @@ public:
+     {
+         // MIDI mappings will always be updated on the main thread, but we need to ensure
+         // that we're not simultaneously reading them on the audio thread.
++        // [orchestral-daw patch] Every event input bus, and the program-change parameters, are
++        // read first (outside the lock: a plugin can have tens of thousands of parameters)
++        const auto numEventBuses = holder->component != nullptr
++                                     ? jmax (1, (int) holder->component->getBusCount (Vst::kEvent, Vst::kInput)) : 1;
++        auto programParameters = findProgramParameters (numEventBuses);
++
+         const SpinLock::ScopedLockType processLock (processMutex);
+ 
+         if (midiMapping != nullptr)
+-            storedMidiMapping.storeMappings (*midiMapping);
++            storedMidiMapping.storeMappings (*midiMapping, numEventBuses);
++
++        storedMidiMapping.storeProgramParameters (std::move (programParameters));
++    }
++
++    // [orchestral-daw patch] Which parameter takes a program change on each event bus and
++    // channel: the kIsProgramChange parameter of the unit the bus/channel belongs to
++    // (IUnitInfo::getUnitByBus), as VST3 hosts do. Plugins that don't say which unit, but
++    // have one program parameter per bus and channel (Vienna Ensemble Pro: 16 ports x 16),
++    // get them in order; a plugin with a single one gets it on the first bus.
++    std::vector<std::array<StoredMidiMapping::ProgramParameter, 16>> findProgramParameters (int numEventBuses) const
++    {
++        std::vector<std::array<StoredMidiMapping::ProgramParameter, 16>> table ((size_t) numEventBuses);
++
++        if (editController == nullptr)
++            return table;
++
++        struct Candidate { Vst::ParamID id; Vst::UnitID unit; int32 stepCount; };
++        std::vector<Candidate> candidates;
++        const auto count = editController->getParameterCount();
++
++        for (int32 i = 0; i < count; ++i)
++        {
++            Vst::ParameterInfo parameterInfo{};
++
++            if (editController->getParameterInfo (i, parameterInfo) == kResultOk
++                 && (parameterInfo.flags & Vst::ParameterInfo::kIsProgramChange) != 0)
++                candidates.push_back ({ parameterInfo.id, parameterInfo.unitId,
++                                        parameterInfo.stepCount > 0 ? parameterInfo.stepCount : 127 });
++        }
++
++        if (candidates.empty())
++            return table;
++
++        auto assigned = false;
++
++        if (unitInfo != nullptr)
++            for (int bus = 0; bus < numEventBuses; ++bus)
++                for (int channel = 0; channel < 16; ++channel)
++                {
++                    Vst::UnitID unit{};
++
++                    if (unitInfo->getUnitByBus (Vst::kEvent, Vst::kInput, bus, channel, unit) != kResultOk)
++                        continue;
++
++                    for (auto& c : candidates)
++                        if (c.unit == unit)
++                        {
++                            table[(size_t) bus][(size_t) channel] = { c.id, c.stepCount };
++                            assigned = true;
++                            break;
++                        }
++                }
++
++        if (assigned)
++            return table;
++
++        if ((int) candidates.size() == numEventBuses * 16)
++        {
++            for (size_t i = 0; i < candidates.size(); ++i)
++                table[i / 16][i % 16] = { candidates[i].id, candidates[i].stepCount };
++        }
++        else if (candidates.size() == 1)
++        {
++            for (auto& slot : table.front())
++                slot = { candidates.front().id, candidates.front().stepCount };
++        }
++
++        return table;
+     }
+ 
+     //==============================================================================
