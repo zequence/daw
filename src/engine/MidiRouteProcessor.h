@@ -90,6 +90,11 @@ public:
         {
             for (const auto metadata : midi)
             {
+                // System real-time (MIDI clock, start/stop, active sensing...) from a live input
+                // device is not for the instrument
+                if (metadata.numBytes == 1 && metadata.data[0] >= 0xf8)
+                    continue;
+
                 auto message = metadata.getMessage();
 
                 if (message.getChannel() > 0)

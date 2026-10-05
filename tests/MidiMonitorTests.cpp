@@ -42,6 +42,19 @@ public:
             }
         }
 
+        beginTest ("MIDI clock and other real-time messages don't reach the instrument");
+        {
+            MidiRouteProcessor route (1);
+            juce::AudioBuffer<float> audio (2, 64);
+            juce::MidiBuffer midi;
+            midi.addEvent (juce::MidiMessage::midiClock(), 0);
+            midi.addEvent (juce::MidiMessage::midiStart(), 1);
+            midi.addEvent (juce::MidiMessage::noteOn (1, 60, (juce::uint8) 90), 2);
+            route.processBlock (audio, midi);
+            expectEquals (midi.getNumEvents(), 1);
+            expect ((*midi.begin()).getMessage().isNoteOn());
+        }
+
         beginTest ("a full monitor drops, it never blocks the audio thread");
         {
             MidiMonitor monitor;
