@@ -2,12 +2,13 @@
 
 #include "../model/ArticulationMenu.h"
 #include "ThemedLookAndFeel.h"
+#include "Smufl.h"
 
 // The MIDI editor's articulation chooser: one column per group, side by side in map order
 // (Color | Main | Legato | Release | Tempo), each showing what the menu rules offer for the
 // current choice (model/ArticulationMenu.h). Inside a column every articulation is a row of
-// sub-columns - its symbol (when the group has any), name and description - each as wide as its
-// widest content. Choosing doesn't close it: the columns follow the new choice - items appear,
+// sub-columns - its symbol (a SMuFL glyph or text, ui/Smufl.h), name and description - each as wide
+// as its widest content. Choosing doesn't close it: the columns follow the new choice - items appear,
 // disappear, get ticked. Shown in a CallOutBox; closes on a click outside it.
 class ArticulationPanel final : public juce::Component,
                                 private juce::Timer
@@ -28,7 +29,7 @@ public:
     }
 
 private:
-    static constexpr int rowHeight = 22, headerHeight = 22, gap = 8, cellPad = 6, subGap = 10;
+    static constexpr int rowHeight = 24, headerHeight = 22, gap = 8, cellPad = 6, subGap = 10, minSymbolWidth = 18;
 
     static juce::Font nameFont()          { return juce::FontOptions (13.0f); }
     static juce::Font descriptionFont()   { return juce::FontOptions (12.0f); }
@@ -71,13 +72,9 @@ private:
             const auto alpha = isEnabled() ? 1.0f : 0.35f;
             auto x = cellPad;
 
-            if (symbolWidth > 0)
-            {
-                g.setColour (juce::Colours::white.withAlpha (0.8f * alpha));
-                g.setFont (nameFont());
-                g.drawText (symbol, x, 0, symbolWidth, getHeight(), juce::Justification::centredLeft, false);
-                x += symbolWidth + subGap;
-            }
+            g.setColour (juce::Colours::white.withAlpha (0.9f * alpha));
+            smufl::draw (g, symbol, { x, 0, symbolWidth, getHeight() }, 13.0f, juce::Justification::centred);
+            x += symbolWidth + subGap;
 
             g.setColour (juce::Colours::white.withAlpha (0.92f * alpha));
             g.setFont (nameFont());
@@ -139,7 +136,7 @@ private:
         for (auto& sections : columns)
         {
             // one set of sub-column widths for the whole column
-            int symbolWidth = 0, nameWidth = 0, descriptionWidth = 0;
+            int symbolWidth = minSymbolWidth, nameWidth = 0, descriptionWidth = 0;
 
             for (auto& section : sections)
             {
@@ -147,8 +144,7 @@ private:
 
                 for (auto* item : section.members)
                 {
-                    if (item->symbol.isNotEmpty())
-                        symbolWidth = juce::jmax (symbolWidth, widthOf (item->symbol, nameFont()));
+                    symbolWidth = juce::jmax (symbolWidth, smufl::width (item->symbol, 13.0f));
 
                     nameWidth = juce::jmax (nameWidth, widthOf (item->name, nameFont()));
 
@@ -157,7 +153,7 @@ private:
                 }
             }
 
-            const auto columnWidth = cellPad + (symbolWidth > 0 ? symbolWidth + subGap : 0) + nameWidth
+            const auto columnWidth = cellPad + symbolWidth + subGap + nameWidth
                                      + (descriptionWidth > 0 ? subGap + descriptionWidth : 0) + cellPad;
             auto y = gap;
 

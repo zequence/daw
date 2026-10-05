@@ -4,65 +4,65 @@
     <ARTICULATION name="Regular" symbol="" description="Regular (program 113)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Main" name="Long"/>
     </ARTICULATION>
-    <ARTICULATION name="Con sordino" symbol="" description="Con sordino (program 114)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Con sordino" symbol="stringsMuteOn" description="Con sordino (program 114)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Main" name="Long"/>
     </ARTICULATION>
     <ARTICULATION name="Flautando" symbol="" description="Flautando (program 115)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Main" name="Long"/>
     </ARTICULATION>
-    <ARTICULATION name="Ponticello" symbol="" description="Ponticello (program 116)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Ponticello" symbol="stringsBowBehindBridge" description="Ponticello (program 116)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Main" name="Long"/>
     </ARTICULATION>
   </GROUP>
   <GROUP name="Main" description="The articulation.">
-    <ARTICULATION name="Long" symbol="" description="Long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Long" symbol="noteWhole" description="Long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Cresc." symbol="" description="Crescendo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Cresc." symbol="dynamicCrescendoHairpin" description="Crescendo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Length" name="Short"/>
     </ARTICULATION>
-    <ARTICULATION name="Dim." symbol="" description="Diminuendo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Dim." symbol="dynamicDiminuendoHairpin" description="Diminuendo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Length" name="Short"/>
     </ARTICULATION>
-    <ARTICULATION name="Swell" symbol="" description="Swell" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Swell" symbol="dynamicMessaDiVoce" description="Swell" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Portato long" symbol="" description="Portato long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Portato long" symbol="articTenutoAbove" description="Portato long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Portato" symbol="" description="Portato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Portato" symbol="articTenutoStaccatoAbove" description="Portato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Detache soft" symbol="" description="Detache soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Detache soft" symbol="articSoftAccentAbove" description="Detache soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Martele" symbol="" description="Martele" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Martele" symbol="articAccentAbove" description="Martele" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Staccato" symbol="" description="Staccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Staccato" symbol="articStaccatoAbove" description="Staccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Staccato hard" symbol="" description="Staccato hard" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Staccato hard" symbol="articAccentStaccatoAbove" description="Staccato hard" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Spiccato" symbol="" description="Spiccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Spiccato" symbol="articStaccatissimoAbove" description="Spiccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Spiccato tight" symbol="" description="Spiccato tight" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Spiccato tight" symbol="articStaccatissimoWedgeAbove" description="Spiccato tight" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Saltando" symbol="" description="Saltando" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Saltando" symbol="stringsJeteAbove" description="Saltando" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Ricochet" symbol="" description="Ricochet" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Ricochet" symbol="stringsJeteAbove" description="Ricochet" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Amount" name="a1"/>
     </ARTICULATION>
-    <ARTICULATION name="Rep." symbol="" description="Repetitions" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Rep." symbol="repeat1Bar" description="Repetitions" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Tempo" name="120"/>
     </ARTICULATION>
-    <ARTICULATION name="Tremolo / Flutter" symbol="" description="Tremolo / Flutter" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Tremolo / Flutter" symbol="tremolo3" description="Tremolo / Flutter" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Tremolo long XF" symbol="" description="Tremolo long crossfade" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Tremolo long XF" symbol="unmeasuredTremolo" description="Tremolo long crossfade" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Trill" symbol="" description="Trill" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Trill" symbol="ornamentTrill" description="Trill" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Interval" name="Half-tone"/>
     </ARTICULATION>
     <ARTICULATION name="Pizz." symbol="" description="Pizzicato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Snap pizz." symbol="" description="Snap pizzicato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Snap pizz." symbol="pluckedSnapPizzicatoAbove" description="Snap pizzicato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
     <ARTICULATION name="Col legno" symbol="" description="Col legno" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Harmonics" symbol="" description="Harmonics" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Harmonics" symbol="stringsHarmonic" description="Harmonics" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Harmonics" name="Long"/>
     </ARTICULATION>
   </GROUP>
@@ -109,7 +109,7 @@
     </ARTICULATION>
     <ARTICULATION name="Slur" symbol="" description="Legato type: slur" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Portamento" symbol="" description="Legato type: portamento" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Portamento" symbol="glissandoUp" description="Legato type: portamento" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
   </GROUP>
   <GROUP name="Release" description="The release sample (none = normal).">

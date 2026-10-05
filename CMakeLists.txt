@@ -57,8 +57,16 @@ target_compile_definitions(OrchestralDAW PRIVATE
     JUCE_APPLICATION_NAME_STRING="$<TARGET_PROPERTY:OrchestralDAW,JUCE_PRODUCT_NAME>"
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:OrchestralDAW,JUCE_VERSION>")
 
+# Bravura, the SMuFL reference music font (SIL Open Font License 1.1, resources/fonts/Bravura-OFL.txt):
+# articulation symbols in the MIDI editor and the expression map editor
+juce_add_binary_data(OrchestralDAWData
+    HEADER_NAME AppBinaryData.h
+    NAMESPACE AppBinaryData
+    SOURCES resources/fonts/Bravura.otf)
+
 target_link_libraries(OrchestralDAW
     PRIVATE
+        OrchestralDAWData
         juce::juce_audio_utils
         juce::juce_audio_processors
     PUBLIC
@@ -115,6 +123,7 @@ target_sources(OrchestralDAWTests PRIVATE
     tests/ExpressionMapTests.cpp
     tests/ExpressionMapSlotTests.cpp
     tests/NoteNamesTests.cpp
+    tests/SmuflTests.cpp
     tests/ExpressionMapEngineTests.cpp
     tests/ExpressionMapCommandTests.cpp
     tests/ExpressionMapLibraryTests.cpp
@@ -144,6 +153,7 @@ target_link_libraries(OrchestralDAWTests
     PRIVATE
         juce::juce_audio_utils
         juce::juce_audio_processors
+        OrchestralDAWData
     PUBLIC
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags)

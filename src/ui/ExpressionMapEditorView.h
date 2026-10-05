@@ -5,6 +5,7 @@
 #include "ThemedLookAndFeel.h"
 #include "../model/NoteNames.h"
 #include "ColorPalette.h"
+#include "Smufl.h"
 
 // Content view: create and edit expression maps (MILESTONES.md "Articulation / expression maps").
 //
@@ -1222,9 +1223,68 @@ private:
         });
         addText ("Symbol", articulation->symbol, [this] (const juce::String& text)
         {
-            if (auto* a = currentArticulation()) { a->symbol = text; commit(); }
+            if (auto* a = currentArticulation()) { a->symbol = text.trim(); commit(); rebuildDetailsSoon(); }
             return true;
         });
+
+        // A SMuFL glyph (drawn with Bravura), or the text typed above
+        {
+            struct Preview final : juce::Component
+            {
+                juce::String symbol;
+
+                void paint (juce::Graphics& g) override
+                {
+                    g.fillAll (juce::Colours::black.withAlpha (0.25f));
+                    g.setColour (juce::Colours::white);
+
+                    if (symbol.isEmpty())
+                    {
+                        g.setColour (juce::Colours::grey);
+                        g.setFont (juce::FontOptions (12.0f));
+                        g.drawText ("no symbol", getLocalBounds().reduced (6, 0), juce::Justification::centredLeft);
+                    }
+                    else
+                    {
+                        smufl::draw (g, symbol, getLocalBounds().reduced (8, 0), 14.0f);
+                    }
+                }
+            };
+
+            auto* preview = own<Preview>();
+            preview->symbol = articulation->symbol;
+
+            auto* pick = own<juce::TextButton> ("Glyph...");
+            pick->setTooltip ("Choose a music symbol (SMuFL, the Bravura font); or type a short text in Symbol");
+            pick->onClick = [this, pick]
+            {
+                juce::PopupMenu menu;
+                std::map<juce::String, juce::PopupMenu> byCategory;
+                juce::StringArray order;
+
+                for (auto& glyph : smufl::glyphs())
+                {
+                    order.addIfNotAlreadyThere (glyph.category);
+                    byCategory[glyph.category].addItem (juce::String (glyph.description) + "   (" + glyph.name + ")",
+                                                        [this, name = juce::String (glyph.name)]
+                                                        {
+                                                            if (auto* a = currentArticulation()) { a->symbol = name; commit(); rebuildDetailsSoon(); }
+                                                        });
+                }
+
+                for (auto& category : order)
+                    menu.addSubMenu (category, byCategory[category]);
+
+                menu.addSeparator();
+                menu.addItem ("No symbol", [this]
+                {
+                    if (auto* a = currentArticulation()) { a->symbol = {}; commit(); rebuildDetailsSoon(); }
+                });
+                menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (pick));
+            };
+
+            rows.push_back ({ preview, pick, 30, 100 });
+        }
         addText ("Description", articulation->description, [this] (const juce::String& text)
         {
             if (auto* a = currentArticulation()) { a->description = text; commit(); }

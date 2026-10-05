@@ -4,6 +4,7 @@
 #include "../model/ArticulationMenu.h"
 #include "../model/NoteNames.h"
 #include "ArticulationPanel.h"
+#include "Smufl.h"
 #include "../api/CommandDispatcher.h"
 
 namespace
@@ -1326,10 +1327,26 @@ void PianoRollView::paint (juce::Graphics& g)
 
                     if (rect.getWidth() >= 12)
                     {
-                        g.setColour (juce::Colours::white.withAlpha (implicit ? 0.5f : 0.95f));
-                        g.setFont (juce::FontOptions (juce::jmin (11.0f, (float) rect.getHeight() - 2.0f)));
-                        g.drawText (articulations::symbols (*articulationMap, shown), rect.reduced (3, 0),
-                                    juce::Justification::centredLeft, true);
+                        // Symbols (SMuFL glyphs or text); a map without any shows the names' starts
+                        const auto parts = articulations::symbolParts (*articulationMap, shown);
+                        const auto textHeight = juce::jmin (11.0f, (float) rect.getHeight() - 2.0f);
+                        g.setColour ((slotColours ? juce::Colours::black : juce::Colours::white).withAlpha (implicit ? 0.5f : 0.9f));
+                        const juce::Graphics::ScopedSaveState clip (g);
+                        g.reduceClipRegion (rect.reduced (2, 0));
+
+                        if (parts.isEmpty())
+                        {
+                            g.setFont (juce::FontOptions (textHeight));
+                            g.drawText (articulations::symbols (*articulationMap, shown), rect.reduced (3, 0),
+                                        juce::Justification::centredLeft, true);
+                        }
+                        else
+                        {
+                            auto area = rect.reduced (3, 0);
+
+                            for (auto& part : parts)
+                                area.removeFromLeft (smufl::draw (g, part, area, textHeight) + 3);
+                        }
                     }
 
                     if (! articulations::resolves (*articulationMap, shown))

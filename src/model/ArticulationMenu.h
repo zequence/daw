@@ -101,6 +101,29 @@ namespace articulations
         return text;
     }
 
+    // The symbols of a choice one by one (the root's, then the modifiers'), only those that have
+    // one - each a SMuFL glyph name or a text (ui/Smufl.h draws both)
+    inline juce::StringArray symbolParts (const ExpressionMap& map, const Selection& selection)
+    {
+        juce::StringArray parts;
+
+        const auto add = [&parts] (const ExpressionMap::Group* group, const juce::String& name)
+        {
+            if (group != nullptr)
+                if (const auto* articulation = ExpressionMap::findArticulation (*group, name))
+                    if (articulation->symbol.trim().isNotEmpty())
+                        parts.add (articulation->symbol.trim());
+        };
+
+        if (selection.root.trim().isNotEmpty())
+            add (map.rootGroup(), selection.root);
+
+        for (auto& [groupName, name] : selection.modifiers)
+            add (map.findGroup (groupName), name);
+
+        return parts;
+    }
+
     //==========================================================================
     // The menu. Roots are always all there and always available; a modifier
     // group shows only the modifiers that apply to the root, and an item is
