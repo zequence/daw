@@ -4,6 +4,7 @@
 #include "../integrations/VeproState.h"
 #include "../integrations/VeproServer.h"
 #include "ColorPalette.h"
+#include "EditorSettings.h"
 #include "ThemeEditor.h"
 
 // Full-window settings page (replaces the whole UI; close with X or ESC).
@@ -30,7 +31,7 @@ public:
         closeButton.onClick = [this] { if (onClose) onClose(); };
         addAndMakeVisible (closeButton);
 
-        categories.names = { "Audio & MIDI", "Plugins", "Tracks", "Agents (MCP)", "Integrations",
+        categories.names = { "Audio & MIDI", "Plugins", "Tracks", "Editor", "Agents (MCP)", "Integrations",
                              "Theming", "Key commands" };
         categories.onSelect = [this] (int index) { setCategory (index); };
         addAndMakeVisible (categories);
@@ -70,6 +71,37 @@ public:
         autoRecordToggle.onClick = [this]
         {
             engine.getSettingsFile().setValue (autoRecordOnSelectKey, autoRecordToggle.getToggleState());
+            engine.getSettingsFile().saveIfNeeded();
+        };
+
+        // --- Editor > Midi ---
+        editorMidiHeading.setText ("Midi", juce::dontSendNotification);
+        editorMidiHeading.setFont (juce::FontOptions (15.0f, juce::Font::bold));
+        editorMidiHeading.setColour (juce::Label::textColourId, juce::Colours::white);
+        page.addAndMakeVisible (editorMidiHeading);
+
+        dropLabel.setText ("When choosing another root articulation would drop modifiers that no longer apply:",
+                           juce::dontSendNotification);
+        dropLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
+        page.addAndMakeVisible (dropLabel);
+
+        dropBox.addItem ("Ask first", 1);
+        dropBox.addItem ("Drop automatically", 2);
+        dropBox.setSelectedId (editorSettings::askBeforeDropping (settings) ? 1 : 2, juce::dontSendNotification);
+        dropBox.setWantsKeyboardFocus (false);
+        dropBox.onChange = [this]
+        {
+            engine.getSettingsFile().setValue (editorSettings::askBeforeDroppingKey, dropBox.getSelectedId() == 1);
+            engine.getSettingsFile().saveIfNeeded();
+        };
+        page.addAndMakeVisible (dropBox);
+
+        defaultRootToggle.setToggleState (editorSettings::firstRootIsDefault (settings), juce::dontSendNotification);
+        defaultRootToggle.setTooltip ("A note with no root articulation then behaves as if the expression map's first root "
+                                      "articulation were chosen. Nothing is written to the note.");
+        defaultRootToggle.onClick = [this]
+        {
+            engine.getSettingsFile().setValue (editorSettings::firstRootIsDefaultKey, defaultRootToggle.getToggleState());
             engine.getSettingsFile().saveIfNeeded();
         };
 
@@ -156,7 +188,7 @@ public:
         page.addChildComponent (themeEditor);
 
         for (auto* c : std::initializer_list<juce::Component*> { &scanButton, &retryButton, &rescanButton,
-                                                                 &onTopToggle, &autoRecordToggle, &mcpToggle })
+                                                                 &onTopToggle, &autoRecordToggle, &mcpToggle, &defaultRootToggle })
         {
             c->setWantsKeyboardFocus (false);
             page.addAndMakeVisible (c);
@@ -198,7 +230,7 @@ public:
     }
 
 private:
-    enum Category { audioMidi = 0, plugins, tracks, agents, integrations, theming, keyCommands };
+    enum Category { audioMidi = 0, plugins, tracks, editor, agents, integrations, theming, keyCommands };
 
     void setCategory (int index)
     {
@@ -223,6 +255,9 @@ private:
             c->setVisible (category == plugins);
 
         autoRecordToggle.setVisible (category == tracks);
+
+        for (auto* c : std::initializer_list<juce::Component*> { &editorMidiHeading, &dropLabel, &dropBox, &defaultRootToggle })
+            c->setVisible (category == editor);
 
         for (auto* c : std::initializer_list<juce::Component*> { &mcpToggle, &mcpStatus, &mcpRegisterHint })
             c->setVisible (category == agents);
@@ -254,6 +289,17 @@ private:
 
             case tracks:
                 autoRecordToggle.setBounds (4, y, 360, 24);
+                y += 32;
+                break;
+
+            case editor:
+                editorMidiHeading.setBounds (4, y, 200, 24);
+                y += 30;
+                dropLabel.setBounds (4, y, juce::jmin (width - 8, 640), 22);
+                y += 26;
+                dropBox.setBounds (4, y, 200, 24);
+                y += 36;
+                defaultRootToggle.setBounds (4, y, juce::jmin (width - 8, 640), 24);
                 y += 32;
                 break;
 
@@ -377,6 +423,9 @@ private:
                      rescanButton { "Rescan everything" };
     juce::ToggleButton onTopToggle { "Plugin windows stay on top" };
     juce::ToggleButton autoRecordToggle { "Arm track on select (auto-record)" };
+    juce::Label editorMidiHeading, dropLabel;
+    juce::ComboBox dropBox;
+    juce::ToggleButton defaultRootToggle { "Use the first root articulation as the default (notes with no articulation behave as if it were chosen)" };
     juce::ToggleButton mcpToggle { "Run the MCP server for AI agents (starts with the app)" };
     juce::Label mcpStatus;
     juce::TextEditor mcpRegisterHint;
