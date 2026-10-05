@@ -14,6 +14,17 @@
 // Names are identifiers and compare case-insensitively ("Staccato" and
 // "staccato" are the same name); the typed case is kept for display.
 //
+// SOUND SLOTS (MILESTONES.md "Sound slots"): a map with slots says what every
+// valid combination of articulations sends - each slot is one combination (one
+// root plus at most one modifier per group) with its own outputs, key range and
+// timing offset; nothing is added up. Groups and articulations are then only
+// names for the menu, which follows the slots: groups form a chain in map order,
+// and an articulation is offered when some slot has it together with the choices
+// of the groups before its own. Choosing an articulation fills in its defaults
+// (Rep. -> Tempo 120), so a note's choice is always the combination of a slot.
+// A map without slots still adds up articulation outputs (until every map has
+// slots).
+//
 // A plain value type: edit a copy, share an immutable snapshot (like
 // MidiSequence and TempoMap). Validation checks structure and value ranges and
 // reports every problem as a sentence. It deliberately does NOT restrict how
@@ -48,6 +59,10 @@ struct ExpressionMap
         // Modifier articulations only: the root articulations this works with
         // (names). Empty = every root articulation.
         juce::StringArray appliesTo;
+
+        // Maps with slots: chosen along with this articulation when their group
+        // has nothing chosen yet, as (group, articulation): Rep. -> (Tempo, 120)
+        std::vector<std::pair<juce::String, juce::String>> defaults;
     };
 
     struct Group
@@ -214,6 +229,19 @@ struct ExpressionMap
 
     std::vector<KeyName> keyNames;
 
+    // One valid combination of articulations and what it does (maps with slots)
+    struct Slot
+    {
+        Selection selection;             // the combination: a root plus at most one modifier per group
+        std::vector<Output> outputs;     // sent in series exactly before the note
+        double timingOffsetMs = 0.0;     // < 0 earlier, > 0 later
+        int keyLow = -1, keyHigh = -1;   // playable key range (-1 = unspecified)
+    };
+
+    std::vector<Slot> slots;
+
+    bool hasSlots() const noexcept    { return ! slots.empty(); }
+
     //==========================================================================
     static bool sameName (const juce::String& a, const juce::String& b)
     {
@@ -268,6 +296,155 @@ struct ExpressionMap
                 return true;
 
         return false;
+    }
+
+    //==========================================================================
+    // Sound slots: finding the slot of a choice, and what can still be chosen
+
+    // Does the combination 'whole' contain everything in 'part'? (Same root, and
+    // every modifier of 'part' is in 'whole'.)
+    static bool contains (const Selection& whole, const Selection& part)
+    {
+        if (! sameName (whole.root, part.root))
+            return false;
+
+        for (auto& [groupName, articulationName] : part.modifiers)
+            if (std::none_of (whole.modifiers.begin(), whole.modifiers.end(), [&] (const auto& m)
+                              { return sameName (m.first, groupName) && sameName (m.second, articulationName); }))
+                return false;
+
+        return true;
+    }
+
+    // The slot that is exactly this combination (nullptr: none)
+    const Slot* findSlot (const Selection& selection) const
+    {
+        for (auto& slot : slots)
+            if (slot.selection.modifiers.size() == selection.modifiers.size() && contains (slot.selection, selection))
+                return &slot;
+
+        return nullptr;
+    }
+
+    // Can this (partial) choice still become a slot?
+    bool leadsToSlot (const Selection& selection) const
+    {
+        return std::any_of (slots.begin(), slots.end(), [&] (const Slot& slot) { return contains (slot.selection, selection); });
+    }
+
+    // The modifiers in the map's group order (so equal choices compare equal)
+    Selection canonical (Selection selection) const
+    {
+        std::stable_sort (selection.modifiers.begin(), selection.modifiers.end(),
+                          [this] (const auto& a, const auto& b) { return groupIndex (a.first) < groupIndex (b.first); });
+        return selection;
+    }
+
+    // The choice up to (not including) a group: the root and the modifiers of the
+    // groups before it. What a group offers depends only on this.
+    Selection before (const Selection& selection, size_t groupIndexLimit) const
+    {
+        Selection result;
+
+        if (groupIndexLimit == 0)
+            return result;
+
+        result.root = selection.root;
+
+        for (auto& modifier : selection.modifiers)
+            if (groupIndex (modifier.first) < groupIndexLimit)
+                result.modifiers.push_back (modifier);
+
+        return result;
+    }
+
+    // Adds the defaults of everything chosen to the groups that have nothing
+    // chosen (and the defaults of those defaults), as long as a slot has them
+    Selection withDefaults (Selection selection) const
+    {
+        for (auto changed = true; changed;)
+        {
+            changed = false;
+            std::vector<const Articulation*> chosen;
+
+            if (! groups.empty())
+                chosen.push_back (findArticulation (groups.front(), selection.root));
+
+            for (auto& [groupName, articulationName] : selection.modifiers)
+                chosen.push_back (findArticulation (groupName, articulationName));
+
+            for (auto* articulation : chosen)
+            {
+                if (articulation == nullptr)
+                    continue;
+
+                for (auto& [groupName, articulationName] : articulation->defaults)
+                {
+                    const auto taken = std::any_of (selection.modifiers.begin(), selection.modifiers.end(),
+                                                    [&] (const auto& m) { return sameName (m.first, groupName); });
+                    auto candidate = selection;
+                    candidate.modifiers.emplace_back (groupName, articulationName);
+
+                    if (! taken && leadsToSlot (candidate))
+                    {
+                        selection = canonical (candidate);
+                        changed = true;
+                        break;
+                    }
+                }
+
+                if (changed)
+                    break;
+            }
+        }
+
+        return selection;
+    }
+
+    // What the menu offers for a choice (maps with slots): per modifier group, the
+    // articulations some slot has together with the choices of the groups before
+    // it. Groups with nothing to offer are omitted. Without a root, nothing.
+    struct Offered
+    {
+        const Group* group = nullptr;
+        std::vector<const Articulation*> articulations;
+    };
+
+    std::vector<Offered> offeredModifiers (const Selection& selection) const
+    {
+        std::vector<Offered> result;
+
+        if (selection.root.trim().isEmpty())
+            return result;
+
+        for (size_t g = 1; g < groups.size(); ++g)
+        {
+            Offered offered;
+            offered.group = &groups[g];
+            const auto prefix = before (selection, g);
+
+            for (auto& articulation : groups[g].articulations)
+            {
+                auto candidate = prefix;
+                candidate.modifiers.emplace_back (groups[g].name, articulation.name);
+
+                if (leadsToSlot (candidate))
+                    offered.articulations.push_back (&articulation);
+            }
+
+            if (! offered.articulations.empty())
+                result.push_back (std::move (offered));
+        }
+
+        return result;
+    }
+
+    // Is this root used by any slot?
+    bool rootHasSlots (const juce::String& rootName) const
+    {
+        Selection selection;
+        selection.root = rootName;
+        return leadsToSlot (selection);
     }
 
     //==========================================================================
@@ -358,6 +535,9 @@ struct ExpressionMap
                                   + "' and '" + keyName.name + "')");
         }
 
+        if (hasSlots())
+            validateSlots (problems);
+
         return problems;
     }
 
@@ -387,6 +567,11 @@ struct ExpressionMap
                     if (output.type == Output::Type::keyswitch && output.number == key && ! switched.contains (articulation.name))
                         switched.add (articulation.name);
 
+        for (auto& slot : slots)
+            for (auto& output : slot.outputs)
+                if (output.type == Output::Type::keyswitch && output.number == key && ! switched.contains (labelOf (slot.selection)))
+                    switched.add (labelOf (slot.selection));
+
         if (instruction != nullptr)
             *instruction = switched.isEmpty() ? juce::String() : "Keyswitch for " + switched.joinIntoString (", ");
 
@@ -402,7 +587,26 @@ struct ExpressionMap
                     if (output.type == Output::Type::keyswitch && output.number == key)
                         return true;
 
+        for (auto& slot : slots)
+            for (auto& output : slot.outputs)
+                if (output.type == Output::Type::keyswitch && output.number == key)
+                    return true;
+
         return false;
+    }
+
+    // "Long notes + Legato + Soft"
+    static juce::String labelOf (const Selection& selection)
+    {
+        juce::StringArray parts;
+
+        if (selection.root.trim().isNotEmpty())
+            parts.add (selection.root);
+
+        for (auto& modifier : selection.modifiers)
+            parts.add (modifier.second);
+
+        return parts.joinIntoString (" + ");
     }
 
     // The playable key range of a choice: the intersection of the ranges that the
@@ -412,6 +616,19 @@ struct ExpressionMap
     {
         low = 0;
         high = 127;
+
+        if (hasSlots())
+        {
+            const auto* slot = findSlot (selection);
+
+            if (slot == nullptr || slot->keyLow < 0 || slot->keyHigh < slot->keyLow)
+                return false;
+
+            low = slot->keyLow;
+            high = slot->keyHigh;
+            return true;
+        }
+
         auto defined = false;
 
         const auto narrow = [&] (const Articulation* articulation)
@@ -469,6 +686,21 @@ struct ExpressionMap
 
                 a->setProperty ("appliesTo", appliesTo);
 
+                if (! articulation.defaults.empty())
+                {
+                    juce::Array<juce::var> defaultList;
+
+                    for (auto& [groupName, articulationName] : articulation.defaults)
+                    {
+                        auto d = new juce::DynamicObject();
+                        d->setProperty ("group", groupName);
+                        d->setProperty ("name", articulationName);
+                        defaultList.add (juce::var (d));
+                    }
+
+                    a->setProperty ("defaults", defaultList);
+                }
+
                 juce::Array<juce::var> outputList;
 
                 for (auto& output : articulation.outputs)
@@ -504,6 +736,25 @@ struct ExpressionMap
         }
 
         map->setProperty ("keyNames", keyList);
+
+        if (hasSlots())
+        {
+            juce::Array<juce::var> slotList;
+
+            for (auto& slot : slots)
+            {
+                auto o = new juce::DynamicObject();
+                o->setProperty ("articulation", slot.selection.toVar());
+                o->setProperty ("outputs", outputsToVar (slot.outputs));
+                o->setProperty ("timingOffsetMs", slot.timingOffsetMs);
+                o->setProperty ("keyLow", slot.keyLow);
+                o->setProperty ("keyHigh", slot.keyHigh);
+                slotList.add (juce::var (o));
+            }
+
+            map->setProperty ("slots", slotList);
+        }
+
         return juce::var (map);
     }
 
@@ -573,6 +824,20 @@ struct ExpressionMap
                         for (auto& root : *roots)
                             articulation.appliesTo.add (root.toString());
 
+                    const auto defaultList = a.getProperty ("defaults", {});
+
+                    if (! defaultList.isVoid() && ! defaultList.isArray())
+                        return label + ": 'defaults' must be an array of {group, name}";
+
+                    if (auto* defaults = defaultList.getArray())
+                        for (auto& d : *defaults)
+                        {
+                            if (! d.isObject() || ! d.hasProperty ("group") || ! d.hasProperty ("name"))
+                                return label + ": every default needs a group and a name: {group, name}";
+
+                            articulation.defaults.emplace_back (d.getProperty ("group", {}).toString(), d.getProperty ("name", {}).toString());
+                        }
+
                     const auto outputList = a.getProperty ("outputs", {});
 
                     if (! outputList.isVoid() && ! outputList.isArray())
@@ -619,6 +884,36 @@ struct ExpressionMap
                                           k.getProperty ("instruction", {}).toString() });
             }
 
+        const auto slotList = json.getProperty ("slots", {});
+
+        if (! slotList.isVoid() && ! slotList.isArray())
+            return "'slots' must be an array of {articulation:{root, modifiers}, outputs, timingOffsetMs?, keyLow?, keyHigh?}";
+
+        int slotNumber = 0;
+
+        if (auto* list = slotList.getArray())
+            for (auto& o : *list)
+            {
+                ++slotNumber;
+                const auto label = "slot " + juce::String (slotNumber);
+
+                if (! o.isObject())
+                    return label + " must be an object {articulation, outputs, ...}";
+
+                Slot slot;
+
+                if (const auto error = Selection::fromVar (o.getProperty ("articulation", {}), slot.selection); error.isNotEmpty())
+                    return label + ": " + error;
+
+                if (const auto error = outputsFromVar (o.getProperty ("outputs", {}), label, slot.outputs); error.isNotEmpty())
+                    return error;
+
+                slot.timingOffsetMs = (double) o.getProperty ("timingOffsetMs", 0.0);
+                slot.keyLow = (int) o.getProperty ("keyLow", -1);
+                slot.keyHigh = (int) o.getProperty ("keyHigh", -1);
+                map.slots.push_back (std::move (slot));
+            }
+
         out = std::move (map);
         return {};
     }
@@ -645,7 +940,18 @@ struct ExpressionMap
             if (&other != group && sameName (other.name, clean))
                 return "there is already a group '" + other.name + "' in map '" + name + "' (names ignore case)";
 
+        const auto oldName = group->name;
         group->name = clean;
+
+        for (auto& slot : slots)
+            slot.selection.renameModifierGroup (oldName, clean);
+
+        for (auto& g : groups)
+            for (auto& articulation : g.articulations)
+                for (auto& d : articulation.defaults)
+                    if (sameName (d.first, oldName))
+                        d.first = clean;
+
         return {};
     }
 
@@ -682,6 +988,20 @@ struct ExpressionMap
                     for (auto& applies : modifier.appliesTo)
                         if (sameName (applies, oldName))
                             applies = clean;
+
+        for (auto& slot : slots)   // the slots and the defaults that name it
+        {
+            if (group == &groups.front())
+                slot.selection.renameRoot (oldName, clean);
+            else
+                slot.selection.renameModifier (group->name, oldName, clean);
+        }
+
+        for (auto& g : groups)
+            for (auto& articulation : g.articulations)
+                for (auto& d : articulation.defaults)
+                    if (sameName (d.first, group->name) && sameName (d.second, oldName))
+                        d.second = clean;
 
         return {};
     }
@@ -729,6 +1049,8 @@ struct ExpressionMap
             return refuse ("no articulation '" + articulationName + "' in group '" + group->name
                                                    + "' (it has: " + names (*group) + ")");
 
+        if (hasSlots())
+            return chooseInSlots (current, *group, *articulation);
 
         if (group == &groups.front())
         {
@@ -835,6 +1157,9 @@ struct ExpressionMap
             return problems;
         }
 
+        if (hasSlots() && ! selection.isEmpty() && findSlot (selection) == nullptr)
+            problems.add ("map '" + name + "' has no sound slot for '" + labelOf (selection) + "'");
+
         const auto* root = selection.root.trim().isEmpty() ? nullptr : findArticulation (groups.front(), selection.root);
 
         if (selection.root.trim().isEmpty() && ! selection.modifiers.empty())
@@ -908,6 +1233,13 @@ struct ExpressionMap
                 for (auto& root : articulation.appliesTo)
                     a->createNewChildElement ("APPLIESTO")->setAttribute ("root", root);
 
+                for (auto& [groupName, articulationName] : articulation.defaults)
+                {
+                    auto* d = a->createNewChildElement ("DEFAULT");
+                    d->setAttribute ("group", groupName);
+                    d->setAttribute ("name", articulationName);
+                }
+
                 for (auto& output : articulation.outputs)
                 {
                     auto* o = a->createNewChildElement ("OUTPUT");
@@ -926,6 +1258,21 @@ struct ExpressionMap
             k->setAttribute ("key", keyName.key);
             k->setAttribute ("name", keyName.name);
             k->setAttribute ("instruction", keyName.instruction);
+        }
+
+        if (hasSlots())
+        {
+            auto* list = xml->createNewChildElement ("SLOTS");
+
+            for (auto& slot : slots)
+            {
+                auto* e = list->createNewChildElement ("SLOT");
+                e->setAttribute ("timingOffsetMs", slot.timingOffsetMs);
+                e->setAttribute ("keyLow", slot.keyLow);
+                e->setAttribute ("keyHigh", slot.keyHigh);
+                e->addChildElement (slot.selection.toXml().release());
+                outputsToXml (*e, slot.outputs);
+            }
         }
 
         return xml;
@@ -956,6 +1303,9 @@ struct ExpressionMap
                 for (auto* applies : a->getChildWithTagNameIterator ("APPLIESTO"))
                     articulation.appliesTo.add (applies->getStringAttribute ("root"));
 
+                for (auto* d : a->getChildWithTagNameIterator ("DEFAULT"))
+                    articulation.defaults.emplace_back (d->getStringAttribute ("group"), d->getStringAttribute ("name"));
+
                 for (auto* o : a->getChildWithTagNameIterator ("OUTPUT"))
                 {
                     Output output;
@@ -978,6 +1328,21 @@ struct ExpressionMap
 
         for (auto* k : xml.getChildWithTagNameIterator ("KEYNAME"))
             map.keyNames.push_back ({ k->getIntAttribute ("key", 0), k->getStringAttribute ("name"), k->getStringAttribute ("instruction") });
+
+        if (auto* list = xml.getChildByName ("SLOTS"))
+            for (auto* e : list->getChildWithTagNameIterator ("SLOT"))
+            {
+                Slot slot;
+                slot.timingOffsetMs = e->getDoubleAttribute ("timingOffsetMs", 0.0);
+                slot.keyLow = e->getIntAttribute ("keyLow", -1);
+                slot.keyHigh = e->getIntAttribute ("keyHigh", -1);
+
+                if (auto* a = e->getChildByName ("ARTICULATION"))
+                    slot.selection = Selection::fromXml (*a);
+
+                slot.outputs = outputsFromXml (*e);
+                map.slots.push_back (std::move (slot));
+            }
 
         return map;
     }
@@ -1009,6 +1374,260 @@ private:
                 return g;
 
         return groups.size();
+    }
+
+    // choose() for maps with slots. A group's articulation is chosen against the
+    // choices before it (root, earlier groups); the later groups' choices are kept
+    // when a slot still has them, else dropped (reported, except a default the old
+    // choice had filled in); then defaults fill the empty groups. The result is
+    // always the combination of a slot.
+    Choice chooseInSlots (const Selection& current, const Group& group, const Articulation& articulation) const
+    {
+        Choice result;
+        result.selection = current;
+        const auto index = groupIndex (group.name);
+        const auto isRoot = index == 0;
+
+        const auto wasDefault = [this, &current] (const std::pair<juce::String, juce::String>& modifier)
+        {
+            std::vector<const Articulation*> chosen { groups.empty() ? nullptr : findArticulation (groups.front(), current.root) };
+
+            for (auto& [g, a] : current.modifiers)
+                chosen.push_back (findArticulation (g, a));
+
+            for (auto* c : chosen)
+                if (c != nullptr)
+                    for (auto& d : c->defaults)
+                        if (sameName (d.first, modifier.first) && sameName (d.second, modifier.second))
+                            return true;
+
+            return false;
+        };
+
+        const auto chosenHere = isRoot ? (sameName (current.root, articulation.name) && current.root.trim().isNotEmpty())
+                                       : std::any_of (current.modifiers.begin(), current.modifiers.end(), [&] (const auto& m)
+                                                      { return sameName (m.first, group.name) && sameName (m.second, articulation.name); });
+
+        if (isRoot && chosenHere)
+        {
+            result.selection = {};   // unselecting the root: nothing is left
+            result.dropped = current.modifiers;
+            return result;
+        }
+
+        if (! isRoot && current.root.trim().isEmpty())
+        {
+            result.error = "modifiers need a root articulation; choose one from '" + groups.front().name + "' first ("
+                           + names (groups.front()) + ")";
+            return result;
+        }
+
+        Selection next;
+
+        if (chosenHere)
+        {
+            next = current;   // toggled off; its defaults (if any) may fill the group again
+            next.modifiers.erase (std::remove_if (next.modifiers.begin(), next.modifiers.end(),
+                                                  [&] (const auto& m) { return sameName (m.first, group.name); }),
+                                  next.modifiers.end());
+        }
+        else
+        {
+            next = before (current, index);
+
+            if (isRoot)
+                next.root = articulation.name;
+            else
+                next.modifiers.emplace_back (group.name, articulation.name);
+
+            if (! leadsToSlot (next))
+            {
+                result.error = "no sound slot has '" + articulation.name + "' (group '" + group.name + "')"
+                               + (isRoot ? juce::String() : " with '" + labelOf (before (current, index)) + "'");
+                return result;
+            }
+
+            for (auto& modifier : current.modifiers)   // the later groups: keep what still fits
+            {
+                if (groupIndex (modifier.first) <= index)
+                    continue;
+
+                auto candidate = next;
+                candidate.modifiers.push_back (modifier);
+
+                if (leadsToSlot (candidate))
+                    next = canonical (candidate);
+                else if (! wasDefault (modifier))
+                    result.dropped.push_back (modifier);
+            }
+        }
+
+        next = withDefaults (canonical (next));
+
+        if (findSlot (next) == nullptr)
+        {
+            result.dropped.clear();
+            result.error = "'" + labelOf (next) + "' is not a sound slot of map '" + name + "'"
+                           + (chosenHere ? juce::String (" ('") + articulation.name + "' can't be unselected here)"
+                                         : juce::String (": choose more, or give the map defaults or a slot for it"));
+            return result;
+        }
+
+        result.selection = next;
+        return result;
+    }
+
+    void validateSlots (juce::StringArray& problems) const
+    {
+        for (size_t s = 0; s < slots.size(); ++s)
+        {
+            auto& slot = slots[s];
+            const auto label = "slot " + juce::String ((int) s + 1) + " ('" + labelOf (slot.selection) + "')";
+
+            if (slot.selection.root.trim().isEmpty() || findArticulation (groups.front(), slot.selection.root) == nullptr)
+                problems.add (label + " needs a root articulation of group '" + groups.front().name + "'");
+
+            juce::StringArray seen;
+
+            for (auto& [groupName, articulationName] : slot.selection.modifiers)
+            {
+                const auto* group = findGroup (groupName);
+
+                if (group == nullptr || group == &groups.front())
+                    problems.add (label + ": '" + groupName + "' is not a modifier group of this map");
+                else if (findArticulation (*group, articulationName) == nullptr)
+                    problems.add (label + ": group '" + group->name + "' has no '" + articulationName + "'");
+
+                if (seen.contains (groupName, true))
+                    problems.add (label + " has two articulations of group '" + groupName + "'");
+
+                seen.add (groupName);
+            }
+
+            for (size_t o = 0; o < slot.outputs.size(); ++o)
+                validateOutput (slot.outputs[o], label + " (output " + juce::String ((int) o + 1) + ")", problems);
+
+            if ((slot.keyLow != -1 || slot.keyHigh != -1)
+                 && (slot.keyLow < 0 || slot.keyHigh > 127 || slot.keyLow > slot.keyHigh))
+                problems.add (label + " has an invalid key range " + juce::String (slot.keyLow) + "-" + juce::String (slot.keyHigh));
+
+            if (std::abs (slot.timingOffsetMs) > 5000.0)
+                problems.add (label + " has a timing offset of " + juce::String (slot.timingOffsetMs) + " ms; the limit is 5000 ms either way");
+
+            for (size_t other = 0; other < s; ++other)
+                if (slots[other].selection.modifiers.size() == slot.selection.modifiers.size()
+                     && contains (slots[other].selection, slot.selection))
+                    problems.add (label + " is the same combination as slot " + juce::String ((int) other + 1));
+        }
+
+        for (size_t g = 0; g < groups.size(); ++g)
+            for (auto& articulation : groups[g].articulations)
+            {
+                const auto label = "'" + articulation.name + "' in group '" + groups[g].name + "'";
+
+                if (! articulation.outputs.empty() || ! articulation.appliesTo.isEmpty())
+                    problems.add (label + " has outputs or an applies-to list; in a map with sound slots they belong to "
+                                  "the slots (and what goes together follows from them)");
+
+                for (auto& [groupName, articulationName] : articulation.defaults)
+                {
+                    const auto* group = findGroup (groupName);
+
+                    if (group == nullptr || group == &groups.front() || group == &groups[g])
+                        problems.add (label + " has a default in '" + groupName + "', which is not another modifier group");
+                    else if (findArticulation (*group, articulationName) == nullptr)
+                        problems.add (label + " has the default '" + articulationName + "', which group '" + group->name + "' doesn't have");
+                }
+
+                if (g == 0)
+                {
+                    Selection alone;
+                    alone.root = articulation.name;
+
+                    if (findSlot (withDefaults (alone)) == nullptr)
+                        problems.add ("choosing the root '" + articulation.name + "' must give a sound slot: add one for it, or "
+                                      "defaults that complete it (now: '" + labelOf (withDefaults (alone)) + "')");
+                }
+            }
+    }
+
+    static juce::var outputsToVar (const std::vector<Output>& outputs)
+    {
+        juce::Array<juce::var> list;
+
+        for (auto& output : outputs)
+        {
+            auto o = new juce::DynamicObject();
+            o->setProperty ("type", typeToString (output.type));
+            o->setProperty ("number", output.number);
+            o->setProperty ("value", output.value);
+            o->setProperty ("held", output.held);
+            o->setProperty ("bank", output.bank);
+            list.add (juce::var (o));
+        }
+
+        return list;
+    }
+
+    static juce::String outputsFromVar (const juce::var& json, const juce::String& label, std::vector<Output>& out)
+    {
+        if (! json.isVoid() && ! json.isArray())
+            return label + ": 'outputs' must be an array of {type, number, value?, held?, bank?}";
+
+        int number = 0;
+
+        if (auto* list = json.getArray())
+            for (auto& o : *list)
+            {
+                ++number;
+                Output output;
+
+                if (! o.isObject() || ! typeFromString (o.getProperty ("type", {}).toString(), output.type))
+                    return label + ", output " + juce::String (number) + ": 'type' must be one of keyswitch, controller, "
+                           "programChange (got '" + o.getProperty ("type", {}).toString() + "')";
+
+                output.number = (int) o.getProperty ("number", 0);
+                output.value = (int) o.getProperty ("value", 100);
+                output.held = (bool) o.getProperty ("held", false);
+                output.bank = (int) o.getProperty ("bank", -1);
+                out.push_back (output);
+            }
+
+        return {};
+    }
+
+    static void outputsToXml (juce::XmlElement& parent, const std::vector<Output>& outputs)
+    {
+        for (auto& output : outputs)
+        {
+            auto* o = parent.createNewChildElement ("OUTPUT");
+            o->setAttribute ("type", typeToString (output.type));
+            o->setAttribute ("number", output.number);
+            o->setAttribute ("value", output.value);
+            o->setAttribute ("held", output.held);
+            o->setAttribute ("bank", output.bank);
+        }
+    }
+
+    static std::vector<Output> outputsFromXml (const juce::XmlElement& parent)
+    {
+        std::vector<Output> outputs;
+
+        for (auto* o : parent.getChildWithTagNameIterator ("OUTPUT"))
+        {
+            Output output;
+
+            if (! typeFromString (o->getStringAttribute ("type"), output.type))
+                continue;
+
+            output.number = o->getIntAttribute ("number", 0);
+            output.value = o->getIntAttribute ("value", 100);
+            output.held = o->getBoolAttribute ("held", false);
+            output.bank = o->getIntAttribute ("bank", -1);
+            outputs.push_back (output);
+        }
+
+        return outputs;
     }
 
     static const char* typeToString (Output::Type type)

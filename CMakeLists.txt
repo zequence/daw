@@ -113,6 +113,7 @@ target_sources(OrchestralDAWTests PRIVATE
     tests/FolderTests.cpp
     tests/ThemeTests.cpp
     tests/ExpressionMapTests.cpp
+    tests/ExpressionMapSlotTests.cpp
     tests/ExpressionMapEngineTests.cpp
     tests/ExpressionMapCommandTests.cpp
     tests/ExpressionMapLibraryTests.cpp
