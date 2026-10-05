@@ -123,7 +123,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     addAndMakeVisible (auditionToggle);
 
     // Note input: play notes on the MIDI keyboard to write them at the playhead (transport stopped)
-    inputToggle.setTooltip ("Note input: notes played on the MIDI keyboard are written at the playhead with the note length "
+    inputToggle.setTooltip ("Note input (N): notes played on the MIDI keyboard are written at the playhead with the note length "
                             "and articulation chosen here, and the playhead moves on. Notes played together (within "
                             + juce::String ((int) chordWindowMs) + " ms of the first) make a chord. Works while stopped.");
     inputToggle.setClickingTogglesState (true);
@@ -1286,6 +1286,12 @@ void PianoRollView::mouseWheelMove (const juce::MouseEvent& event, const juce::M
 // box's items in order), 0 enters a rest (the playhead moves on by the length)
 bool PianoRollView::noteInputKey (const juce::KeyPress& key)
 {
+    if (key == juce::KeyPress ('n'))   // toggles note input
+    {
+        inputToggle.setToggleState (! inputToggle.getToggleState(), juce::sendNotificationSync);
+        return true;
+    }
+
     if (! inputToggle.getToggleState() || key.getModifiers().isCtrlDown() || key.getModifiers().isAltDown()
          || key.getModifiers().isCommandDown())
         return false;
