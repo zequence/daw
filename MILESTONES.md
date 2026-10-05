@@ -118,13 +118,26 @@ it is heard on the beat.
 - It only changes what is **sent**. The editor keeps drawing notes where they
   are written (on the grid, on the beat); the offset is playback compensation.
 - The note's length is kept (note-off moves with note-on).
-- A negative offset needs **look-ahead** in `MidiSourceProcessor`: the events of
-  the next ~100+ ms must be rendered before the playhead gets there, including
-  across a loop wrap and a locate. A note at the very start with a negative
-  offset has nowhere to go (clamp, or a pre-roll when playback starts).
+- **No look-ahead in the audio thread: the shift is baked in.** There are two
+  sequences per track: the **written** one (what the editor shows, what is saved,
+  what the user edits) and a derived **playback** one that is generated from
+  (written sequence, the instrument's map, the tempo map): notes shifted by
+  their articulation's offset, and the switch events inserted just before each
+  shifted note-on. `MidiSourceProcessor` plays the playback sequence exactly
+  like it plays sequences today (it arrives through `setSequence`, an immutable
+  swap), so a negative offset is just a note sitting earlier in the sequence.
+  - It is regenerated whenever something it depends on changes: notes or their
+    articulations, the map (an offset edited, an articulation added), the
+    track's instrument assignment, the tempo map. It is cheap (one pass over the
+    track), done off the audio thread.
+  - Loop wraps and locates need nothing special - the events are where they are.
+    Switch events are tagged so the existing chase-on-locate can replay the
+    last one when the playhead lands mid-phrase.
+- A note at the very start with a negative offset has nowhere to go (clamp at the
+  start, or start playback with a short pre-roll).
 - Notes shifted by different amounts can overlap or reorder (a shifted legato
-  overlapping the previous note). That is usually the point, but it is new
-  behaviour for the processor's note tracking.
+  overlapping the previous note). That is usually the point, but the playback
+  sequence must keep each note's on/off pair together.
 - Not sure what to call it: "timing offset", "latency compensation" and "delay
   compensation" are candidates; Cubase recently added this to its expression
   maps, so its naming is worth a look when we get there.
@@ -156,7 +169,9 @@ separate kind of output.
   through: one MIDI channel of an instrument plugin (one VE Pro player, one
   Kontakt channel). One plugin hosts many different sounds, so the assignment is
   per instrument channel (`MidiChannelInfo`, next to its name and key range), not
-  per plugin and not per track. Every track playing that instrument uses its map.
+  per plugin and not per track. So the channels of one multi-instrument plugin
+  (Kontakt, VE Pro) each get their own map, and every track playing the same
+  channel shares it.
   - The **maps themselves are project data**: a named collection saved in the
     project (`<EXPRESSIONMAPS>`), referenced by name from the instrument
     channels, so several instruments (1st and 2nd violins) can share one map and
@@ -193,15 +208,17 @@ separate kind of output.
 
 ### Playback
 
-`MidiSourceProcessor` is one per track and already emits controls before
-note-ons and chases state on locate. The track's instrument channel (output
-instrument + port + channel) tells which map applies; it reaches the processor
-as an immutable snapshot, like `setSequence`, and is refreshed when the
-assignment or the map changes. The output goes out whenever the active
-articulation changes from one note to the next, just before the note-on
-(which is itself shifted by the articulation's timing offset). Locating
-mid-song chases the last articulation before the playhead. Live playing uses
-the editor's current articulation (later).
+The processor changes very little. The track's instrument channel (output
+instrument + port + channel) tells which map applies. From the written
+sequence, the map and the tempo map a **playback sequence** is generated (see
+"Timing offset"): notes shifted by their articulation's offset, and the switch
+events (keyswitch, CC, program change) inserted just before each shifted
+note-on whenever the active articulation changes. `MidiSourceProcessor` is one
+per track and already emits controls before note-ons and chases state on
+locate; it gets the playback sequence through `setSequence` and plays it. The
+switch events are tagged so locating mid-song re-sends the last one (a
+keyswitch is not a CC, the existing chase would not know it). Live playing
+uses the editor's current articulation (later).
 
 ### Dynamics, velocity layers and CC sequences
 
@@ -229,7 +246,8 @@ selection. The UI is a client of the same commands.
    maps and assignments). No UI.
 2. Editor: the dropdown, note assignment, symbols on notes, named keys and
    per-articulation key ranges.
-3. Playback: output, timing offsets (with look-ahead), chase on locate.
+3. Playback: the generated playback sequence (switch events and timing
+   offsets), regenerated on change, and the chase of the last switch on locate.
 4. The two configuration views (own milestone below) and the map editor UI.
 5. Library, presets (Spitfire UACC, a generic keyswitch map), Cubase
    `.expressionmap` import (observed format only), Synchron detection, then
@@ -241,7 +259,8 @@ selection. The UI is a client of the same commands.
   the very start of the song (clamp, or pre-roll on playback start).
 - Notes whose articulation doesn't exist in the instrument's map (track moved,
   map changed): keep and show as unresolved (as drafted), or clear them?
-- Does a map ever need to differ per track on the same instrument?
+- Which events does the playback sequence need to keep in sync when the user
+  records or edits live while playing (record mode over a looping region)?
 
 ### Key ranges must follow articulation changes
 
