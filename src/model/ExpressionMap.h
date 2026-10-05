@@ -1,0 +1,282 @@
+#pragma once
+
+#include <juce_core/juce_core.h>
+#include <vector>
+
+// Expression maps (MILESTONES.md "Articulation / expression maps").
+//
+// A map is a named, ordered list of groups. Group 0 is the ROOT group (the
+// main articulations: Staccato, Legato...); every other group holds MODIFIERS
+// (Release, Attack, Mute...). A modifier articulation says which root
+// articulations it works with. A note's articulation is one root plus at most
+// one modifier per group; modifiers only exist together with a root.
+//
+// Names are identifiers and compare case-insensitively ("Staccato" and
+// "staccato" are the same name); the typed case is kept for display.
+//
+// A plain value type: edit a copy, share an immutable snapshot (like
+// MidiSequence and TempoMap). Validation reports every problem as a sentence
+// that names what exists and what clashes.
+struct ExpressionMap
+{
+    // What an articulation sends to the instrument when it becomes active
+    struct Output
+    {
+        enum class Type { keyswitch, controller, programChange };
+
+        Type type = Type::keyswitch;
+        int number = 0;          // keyswitch: key; controller: CC number; programChange: program (all 0..127)
+        int value = 100;         // keyswitch: velocity (1..127); controller: value (0..127); unused for programChange
+        bool held = false;       // keyswitch only: held while the note sounds, instead of tapped
+        int bank = -1;           // programChange only: -1 = none, else 0..16383
+    };
+
+    struct Articulation
+    {
+        juce::String name;           // identifier, unique (ignoring case) within its group
+        juce::String symbol;         // short glyph or text for notes and menus
+        juce::String description;
+        Output output;
+        double timingOffsetMs = 0.0; // when the note is triggered: < 0 earlier, > 0 later (0 = as written)
+        int keyLow = -1, keyHigh = -1;   // optional playable key range (-1 = unspecified)
+
+        // Modifier articulations only: the root articulations this works with
+        // (names). Empty = every root articulation.
+        juce::StringArray appliesTo;
+    };
+
+    struct Group
+    {
+        juce::String name;           // identifier, unique (ignoring case) within the map
+        juce::String description;
+        std::vector<Articulation> articulations;
+    };
+
+    juce::String name;               // identifier of the map
+    juce::String description;
+    std::vector<Group> groups;       // [0] = the root group
+
+    //==========================================================================
+    static bool sameName (const juce::String& a, const juce::String& b)
+    {
+        return a.trim().equalsIgnoreCase (b.trim());
+    }
+
+    const Group* rootGroup() const noexcept     { return groups.empty() ? nullptr : &groups.front(); }
+
+    const Group* findGroup (const juce::String& groupName) const
+    {
+        for (auto& group : groups)
+            if (sameName (group.name, groupName))
+                return &group;
+
+        return nullptr;
+    }
+
+    static const Articulation* findArticulation (const Group& group, const juce::String& articulationName)
+    {
+        for (auto& articulation : group.articulations)
+            if (sameName (articulation.name, articulationName))
+                return &articulation;
+
+        return nullptr;
+    }
+
+    const Articulation* findArticulation (const juce::String& groupName, const juce::String& articulationName) const
+    {
+        if (auto* group = findGroup (groupName))
+            return findArticulation (*group, articulationName);
+
+        return nullptr;
+    }
+
+    // Does this modifier work with the named root articulation?
+    static bool appliesToRoot (const Articulation& modifier, const juce::String& rootName)
+    {
+        if (modifier.appliesTo.isEmpty())
+            return true;
+
+        for (auto& name : modifier.appliesTo)
+            if (sameName (name, rootName))
+                return true;
+
+        return false;
+    }
+
+    //==========================================================================
+    // Every problem with the map, each a sentence (empty = valid)
+    juce::StringArray validate() const
+    {
+        juce::StringArray problems;
+        const auto mapLabel = "map '" + name + "'";
+
+        if (name.trim().isEmpty())
+            problems.add ("a map needs a name");
+
+        if (groups.empty())
+        {
+            problems.add (mapLabel + " has no groups; it needs a root group (the first group)");
+            return problems;
+        }
+
+        for (size_t g = 0; g < groups.size(); ++g)
+        {
+            auto& group = groups[g];
+            const auto groupLabel = (g == 0 ? "root group '" : "group '") + group.name + "'";
+
+            if (group.name.trim().isEmpty())
+                problems.add ("group " + juce::String ((int) g + 1) + " needs a name");
+
+            for (size_t other = 0; other < g; ++other)
+                if (! group.name.trim().isEmpty() && sameName (groups[other].name, group.name))
+                    problems.add ("two groups are named '" + group.name + "' (names ignore case); "
+                                  "group names must be unique within the map");
+
+            for (size_t a = 0; a < group.articulations.size(); ++a)
+            {
+                auto& articulation = group.articulations[a];
+                const auto label = "'" + articulation.name + "' in " + groupLabel;
+
+                if (articulation.name.trim().isEmpty())
+                    problems.add ("articulation " + juce::String ((int) a + 1) + " in " + groupLabel + " needs a name");
+
+                for (size_t other = 0; other < a; ++other)
+                    if (! articulation.name.trim().isEmpty() && sameName (group.articulations[other].name, articulation.name))
+                        problems.add (groupLabel + " has two articulations named '" + articulation.name
+                                      + "' (names ignore case); articulation names must be unique within a group");
+
+                validateOutput (articulation.output, label, problems);
+
+                if (articulation.keyLow != -1 || articulation.keyHigh != -1)
+                    if (articulation.keyLow < 0 || articulation.keyHigh > 127 || articulation.keyLow > articulation.keyHigh)
+                        problems.add (label + " has an invalid key range " + juce::String (articulation.keyLow) + "-"
+                                      + juce::String (articulation.keyHigh) + " (0-127, low <= high, or both unset)");
+
+                if (std::abs (articulation.timingOffsetMs) > 5000.0)
+                    problems.add (label + " has a timing offset of " + juce::String (articulation.timingOffsetMs)
+                                  + " ms; the limit is 5000 ms either way");
+
+                if (g == 0)
+                {
+                    if (! articulation.appliesTo.isEmpty())
+                        problems.add (label + " is a root articulation and can't have an 'applies to' list "
+                                      "(only modifiers do)");
+                }
+                else
+                {
+                    for (auto& rootName : articulation.appliesTo)
+                        if (findArticulation (groups.front(), rootName) == nullptr)
+                            problems.add (label + " applies to '" + rootName + "', which is not a root articulation "
+                                          "(the root group has: " + names (groups.front()) + ")");
+                }
+            }
+        }
+
+        addConflicts (problems);
+        return problems;
+    }
+
+    bool isValid() const    { return validate().isEmpty(); }
+
+private:
+    static juce::String names (const Group& group)
+    {
+        juce::StringArray list;
+
+        for (auto& articulation : group.articulations)
+            list.add (articulation.name);
+
+        return list.isEmpty() ? "no articulations" : list.joinIntoString (", ");
+    }
+
+    static void validateOutput (const Output& output, const juce::String& label, juce::StringArray& problems)
+    {
+        const auto in = [] (int v, int lo, int hi) { return v >= lo && v <= hi; };
+
+        switch (output.type)
+        {
+            case Output::Type::keyswitch:
+                if (! in (output.number, 0, 127))   problems.add (label + ": keyswitch key " + juce::String (output.number) + " is outside 0-127");
+                if (! in (output.value, 1, 127))    problems.add (label + ": keyswitch velocity " + juce::String (output.value) + " is outside 1-127");
+                break;
+
+            case Output::Type::controller:
+                if (! in (output.number, 0, 127))   problems.add (label + ": CC number " + juce::String (output.number) + " is outside 0-127");
+                if (! in (output.value, 0, 127))    problems.add (label + ": CC value " + juce::String (output.value) + " is outside 0-127");
+                break;
+
+            case Output::Type::programChange:
+                if (! in (output.number, 0, 127))   problems.add (label + ": program " + juce::String (output.number) + " is outside 0-127");
+                if (output.bank != -1 && ! in (output.bank, 0, 16383))
+                    problems.add (label + ": bank " + juce::String (output.bank) + " is outside 0-16383 (or -1 for none)");
+                break;
+        }
+    }
+
+    static juce::String describe (const Output& output)
+    {
+        switch (output.type)
+        {
+            case Output::Type::keyswitch:      return "keyswitch key " + juce::String (output.number);
+            case Output::Type::controller:     return "CC " + juce::String (output.number);
+            case Output::Type::programChange:  return "a program change";
+        }
+
+        return {};
+    }
+
+    // Two outputs that are active at the same time clash when they would
+    // overwrite each other: the same CC number, the same keyswitch key, or any
+    // two program changes (a channel holds one program).
+    static bool clash (const Output& a, const Output& b)
+    {
+        if (a.type != b.type)
+            return false;
+
+        return a.type == Output::Type::programChange || a.number == b.number;
+    }
+
+    // Articulations in the SAME group are never active together, so sharing a
+    // CC or key there is fine (UACC: CC32 with a different value for each).
+    // Across groups, a pair is active together when a modifier works with the
+    // root (root + modifier), or two modifiers of different groups share a root
+    // they both work with. Modifiers don't exist without a root.
+    void addConflicts (juce::StringArray& problems) const
+    {
+        const auto& root = groups.front();
+
+        const auto report = [&] (const Group& ga, const Articulation& a, const Group& gb, const Articulation& b)
+        {
+            problems.add ("'" + a.name + "' (group '" + ga.name + "') and '" + b.name + "' (group '" + gb.name
+                          + "') can be active together and both send " + describe (a.output)
+                          + "; the second would overwrite the first. Give one of them a different "
+                          + (a.output.type == Output::Type::programChange ? "output" : "number") + ", or limit which roots it applies to");
+        };
+
+        for (size_t g = 1; g < groups.size(); ++g)
+        {
+            for (auto& modifier : groups[g].articulations)
+            {
+                // root + modifier
+                for (auto& rootArticulation : root.articulations)
+                    if (appliesToRoot (modifier, rootArticulation.name) && clash (rootArticulation.output, modifier.output))
+                        report (root, rootArticulation, groups[g], modifier);
+
+                // modifier + modifier of a later group, with a root both work with
+                for (size_t h = g + 1; h < groups.size(); ++h)
+                    for (auto& other : groups[h].articulations)
+                        if (clash (modifier.output, other.output) && shareARoot (modifier, other))
+                            report (groups[g], modifier, groups[h], other);
+            }
+        }
+    }
+
+    bool shareARoot (const Articulation& a, const Articulation& b) const
+    {
+        for (auto& rootArticulation : groups.front().articulations)
+            if (appliesToRoot (a, rootArticulation.name) && appliesToRoot (b, rootArticulation.name))
+                return true;
+
+        return false;
+    }
+};
