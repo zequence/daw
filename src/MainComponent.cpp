@@ -1028,6 +1028,9 @@ void MainComponent::applyLoadedProject (const juce::File& file, bool ok, const j
     setDomain (Domain::midi);
     updateWindowTitle();
 
+    if (isShowing())
+        grabKeyboardFocus();   // the selected track's keys work without a click first
+
     if (! ok)
     {
         juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Couldn't load project", warnings);

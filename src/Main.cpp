@@ -112,6 +112,7 @@ private:
             setVisible (true);
             setFullScreen (true);   // maximized by default (user requirement)
             titleBar.apply();       // dark title bar when Windows is in dark mode
+            getContentComponent()->grabKeyboardFocus();   // the shell's keys (E, D, S, M, I...) work at once
         }
 
         void closeButtonPressed() override
