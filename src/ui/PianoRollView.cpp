@@ -377,6 +377,18 @@ void PianoRollView::runCommand (const juce::String& cmd, juce::DynamicObject::Pt
 
 //==============================================================================
 // Articulations (the rules are in model/ArticulationMenu.h; this is the view)
+const ExpressionMap* PianoRollView::currentMap()
+{
+    if (cachedMapTrack != trackId || cachedMapRevision != engine.getStateRevision())
+    {
+        cachedMapTrack = trackId;
+        cachedMapRevision = engine.getStateRevision();
+        cachedMap = engine.getTrackExpressionMap (trackId);
+    }
+
+    return cachedMap.has_value() ? &*cachedMap : nullptr;
+}
+
 std::vector<int> PianoRollView::selectedNoteIndices() const
 {
     std::vector<int> indices;
@@ -1216,6 +1228,8 @@ void PianoRollView::paint (juce::Graphics& g)
     if (seq != nullptr)
     {
         const auto& notes = seq->getNotes();
+        const auto* articulationMap = currentMap();
+        const auto useFirstRoot = editorSettings::firstRootIsDefault (engine.getSettingsFile());
 
         for (int i = 0; i < (int) notes.size(); ++i)
         {
@@ -1245,6 +1259,40 @@ void PianoRollView::paint (juce::Graphics& g)
             g.fillRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f);
             g.setColour (juce::Colours::black.withAlpha (0.4f));
             g.drawRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f, 1.0f);
+
+            // Articulation: its symbol on the note; one the map doesn't have is an error mark
+            if (articulationMap != nullptr)
+            {
+                const auto shown = articulations::effective (*articulationMap, note.articulation, useFirstRoot);
+
+                if (! shown.isEmpty())
+                {
+                    const auto implicit = note.articulation.isEmpty();   // the default root: not written to the note
+
+                    if (rect.getWidth() >= 12)
+                    {
+                        g.setColour (juce::Colours::white.withAlpha (implicit ? 0.5f : 0.95f));
+                        g.setFont (juce::FontOptions (juce::jmin (11.0f, (float) rect.getHeight() - 2.0f)));
+                        g.drawText (articulations::symbols (*articulationMap, shown), rect.reduced (3, 0),
+                                    juce::Justification::centredLeft, true);
+                    }
+
+                    if (! articulations::resolves (*articulationMap, shown))
+                    {
+                        g.setColour (juce::Colours::red);
+                        g.drawRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f, 1.8f);
+
+                        if (rect.getWidth() >= 16)
+                        {
+                            const auto badge = juce::Rectangle<float> ((float) rect.getRight() - 9.0f, (float) rect.getY() + 1.0f, 8.0f, 8.0f);
+                            g.fillEllipse (badge);
+                            g.setColour (juce::Colours::white);
+                            g.setFont (juce::FontOptions (8.0f, juce::Font::bold));
+                            g.drawText ("!", badge.toNearestInt(), juce::Justification::centred);
+                        }
+                    }
+                }
+            }
         }
     }
 

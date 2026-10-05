@@ -87,6 +87,7 @@ private:
     // Articulations (the top bar's dropdown; the rules live in model/ArticulationMenu.h)
     std::vector<ExpressionMap::Selection> articulationTargets (const ExpressionMap&) const;   // the selected notes, else the one for new notes
     std::vector<int> selectedNoteIndices() const;   // the selection, only indices that still exist, ascending
+    const ExpressionMap* currentMap();   // cached; nullptr when the track has no (valid) map
     void showArticulationMenu();
     void chooseArticulation (const juce::String& group, const juce::String& name);
     void commitArticulations (const std::vector<ExpressionMap::Selection>& results);
@@ -134,6 +135,9 @@ private:
     juce::TextButton articulationButton { "Articulation" };
     ExpressionMap::Selection newNoteArticulation;   // what new notes are drawn with (nothing selected)
     juce::String articulationKey;                   // what the button was last built for
+    std::optional<ExpressionMap> cachedMap;         // the track's map for painting, refreshed when the engine changes
+    AudioEngine::TrackId cachedMapTrack = -1;
+    int cachedMapRevision = -1;
     juce::Label trackLabel;
     std::vector<int> lastCcList;           // CCs currently offered by laneBox
 
