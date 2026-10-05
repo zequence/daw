@@ -348,6 +348,12 @@ public:
     juce::StringArray getControllers() const;
     std::function<void (const juce::MidiMessage&)> onControllerMidi;   // message thread: a controller's note on / CC / program change
 
+    // Note input (step entry in the MIDI editor): while listening, every note-on from the live
+    // input (not from MIDI controllers) is also handed to onNoteInput on the message thread,
+    // with the time it arrived (ms, juce::Time::getMillisecondCounterHiRes)
+    void setNoteInputListening (bool shouldListen)   { noteInputListening.store (shouldListen); }
+    std::function<void (const juce::MidiMessage&, double receivedMs)> onNoteInput;
+
     // Send an articulation switch to a track's instrument now (heard on the next note played
     // live): program changes (with bank select), CCs, keyswitches (tapped)
     void sendLiveArticulation (TrackId, const std::vector<ExpressionMap::Output>&);
@@ -568,6 +574,7 @@ private:
 
     InputRouter inputRouter { *this };
     juce::CriticalSection controllerLock;
+    std::atomic<bool> noteInputListening { false };
     juce::StringArray controllerDevices;
 
     NodeID audioOutNode, midiInNode, recorderNode;

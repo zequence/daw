@@ -107,6 +107,15 @@ void AudioEngine::InputRouter::handleIncomingMidiMessage (juce::MidiInput* sourc
     if (! isController)
     {
         engine.player.handleIncomingMidiMessage (source, message);
+
+        if (engine.noteInputListening.load() && message.isNoteOn())
+            juce::MessageManager::callAsync ([&e = engine, token = std::weak_ptr<int> (engine.lifetimeToken), message,
+                                              received = juce::Time::getMillisecondCounterHiRes()]
+            {
+                if (! token.expired() && e.onNoteInput)
+                    e.onNoteInput (message, received);
+            });
+
         return;
     }
 

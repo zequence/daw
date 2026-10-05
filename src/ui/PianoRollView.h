@@ -144,7 +144,13 @@ private:
     bool laneErasing = false;
 
     // Toolbar
-    juce::TextButton snapToggle { "Snap" }, auditionToggle { "Hear" };
+    juce::TextButton snapToggle { "Snap" }, auditionToggle { "Hear" }, inputToggle { "Input" };
+
+    // Note input (step entry): notes played within this long after a chord's first note join it
+    static constexpr double chordWindowMs = 60.0;
+    juce::int64 chordTick = -1;            // where the current chord is written (-1: none yet)
+    double chordStartMs = 0.0;             // when its first note arrived
+    void noteInput (const juce::MidiMessage&, double receivedMs);
     juce::ComboBox modeBox, snapBox, lengthBox, laneBox, colourBox;
     juce::TextButton quantizeButton { "Q" }, undoButton { "Undo" }, redoButton { "Redo" };
     juce::TextButton articulationButton { "Articulation" };

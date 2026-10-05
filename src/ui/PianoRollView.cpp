@@ -119,6 +119,26 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     theme::setButtonRole (auditionToggle, "accent");
     addAndMakeVisible (auditionToggle);
 
+    // Note input: play notes on the MIDI keyboard to write them at the playhead (transport stopped)
+    inputToggle.setTooltip ("Note input: notes played on the MIDI keyboard are written at the playhead with the note length "
+                            "and articulation chosen here, and the playhead moves on. Notes played together (within "
+                            + juce::String ((int) chordWindowMs) + " ms of the first) make a chord. Works while stopped.");
+    inputToggle.setClickingTogglesState (true);
+    inputToggle.setToggleState (false, juce::dontSendNotification);
+    theme::setButtonRole (inputToggle, "accent");
+    inputToggle.onClick = [this]
+    {
+        engine.setNoteInputListening (inputToggle.getToggleState());
+        chordTick = -1;
+    };
+    addAndMakeVisible (inputToggle);
+
+    engine.onNoteInput = [safe = juce::Component::SafePointer<PianoRollView> (this)] (const juce::MidiMessage& message, double receivedMs)
+    {
+        if (safe != nullptr)
+            safe->noteInput (message, receivedMs);
+    };
+
     quantizeButton.setTooltip ("Quantize selected notes (or all) to the grid division");
     quantizeButton.onClick = [this]
     {
@@ -184,7 +204,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     trackLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
     addAndMakeVisible (trackLabel);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &modeBox, &snapToggle, &auditionToggle, &snapBox,
+    for (auto* c : std::initializer_list<juce::Component*> { &modeBox, &snapToggle, &auditionToggle, &inputToggle, &snapBox,
                                                              &lengthBox, &laneBox, &quantizeButton, &undoButton,
                                                              &redoButton, &articulationButton, &colourBox })
         c->setWantsKeyboardFocus (false);
@@ -192,7 +212,52 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     startTimerHz (30);
 }
 
-PianoRollView::~PianoRollView() = default;
+PianoRollView::~PianoRollView()
+{
+    engine.setNoteInputListening (false);
+    engine.onNoteInput = nullptr;
+}
+
+// Note input: a played note is written at the playhead (the chord's position) with the note length
+// and the articulation for new notes. The first note of a chord moves the playhead on by the
+// length; notes within chordWindowMs of it join the chord at the same position. Nothing is
+// selected, so choosing another articulation sets the next notes', not the ones just written.
+void PianoRollView::noteInput (const juce::MidiMessage& message, double receivedMs)
+{
+    auto& transport = engine.getTransport();
+
+    if (! inputToggle.getToggleState() || ! isShowing() || trackId == 0 || transport.isPlaying())
+        return;
+
+    const auto length = newNoteTicks();
+    const auto joinsChord = chordTick >= 0 && receivedMs - chordStartMs <= chordWindowMs;
+
+    if (! joinsChord)
+    {
+        chordTick = transport.getPositionTicks();
+        chordStartMs = receivedMs;
+        transport.locate (chordTick + length);
+        selection.clear();
+    }
+
+    auto note = new juce::DynamicObject();
+    note->setProperty ("start", chordTick);
+    note->setProperty ("length", length);
+    note->setProperty ("key", message.getNoteNumber());
+    note->setProperty ("velocity", juce::jlimit (1, 127, (int) message.getVelocity()));
+
+    if (! newNoteArticulation.isEmpty() && engine.getTrackExpressionMap (trackId).has_value())
+        note->setProperty ("articulation", newNoteArticulation.toVar());
+
+    juce::Array<juce::var> notes;
+    notes.add (juce::var (note));
+
+    auto params = new juce::DynamicObject();
+    params->setProperty ("trackId", trackId);
+    params->setProperty ("notes", notes);
+    runCommand ("clip.addNotes", params);
+    repaint();
+}
 
 void PianoRollView::setTrack (AudioEngine::TrackId id)
 {
@@ -1316,6 +1381,8 @@ void PianoRollView::resized()
     redoButton.setBounds (toolbar.removeFromLeft (52));
     toolbar.removeFromLeft (12);
     auditionToggle.setBounds (toolbar.removeFromLeft (46));
+    toolbar.removeFromLeft (4);
+    inputToggle.setBounds (toolbar.removeFromLeft (50));
     toolbar.removeFromLeft (12);
     laneBox.setBounds (toolbar.removeFromLeft (140));
     toolbar.removeFromLeft (10);
