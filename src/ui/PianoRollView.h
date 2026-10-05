@@ -131,7 +131,7 @@ private:
 
     // Toolbar
     juce::TextButton snapToggle { "Snap" }, auditionToggle { "Hear" };
-    juce::ComboBox modeBox, snapBox, lengthBox, laneBox;
+    juce::ComboBox modeBox, snapBox, lengthBox, laneBox, colourBox;
     juce::TextButton quantizeButton { "Q" }, undoButton { "Undo" }, redoButton { "Redo" };
     juce::TextButton articulationButton { "Articulation" };
     ExpressionMap::Selection newNoteArticulation;   // what new notes are drawn with (nothing selected)

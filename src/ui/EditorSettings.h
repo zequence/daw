@@ -13,6 +13,11 @@ namespace editorSettings
     // articulation were chosen (implicit; nothing is written to the note). Off by default.
     constexpr auto firstRootIsDefaultKey = "editorFirstRootIsDefault";
 
+    // What colours the notes in the MIDI editor: their velocity (the default) or their
+    // articulation's sound slot (the expression map's slot colour)
+    constexpr auto noteColoursKey = "editorNoteColours";
+    inline bool coloursBySlot (juce::PropertiesFile& settings)   { return settings.getValue (noteColoursKey, "velocity") == "slot"; }
+
     // The name of MIDI note 60: C3 (VSL, Cubase; the default), C4 or C5
     constexpr auto middleCOctaveKey = "editorMiddleCOctave";
 

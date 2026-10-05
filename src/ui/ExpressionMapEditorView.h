@@ -4,6 +4,7 @@
 #include "../api/CommandDispatcher.h"
 #include "ThemedLookAndFeel.h"
 #include "../model/NoteNames.h"
+#include "ColorPalette.h"
 
 // Content view: create and edit expression maps (MILESTONES.md "Articulation / expression maps").
 //
@@ -1492,6 +1493,48 @@ private:
                            commit();
                        }
                    }, "any");
+
+        // Its notes' colour in the MIDI editor (top bar: "Colour: sound slot")
+        {
+            auto* box = own<juce::ComboBox>();
+            box->addItem ("None", 1);
+            int id = 2, selected = 1;
+
+            for (auto& entry : colours::palette())
+            {
+                box->addItem (entry.name, id);
+
+                if (slot->colour.equalsIgnoreCase (entry.hex))
+                    selected = id;
+
+                ++id;
+            }
+
+            if (selected == 1 && slot->colour.isNotEmpty())   // a colour outside the palette (a generated map)
+            {
+                box->addItem (slot->colour, id);
+                selected = id;
+            }
+
+            box->setSelectedId (selected, juce::dontSendNotification);
+            box->onChange = [this, box]
+            {
+                if (auto* s = currentSlot())
+                {
+                    const auto index = box->getSelectedId() - 2;
+                    const auto& palette = colours::palette();
+
+                    if (box->getSelectedId() == 1)
+                        s->colour = {};
+                    else if (index >= 0 && index < (int) palette.size())
+                        s->colour = palette[(size_t) index].hex;
+
+                    commit();
+                    refreshSlots();
+                }
+            };
+            rows.push_back ({ makeLabel ("Colour"), box, 26, 220 });
+        }
 
         addHeading ("Output (sent in this order)");
         buildOutputs ([this]() -> std::vector<Output>* { auto* s = currentSlot(); return s != nullptr ? &s->outputs : nullptr; }, noteName);

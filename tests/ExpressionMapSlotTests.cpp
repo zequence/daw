@@ -190,6 +190,14 @@ public:
 
         beginTest ("XML and JSON keep slots and defaults");
         {
+            auto coloured = map;
+            coloured.slots[0].colour = "#eac13a";
+            expect (Map::fromXml (*coloured.toXml()).slots[0].colour == "#eac13a");
+            Map colouredBack;
+            expect (Map::fromVar (coloured.toVar(), colouredBack).isEmpty() && colouredBack.slots[0].colour == "#eac13a");
+            coloured.slots[1].colour = "yellow";
+            expect (coloured.validate().joinIntoString (";").contains ("#rrggbb"));
+
             const auto xml = map.toXml();
             const auto fromXml = Map::fromXml (*xml);
             expectEquals (fromXml.toXml()->toString(), xml->toString());

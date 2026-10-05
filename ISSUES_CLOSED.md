@@ -268,6 +268,11 @@ resolution notes. Newest additions go at the top of each chapter.
 
 ## Midi editor
 
+- [x] Articulations: show available modifiers on the right side of a selected articulation, ordered by group
+      (the articulation button opens columns, one per group in map order -
+      Color | Main | Legato | Release | Tempo - each with what is offered for
+      the current choice; choosing doesn't close it, the columns follow.
+      ui/ArticulationPanel.h.)
 - [x] Articulations: do not show any modifiers until having selected a prerequisite
       (a modifier is offered only when a sound slot has it together with
       exactly the choices already made in the groups before it: Tempo appears
@@ -296,3 +301,12 @@ resolution notes. Newest additions go at the top of each chapter.
       "snap to grid" (snapping + quantize share it)
 - [x] Move selected notes with arrows: Up/Down a half step, Ctrl+Up/Down an
       octave, Left/Right by the snap grid
+
+# Expression maps
+
+- [x] Implement colors for sound slots
+      (a slot has a colour, set in the map editor's slot details; the MIDI
+      editor's top bar chooses what colours the notes: "Colour: velocity" or
+      "Colour: sound slot" (a selected note keeps its colour, white outline).
+      The vsl-manager generator colours slots by main articulation, the Cubase
+      maps' hues.)

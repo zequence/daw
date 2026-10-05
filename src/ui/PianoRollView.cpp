@@ -3,6 +3,7 @@
 #include "EditorSettings.h"
 #include "../model/ArticulationMenu.h"
 #include "../model/NoteNames.h"
+#include "ArticulationPanel.h"
 #include "../api/CommandDispatcher.h"
 
 namespace
@@ -93,6 +94,20 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     addAndMakeVisible (laneBox);
     rebuildLaneBox();
 
+    colourBox.addItem ("Colour: velocity", 1);
+    colourBox.addItem ("Colour: sound slot", 2);
+    colourBox.setSelectedId (editorSettings::coloursBySlot (engine.getSettingsFile()) ? 2 : 1, juce::dontSendNotification);
+    colourBox.setTooltip ("What colours the notes: their velocity, or the colour of their articulation's sound slot "
+                          "(set in the expression map)");
+    colourBox.setWantsKeyboardFocus (false);
+    colourBox.onChange = [this]
+    {
+        engine.getSettingsFile().setValue (editorSettings::noteColoursKey, colourBox.getSelectedId() == 2 ? "slot" : "velocity");
+        engine.getSettingsFile().saveIfNeeded();
+        repaint();
+    };
+    addAndMakeVisible (colourBox);
+
     articulationButton.setTooltip ("Articulation");
     articulationButton.onClick = [this] { showArticulationMenu(); };
     addAndMakeVisible (articulationButton);
@@ -170,7 +185,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
 
     for (auto* c : std::initializer_list<juce::Component*> { &modeBox, &snapToggle, &auditionToggle, &snapBox,
                                                              &lengthBox, &laneBox, &quantizeButton, &undoButton,
-                                                             &redoButton, &articulationButton })
+                                                             &redoButton, &articulationButton, &colourBox })
         c->setWantsKeyboardFocus (false);
 
     startTimerHz (30);
@@ -480,29 +495,26 @@ void PianoRollView::showArticulationMenu()
     if (! map.has_value())
         return;
 
-    juce::PopupMenu menu;
+    // Columns (one per group) that stay open and follow each choice
+    const auto safe = juce::Component::SafePointer<PianoRollView> (this);
 
-    for (auto& item : articulations::buildMenu (*map, articulationTargets (*map)))
-    {
-        if (item.kind == articulations::MenuItem::Kind::header)
+    auto panel = std::make_unique<ArticulationPanel> (
+        [safe]() -> ArticulationPanel::Items
         {
-            menu.addSectionHeader (item.text);
-            continue;
-        }
+            if (safe == nullptr)
+                return {};
 
-        juce::PopupMenu::Item popupItem (item.text);
-        popupItem.setEnabled (item.enabled);
-        popupItem.setTicked (item.ticked);
-        popupItem.shortcutKeyDescription = item.description.substring (0, 40);   // JUCE menu items have no tooltip
-        popupItem.setAction ([safe = juce::Component::SafePointer<PianoRollView> (this), group = item.group, name = item.name]
-                             {
-                                 if (safe != nullptr)
-                                     safe->chooseArticulation (group, name);
-                             });
-        menu.addItem (popupItem);
-    }
+            const auto current = safe->engine.getTrackExpressionMap (safe->trackId);
+            return current.has_value() ? articulations::buildMenu (*current, safe->articulationTargets (*current))
+                                       : ArticulationPanel::Items();
+        },
+        [safe] (const juce::String& group, const juce::String& name)
+        {
+            if (safe != nullptr)
+                safe->chooseArticulation (group, name);
+        });
 
-    menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&articulationButton));
+    juce::CallOutBox::launchAsynchronously (std::move (panel), articulationButton.getScreenBounds(), nullptr);
 }
 
 void PianoRollView::chooseArticulation (const juce::String& group, const juce::String& name)
@@ -1169,6 +1181,9 @@ void PianoRollView::resized()
     laneBox.setBounds (toolbar.removeFromLeft (140));
     toolbar.removeFromLeft (10);
     articulationButton.setBounds (toolbar.removeFromLeft (170));
+    toolbar.removeFromLeft (10);
+    colourBox.setBounds (toolbar.removeFromLeft (150));
+    toolbar.removeFromLeft (10);
     trackLabel.setBounds (toolbar);
 }
 
@@ -1182,6 +1197,7 @@ void PianoRollView::paint (juce::Graphics& g)
 
     const auto* articulationMap = currentMap();
     const auto useFirstRoot = editorSettings::firstRootIsDefault (engine.getSettingsFile());
+    const auto slotColours = editorSettings::coloursBySlot (engine.getSettingsFile());
 
     // Playable range: the articulation in effect (the selected notes' if they agree, else the
     // one new notes get) when the map gives it a range, else the track's player (Synchron via
@@ -1282,11 +1298,22 @@ void PianoRollView::paint (juce::Graphics& g)
             const auto velocity = velocityPreview.count (i) ? velocityPreview.at (i) : note.velocity;
             const auto brightness = 0.45f + 0.55f * (float) velocity / 127.0f;
 
-            g.setColour (selected ? juce::Colours::orange.withBrightness (brightness)
-                                  : juce::Colour (0xff5d8fc4).withBrightness (brightness));
+            // Sound slot colours: the colour of the note's slot (notes without one stay neutral grey);
+            // a selected note keeps its colour and gets a white outline
+            const auto* slot = slotColours && articulationMap != nullptr && articulationMap->hasSlots()
+                                 ? articulationMap->findSlot (articulations::effective (*articulationMap, note.articulation, useFirstRoot))
+                                 : nullptr;
+
+            if (slotColours)
+                g.setColour (slot != nullptr && slot->colour.isNotEmpty() ? AudioEngine::colourFromHex (slot->colour, juce::Colours::grey)
+                                                                         : juce::Colour (0xff8a8d93));
+            else
+                g.setColour (selected ? juce::Colours::orange.withBrightness (brightness)
+                                      : juce::Colour (0xff5d8fc4).withBrightness (brightness));
+
             g.fillRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f);
-            g.setColour (juce::Colours::black.withAlpha (0.4f));
-            g.drawRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f, 1.0f);
+            g.setColour (slotColours && selected ? juce::Colours::white : juce::Colours::black.withAlpha (0.4f));
+            g.drawRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f, slotColours && selected ? 2.0f : 1.0f);
 
             // Articulation: its symbol on the note; one the map doesn't have is an error mark
             if (articulationMap != nullptr)

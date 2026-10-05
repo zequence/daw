@@ -46,7 +46,6 @@ Claude is unsure of an issue they will pose a question.
 
 # Midi editor
 
-- [ ] Articulations: show available modifiers on the right side of a selected articulation, ordered by group
 - [ ] Change pointer to a pen when in draw mode
 - [ ] Show midi for multiple tracks. Midi for the selected channel is normal, while other channel midi is greyed out.
 - [ ] A dropdown in the top editor bar to select which channel to edit. It will only show the selected midi channels.
@@ -60,4 +59,5 @@ Claude is unsure of an issue they will pose a question.
 
 # Expression maps
 
-- [ ] Implement colors for sound slots
+
+- [ ] Each articulation has a symbol, a name and a description. For now, no symbols.

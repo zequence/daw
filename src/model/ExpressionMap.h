@@ -236,9 +236,15 @@ struct ExpressionMap
         std::vector<Output> outputs;     // sent in series exactly before the note
         double timingOffsetMs = 0.0;     // < 0 earlier, > 0 later
         int keyLow = -1, keyHigh = -1;   // playable key range (-1 = unspecified)
+        juce::String colour;             // "#rrggbb" for its notes in the editor ("" = none)
     };
 
     std::vector<Slot> slots;
+
+    static bool isValidColour (const juce::String& text)
+    {
+        return text.isEmpty() || (text.length() == 7 && text[0] == '#' && text.substring (1).containsOnly ("0123456789abcdefABCDEF"));
+    }
 
     bool hasSlots() const noexcept    { return ! slots.empty(); }
 
@@ -251,6 +257,10 @@ struct ExpressionMap
         o->setProperty ("timingOffsetMs", slot.timingOffsetMs);
         o->setProperty ("keyLow", slot.keyLow);
         o->setProperty ("keyHigh", slot.keyHigh);
+
+        if (slot.colour.isNotEmpty())
+            o->setProperty ("color", slot.colour);
+
         return juce::var (o);
     }
 
@@ -271,6 +281,7 @@ struct ExpressionMap
         slot.timingOffsetMs = (double) json.getProperty ("timingOffsetMs", 0.0);
         slot.keyLow = (int) json.getProperty ("keyLow", -1);
         slot.keyHigh = (int) json.getProperty ("keyHigh", -1);
+        slot.colour = json.getProperty ("color", {}).toString();
         out = std::move (slot);
         return {};
     }
@@ -881,6 +892,10 @@ struct ExpressionMap
                 o->setProperty ("timingOffsetMs", slot.timingOffsetMs);
                 o->setProperty ("keyLow", slot.keyLow);
                 o->setProperty ("keyHigh", slot.keyHigh);
+
+                if (slot.colour.isNotEmpty())
+                    o->setProperty ("color", slot.colour);
+
                 slotList.add (juce::var (o));
             }
 
@@ -1043,6 +1058,7 @@ struct ExpressionMap
                 slot.timingOffsetMs = (double) o.getProperty ("timingOffsetMs", 0.0);
                 slot.keyLow = (int) o.getProperty ("keyLow", -1);
                 slot.keyHigh = (int) o.getProperty ("keyHigh", -1);
+                slot.colour = o.getProperty ("color", {}).toString();
                 map.slots.push_back (std::move (slot));
             }
 
@@ -1402,6 +1418,10 @@ struct ExpressionMap
                 e->setAttribute ("timingOffsetMs", slot.timingOffsetMs);
                 e->setAttribute ("keyLow", slot.keyLow);
                 e->setAttribute ("keyHigh", slot.keyHigh);
+
+                if (slot.colour.isNotEmpty())
+                    e->setAttribute ("color", slot.colour);
+
                 e->addChildElement (slot.selection.toXml().release());
                 outputsToXml (*e, slot.outputs);
             }
@@ -1468,6 +1488,7 @@ struct ExpressionMap
                 slot.timingOffsetMs = e->getDoubleAttribute ("timingOffsetMs", 0.0);
                 slot.keyLow = e->getIntAttribute ("keyLow", -1);
                 slot.keyHigh = e->getIntAttribute ("keyHigh", -1);
+                slot.colour = e->getStringAttribute ("color");
 
                 if (auto* a = e->getChildByName ("ARTICULATION"))
                     slot.selection = Selection::fromXml (*a);
@@ -1645,6 +1666,9 @@ private:
 
             if (std::abs (slot.timingOffsetMs) > 5000.0)
                 problems.add (label + " has a timing offset of " + juce::String (slot.timingOffsetMs) + " ms; the limit is 5000 ms either way");
+
+            if (! isValidColour (slot.colour))
+                problems.add (label + " has the colour '" + slot.colour + "'; a colour is \"#rrggbb\" (or empty for none)");
 
             for (size_t other = 0; other < s; ++other)
                 if (slots[other].selection.modifiers.size() == slot.selection.modifiers.size()
