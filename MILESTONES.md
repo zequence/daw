@@ -111,7 +111,9 @@ So one articulation can send, say, a keyswitch, then a CC, then a program change
 The list may be empty (an articulation that needs nothing sent). Repeating a CC
 inside one articulation is the author's explicit sequence, not a conflict.
 
-The active combination's outputs are the root's, then its modifiers'.
+The active combination's outputs are the root's, then its modifiers'. (For maps
+that have sound slots this is replaced: see "Sound slots" below. A map with no
+slots keeps this rule.)
 
 **No restrictions on combining outputs.** Any articulation may use any key, CC or
 program change, including the same one as another articulation, even one that
@@ -124,6 +126,70 @@ roots, numbers in range.
 
 The output is always sent exactly before its note - no setting, no default
 offset. (Timing is a separate thing, next.)
+
+### Sound slots (decided 2026-10-05; phase 6)
+
+Adding up outputs from the parts (root, then modifiers) can't describe a library
+like Synchron, where each combination needs its own programs, and the same name
+(Legato on Long notes, Legato on Tremolo) sends different things. So a map gets
+**sound slots**, as in a Cubase expression map. Not VSL's sound slots: those are
+where a Synchron map's combinations can be derived from (below). When a map
+says "slot" it means an **expression-map sound slot**.
+
+- **A sound slot is one combination of articulations** (one root plus at most one
+  modifier per group, exactly what a note stores as its selection) **and what that
+  combination does**: its outputs, sent in series (as above), its playable key
+  range, and its timing offset. Nothing is added up: "Long notes", "Long notes +
+  Legato" and "Long notes + Legato + Soft" are three slots with three output lists.
+- **Groups and articulations are for the UI only**: name, symbol, description. They
+  no longer carry outputs, key ranges or timing offsets in a map that has slots
+  (those live on the slots).
+- **The UI follows the slots; it never offers or stores a combination that has no
+  slot.** There is no separately stored list of what works with what: it is
+  derived. A modifier is available when some slot contains it together with
+  everything that is already selected; the others are not shown (a group with
+  nothing left disappears), so choosing a colour hides the modifiers that no slot
+  has with it. Choosing a root keeps the modifiers that still lead to a slot and
+  drops the rest (ask or drop, as today). A note's stored selection is always the
+  combination of one slot.
+- **Playback finds the slot of the note's combination** and sends its outputs
+  exactly before the note, shifted by the slot's timing offset. A selection with
+  no slot (the map was edited, the project was loaded without it) plays as having
+  none and shows as an error, as missing articulations do today.
+- **Key range follows the slot**: the editor greys out what the slot in effect
+  can't play (replaces the per-articulation range and the one-range-per-channel
+  stopgap).
+- **Deriving the slots from a Synchron player.** VSL's sound slots (the leaves of
+  the preset tree, each with its program path and key range) enumerate every valid
+  combination, so a map's slots can be generated from them. `vsl-manager`
+  (`tools/daw_maps.py`) already enumerates them for the Cubase maps (185 for the
+  merged Duality 1st Violins). "Synchron detection" (below) produces slots, too.
+- **Maps without slots keep working**: all the combinations their applies-to lists
+  allow are slots implicitly, with the outputs added up as today. Nothing is
+  converted when a project loads. Hand-made maps (a keyswitch map, Spitfire UACC)
+  stay as small as they are; a map with a `<SLOTS>` list uses the slots.
+- **Validation** (slots): each slot names an existing root and existing modifiers,
+  one per group at most, a root is required, no two slots have the same
+  combination, every output and range is in range. Renaming a group or an
+  articulation rewrites the slots that use it; deleting an articulation is refused
+  while a slot uses it (or removes those slots, on request).
+- **Editor**: the map editor gets a slot list (combination, outputs, range, offset)
+  with a filter, add / remove / duplicate, and "make slots for all combinations"
+  for an additive map. Commands: `expressionmap.setSlot`, `removeSlot`, `slots`
+  (list, filterable by a selection), and `expressionmap.available` (what the menu
+  would offer for a selection).
+
+Example (Duality 1st Violins, groups Color (root) / Main / Legato / Release /
+Tempo): choosing the colour Ponticello leaves only the Main items some Ponticello
+slot has; choosing Main "Rep." offers the five tempos (the only Main with tempo
+slots); choosing "Long notes" offers Legato, Lyrical, Slur, Portamento and the
+releases. Legato on "Tremolo" and Legato on "Long notes" are two slots with
+different programs under the same label.
+
+Phase 6 (to do): model, XML/JSON, validation, tests; the menu rules from the slots;
+playback and the pre-roll from the slots; the slot list in the map editor; the
+generator in vsl-manager writing slots (with key ranges); then the DAW+ map is
+regenerated.
 
 ### Timing offset (working name)
 
@@ -442,8 +508,16 @@ selection. The UI is a client of the same commands.
    **Not done yet:** Synchron detection, programmed CC sequences.
    programmed CC sequences.
 
+6. Sound slots (see "Sound slots"): the UI follows the combinations that exist,
+   each combination has its own outputs, key range and timing offset.
+
 ### Open questions
 
+- **Root alone**: a root with no slot of its own (every slot also has a Main, say)
+  can't be a note's whole selection. Proposed: the menu still lets it be picked as
+  the start of a combination, the note stores only complete combinations, and the
+  generators add a root-only slot where the root is meaningful alone (the colour
+  Regular = just its program).
 - **Timing offset**: what it is called. (The pre-roll for negative offsets is
   decided; its transport, loop and locate details are in "Timing offset".)
 
