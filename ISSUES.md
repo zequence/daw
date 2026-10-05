@@ -58,6 +58,3 @@ Claude is unsure of an issue they will pose a question.
       map. (Milestone "Articulation / expression maps" in MILESTONES.md.)
 
 # Expression maps
-
-
-- [ ] Each articulation has a symbol, a name and a description. For now, no symbols.

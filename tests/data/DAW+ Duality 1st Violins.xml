@@ -1,122 +1,135 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <EXPRESSIONMAP name="DAW+ Duality 1st Violins" description="Generated from the DAW+ preset 11 Strings/Synchron/31 Duality 1st Violins (tools/daw_maps.py): one sound slot per combination the preset plays. Every slot sends the colour first (program 113-116, as the player numbers them), then the articulation's program path.">
   <GROUP name="Color" description="The colour layer, sent first in every slot.">
-    <ARTICULATION name="Regular" symbol="Reg." description="Regular (program 113)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Regular" symbol="" description="Regular (program 113)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Main" name="Long"/>
     </ARTICULATION>
-    <ARTICULATION name="Con sordino" symbol="Sord." description="Con sordino (program 114)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Con sordino" symbol="" description="Con sordino (program 114)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Main" name="Long"/>
     </ARTICULATION>
-    <ARTICULATION name="Flautando" symbol="Flaut." description="Flautando (program 115)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Flautando" symbol="" description="Flautando (program 115)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Main" name="Long"/>
     </ARTICULATION>
-    <ARTICULATION name="Ponticello" symbol="Pont." description="Ponticello (program 116)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Ponticello" symbol="" description="Ponticello (program 116)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Main" name="Long"/>
     </ARTICULATION>
   </GROUP>
   <GROUP name="Main" description="The articulation.">
-    <ARTICULATION name="Long" symbol="Long" description="Long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Long" symbol="" description="Long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Cresc." symbol="Cresc." description="Crescendo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Cresc." symbol="" description="Crescendo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+      <DEFAULT group="Length" name="Short"/>
     </ARTICULATION>
-    <ARTICULATION name="Cresc. short" symbol="Cresc. S" description="Crescendo, short" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Dim." symbol="" description="Diminuendo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+      <DEFAULT group="Length" name="Short"/>
     </ARTICULATION>
-    <ARTICULATION name="Cresc. medium" symbol="Cresc. M" description="Crescendo, medium" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Swell" symbol="" description="Swell" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Cresc. long" symbol="Cresc. L" description="Crescendo, long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Portato long" symbol="" description="Portato long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Dim." symbol="Dim." description="Diminuendo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Portato" symbol="" description="Portato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Dim. short" symbol="Dim. S" description="Diminuendo, short" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Detache soft" symbol="" description="Detache soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Dim. medium" symbol="Dim. M" description="Diminuendo, medium" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Martele" symbol="" description="Martele" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Dim. long" symbol="Dim. L" description="Diminuendo, long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Staccato" symbol="" description="Staccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Swell" symbol="Swell" description="Swell" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Staccato hard" symbol="" description="Staccato hard" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Portato long" symbol="Port. L" description="Portato long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Spiccato" symbol="" description="Spiccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Portato" symbol="Port." description="Portato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Spiccato tight" symbol="" description="Spiccato tight" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Detache soft" symbol="Det. soft" description="Detache soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Saltando" symbol="" description="Saltando" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Martele" symbol="Mart." description="Martele" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Ricochet" symbol="" description="Ricochet" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+      <DEFAULT group="Amount" name="a1"/>
     </ARTICULATION>
-    <ARTICULATION name="Staccato" symbol="Stacc." description="Staccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
-    </ARTICULATION>
-    <ARTICULATION name="Staccato hard" symbol="Stacc. hard" description="Staccato hard" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
-    </ARTICULATION>
-    <ARTICULATION name="Spiccato" symbol="Spicc." description="Spiccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
-    </ARTICULATION>
-    <ARTICULATION name="Spiccato tight" symbol="Spicc. tight" description="Spiccato tight" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
-    </ARTICULATION>
-    <ARTICULATION name="Saltando" symbol="Salt." description="Saltando" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
-    </ARTICULATION>
-    <ARTICULATION name="Ricochet a1" symbol="Ric. a1" description="Ricochet a1" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
-    </ARTICULATION>
-    <ARTICULATION name="Ricochet a2" symbol="Ric. a2" description="Ricochet a2" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
-    </ARTICULATION>
-    <ARTICULATION name="Ricochet a3" symbol="Ric. a3" description="Ricochet a3" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
-    </ARTICULATION>
-    <ARTICULATION name="Ricochet a4" symbol="Ric. a4" description="Ricochet a4" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
-    </ARTICULATION>
-    <ARTICULATION name="Rep." symbol="Rep." description="Repetitions" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Rep." symbol="" description="Repetitions" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
       <DEFAULT group="Tempo" name="120"/>
     </ARTICULATION>
-    <ARTICULATION name="Tremolo / Flutter" symbol="Trem." description="Tremolo / Flutter" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Tremolo / Flutter" symbol="" description="Tremolo / Flutter" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Tremolo long XF" symbol="Trem. XF" description="Tremolo long crossfade" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Tremolo long XF" symbol="" description="Tremolo long crossfade" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Trill ½" symbol="Trill ½" description="Trill half-tone" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Trill" symbol="" description="Trill" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+      <DEFAULT group="Interval" name="Half-tone"/>
     </ARTICULATION>
-    <ARTICULATION name="Trill 1" symbol="Trill 1" description="Trill whole-tone" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Pizz." symbol="" description="Pizzicato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Trill min. 3rd" symbol="Trill min. 3rd" description="Trill minor third" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Snap pizz." symbol="" description="Snap pizzicato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Trill maj. 3rd" symbol="Trill maj. 3rd" description="Trill major third" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Col legno" symbol="" description="Col legno" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Pizz." symbol="Pizz." description="Pizzicato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Harmonics" symbol="" description="Harmonics" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+      <DEFAULT group="Harmonics" name="Long"/>
     </ARTICULATION>
-    <ARTICULATION name="Snap pizz." symbol="Snap pizz." description="Snap pizzicato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+  </GROUP>
+  <GROUP name="Harmonics" description="The kind of harmonic: long, staccato, tremolo.">
+    <ARTICULATION name="Long" symbol="" description="Long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Col legno" symbol="Col legno" description="Col legno" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Staccato" symbol="" description="Staccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Harm. long" symbol="Harm. long" description="Harmonics long" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Tremolo" symbol="" description="Tremolo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Harm. staccato" symbol="Harm. staccato" description="Harmonics staccato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+  </GROUP>
+  <GROUP name="Interval" description="The trill interval.">
+    <ARTICULATION name="Half-tone" symbol="" description="Half-tone" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Harm. tremolo" symbol="Harm. tremolo" description="Harmonics tremolo" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Whole tone" symbol="" description="Whole tone" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Minor third" symbol="" description="Minor third" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Major third" symbol="" description="Major third" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+  </GROUP>
+  <GROUP name="Amount" description="How many ricochet bounces.">
+    <ARTICULATION name="a1" symbol="" description="a1" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="a2" symbol="" description="a2" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="a3" symbol="" description="a3" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="a4" symbol="" description="a4" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+  </GROUP>
+  <GROUP name="Length" description="The length of a crescendo or diminuendo.">
+    <ARTICULATION name="Short" symbol="" description="Short (S)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Medium" symbol="" description="Medium (M)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    </ARTICULATION>
+    <ARTICULATION name="Long" symbol="" description="Long (L)" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
   </GROUP>
   <GROUP name="Legato" description="Legato type (with Long), or the legato / slurred transition (repetitions, tremolo, trills).">
-    <ARTICULATION name="Legato" symbol="Legato" description="Legato type: legato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Legato" symbol="" description="Legato type: legato" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Lyrical" symbol="Lyrical" description="Legato type: lyrical" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Lyrical" symbol="" description="Legato type: lyrical" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Slur" symbol="Slur" description="Legato type: slur" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Slur" symbol="" description="Legato type: slur" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Portamento" symbol="Portam." description="Legato type: portamento" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Portamento" symbol="" description="Legato type: portamento" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
   </GROUP>
   <GROUP name="Release" description="The release sample (none = normal).">
-    <ARTICULATION name="Soft" symbol="Soft" description="Release: Soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Soft" symbol="" description="Release: Soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Very soft" symbol="Very soft" description="Release: Very soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Very soft" symbol="" description="Release: Very soft" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="Cut" symbol="Cut" description="Release: Cut" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="Cut" symbol="" description="Release: Cut" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
   </GROUP>
   <GROUP name="Tempo" description="Repetition tempo (bpm).">
-    <ARTICULATION name="120" symbol="120" description="120 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="120" symbol="" description="120 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="130" symbol="130" description="130 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="130" symbol="" description="130 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="140" symbol="140" description="140 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="140" symbol="" description="140 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="160" symbol="160" description="160 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="160" symbol="" description="160 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
-    <ARTICULATION name="180" symbol="180" description="180 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
+    <ARTICULATION name="180" symbol="" description="180 bpm" timingOffsetMs="0" keyLow="-1" keyHigh="-1">
     </ARTICULATION>
   </GROUP>
   <SLOTS>
@@ -149,6 +162,7 @@
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#dd2c40">
       <ARTICULATION root="Regular">
         <MODIFIER group="Main" name="Cresc."/>
+        <MODIFIER group="Length" name="Short"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
@@ -157,16 +171,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#dd2c40">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Cresc. short"/>
-      </ARTICULATION>
-      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
-      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
-      <OUTPUT type="programChange" number="16" value="0" held="0" bank="-1"/>
-      <OUTPUT type="programChange" number="32" value="0" held="0" bank="-1"/>
-    </SLOT>
-    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#dd2c40">
-      <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Cresc. medium"/>
+        <MODIFIER group="Main" name="Cresc."/>
+        <MODIFIER group="Length" name="Medium"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
@@ -175,7 +181,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#dd2c40">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Cresc. long"/>
+        <MODIFIER group="Main" name="Cresc."/>
+        <MODIFIER group="Length" name="Long"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
@@ -185,6 +192,7 @@
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#dd2c40">
       <ARTICULATION root="Regular">
         <MODIFIER group="Main" name="Dim."/>
+        <MODIFIER group="Length" name="Short"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
@@ -193,16 +201,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#dd2c40">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Dim. short"/>
-      </ARTICULATION>
-      <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
-      <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
-      <OUTPUT type="programChange" number="17" value="0" held="0" bank="-1"/>
-      <OUTPUT type="programChange" number="32" value="0" held="0" bank="-1"/>
-    </SLOT>
-    <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#dd2c40">
-      <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Dim. medium"/>
+        <MODIFIER group="Main" name="Dim."/>
+        <MODIFIER group="Length" name="Medium"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
@@ -211,7 +211,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#dd2c40">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Dim. long"/>
+        <MODIFIER group="Main" name="Dim."/>
+        <MODIFIER group="Length" name="Long"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="2" value="0" held="0" bank="-1"/>
@@ -321,7 +322,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#9dedf0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Ricochet a1"/>
+        <MODIFIER group="Main" name="Ricochet"/>
+        <MODIFIER group="Amount" name="a1"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
@@ -330,7 +332,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#9dedf0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Ricochet a2"/>
+        <MODIFIER group="Main" name="Ricochet"/>
+        <MODIFIER group="Amount" name="a2"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
@@ -339,7 +342,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#9dedf0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Ricochet a3"/>
+        <MODIFIER group="Main" name="Ricochet"/>
+        <MODIFIER group="Amount" name="a3"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
@@ -348,7 +352,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#9dedf0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Ricochet a4"/>
+        <MODIFIER group="Main" name="Ricochet"/>
+        <MODIFIER group="Amount" name="a4"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="3" value="0" held="0" bank="-1"/>
@@ -490,7 +495,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Half-tone"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -499,7 +505,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Whole tone"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -508,7 +515,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Minor third"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -517,7 +525,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Major third"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -550,7 +559,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Harm. long"/>
+        <MODIFIER group="Main" name="Harmonics"/>
+        <MODIFIER group="Harmonics" name="Long"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
@@ -558,7 +568,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Harm. staccato"/>
+        <MODIFIER group="Main" name="Harmonics"/>
+        <MODIFIER group="Harmonics" name="Staccato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
@@ -566,7 +577,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Harm. tremolo"/>
+        <MODIFIER group="Main" name="Harmonics"/>
+        <MODIFIER group="Harmonics" name="Tremolo"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
@@ -681,7 +693,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Half-tone"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
@@ -691,7 +704,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Whole tone"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
@@ -701,7 +715,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Minor third"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
@@ -711,7 +726,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Major third"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
@@ -860,7 +876,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Half-tone"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
@@ -870,7 +887,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Whole tone"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
@@ -880,7 +898,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Minor third"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
@@ -890,7 +909,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Regular">
-        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Major third"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="112" value="0" held="0" bank="-1"/>
@@ -1155,7 +1175,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Half-tone"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -1164,7 +1185,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Whole tone"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -1173,7 +1195,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Minor third"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -1182,7 +1205,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Major third"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -1207,7 +1231,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Harm. long"/>
+        <MODIFIER group="Main" name="Harmonics"/>
+        <MODIFIER group="Harmonics" name="Long"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
@@ -1215,7 +1240,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Harm. staccato"/>
+        <MODIFIER group="Main" name="Harmonics"/>
+        <MODIFIER group="Harmonics" name="Staccato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
@@ -1223,7 +1249,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="86" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Harm. tremolo"/>
+        <MODIFIER group="Main" name="Harmonics"/>
+        <MODIFIER group="Harmonics" name="Tremolo"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="8" value="0" held="0" bank="-1"/>
@@ -1327,7 +1354,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Half-tone"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
@@ -1337,7 +1365,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Whole tone"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
@@ -1347,7 +1376,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Minor third"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
@@ -1357,7 +1387,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Major third"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
@@ -1495,7 +1526,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Half-tone"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
@@ -1505,7 +1537,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Whole tone"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
@@ -1515,7 +1548,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Minor third"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
@@ -1525,7 +1559,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Con sordino">
-        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Major third"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="113" value="0" held="0" bank="-1"/>
@@ -1606,7 +1641,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Half-tone"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -1615,7 +1651,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Whole tone"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -1624,7 +1661,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Minor third"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -1633,7 +1671,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Major third"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
       <OUTPUT type="programChange" number="80" value="0" held="0" bank="-1"/>
@@ -1660,7 +1699,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Half-tone"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
@@ -1670,7 +1710,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Whole tone"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
@@ -1680,7 +1721,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Minor third"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
@@ -1690,7 +1732,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Major third"/>
         <MODIFIER group="Legato" name="Legato"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
@@ -1718,7 +1761,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill ½"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Half-tone"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
@@ -1728,7 +1772,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="98" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill 1"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Whole tone"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
@@ -1738,7 +1783,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill min. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Minor third"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>
@@ -1748,7 +1794,8 @@
     </SLOT>
     <SLOT timingOffsetMs="0" keyLow="55" keyHigh="96" color="#e585c0">
       <ARTICULATION root="Flautando">
-        <MODIFIER group="Main" name="Trill maj. 3rd"/>
+        <MODIFIER group="Main" name="Trill"/>
+        <MODIFIER group="Interval" name="Major third"/>
         <MODIFIER group="Legato" name="Slur"/>
       </ARTICULATION>
       <OUTPUT type="programChange" number="114" value="0" held="0" bank="-1"/>

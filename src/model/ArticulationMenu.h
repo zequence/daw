@@ -113,6 +113,7 @@ namespace articulations
 
         Kind kind = Kind::item;
         juce::String text;           // symbol + name (a header: the group's name)
+        juce::String symbol;         // the articulation's own symbol (may be empty)
         juce::String description;
         juce::String group, name;    // what choosing it passes to choose()
         bool isRoot = false;
@@ -154,6 +155,7 @@ namespace articulations
                 MenuItem item;
                 item.text = symbolled (root);
                 item.description = root.description;
+                item.symbol = root.symbol.trim();
                 item.group = map.groups.front().name;
                 item.name = root.name;
                 item.isRoot = true;
@@ -191,6 +193,7 @@ namespace articulations
                 MenuItem item;
                 item.text = symbolled (modifier);
                 item.description = modifier.description;
+                item.symbol = modifier.symbol.trim();
                 item.group = map.groups[g].name;
                 item.name = modifier.name;
                 item.ticked = allTargets ([&] (const Selection& s)

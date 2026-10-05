@@ -304,6 +304,18 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Expression maps
 
+- [x] Add new groups for dynamic lengths, trill intervals, ricochet amount
+      (the DAW+ map, vsl-manager tools/daw_maps.py: Main "Trill" + group
+      Interval (Half-tone, Whole tone, Minor third, Major third), Main
+      "Ricochet" + Amount (a1-a4), Cresc. / Dim. + Length (Short, Medium,
+      Long); each Main defaults to its first / default value.)
+- [x] For harmonics, add a subgroup with modifiers for long, stacc, tremolo
+      (Main "Harmonics" + its own group Harmonics: Long, Staccato, Tremolo.)
+- [x] Each articulation has a symbol, a name and a description. For now, no symbols. Nothing else. Showin in "sub-columns". Width decided by the widestt content.
+      (the articulation panel: in each group's column every articulation is a
+      row of sub-columns - symbol (only when the group has any), name,
+      description - each as wide as its widest content. The generated map has
+      no symbols.)
 - [x] Implement colors for sound slots
       (a slot has a colour, set in the map editor's slot details; the MIDI
       editor's top bar chooses what colours the notes: "Colour: velocity" or

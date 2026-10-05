@@ -285,7 +285,7 @@ public:
         beginTest ("the generated Synchron map is valid and its menu follows the preset");
         {
             expect (duality.validate().isEmpty(), duality.validate().joinIntoString ("\n"));
-            expectEquals ((int) duality.slots.size(), 177);
+            expectEquals ((int) duality.slots.size(), 175);
 
             // A colour alone: its default Main
             auto choice = duality.choose ({}, "Color", "Con sordino");
