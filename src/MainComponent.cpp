@@ -714,6 +714,7 @@ void MainComponent::openPluginWindow (AudioEngine::InstrumentId instrumentId)
     {
         window->setVisible (true);
         window->toFront (true);
+        window->ensureOnScreen();   // it may have been left off-screen, or the displays changed
         return;
     }
 
