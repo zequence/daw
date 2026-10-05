@@ -225,9 +225,17 @@ separate kind of output.
   map's combination table, not a vector per note. **Renaming** a group or
   articulation (including a case-only change) is a command that rewrites every
   note using it, across all tracks on the instruments using the map, in one undo
-  step. If a track is moved to an instrument with a different map, its notes keep
-  their articulation names; those that don't exist in the new map are shown as
-  unresolved and send nothing (open question).
+  step.
+- **Articulations that don't exist are visible errors.** If a note's
+  articulation isn't in the instrument's map any more (a track moved to another
+  instrument, the map changed, an articulation deleted, a project loaded without
+  its map), the note keeps the name it has (nothing is cleared, so the data can
+  be repaired) but is treated as having **no articulation** for playback: no
+  switch is sent for it. In the editor it is marked as an error (distinct from
+  "no articulation"), which helps finding where edits are required. The
+  articulation menu offers to select all notes with a missing articulation.
+  Fixing is done by adding the articulation to the map, renaming, or assigning
+  another one.
 
 ### The editor
 
@@ -239,6 +247,7 @@ separate kind of output.
   notes**; with nothing selected it sets the articulation new notes are drawn
   with. A selection that mixes articulations shows "Mixed".
 - Notes show their **symbol** in the piano roll (colour per articulation later).
+  Notes whose articulation is missing from the map show an error mark instead.
 - Articulation changes are undoable edits like any other (clip commands).
 
 ### Playback
@@ -294,8 +303,6 @@ selection. The UI is a client of the same commands.
 
 - **Timing offset**: what it is called. (The pre-roll for negative offsets is
   decided; its transport, loop and locate details are in "Timing offset".)
-- Notes whose articulation doesn't exist in the instrument's map (track moved,
-  map changed): keep and show as unresolved (as drafted), or clear them?
 
 ### Key ranges must follow articulation changes
 
