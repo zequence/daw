@@ -187,6 +187,78 @@ public:
             expect (anyContains (map.validate(), "(output 3): CC value 400"));
         }
 
+        beginTest ("XML round trip keeps everything, including order, text and outputs in series");
+        {
+            auto map = spitfireLike();
+            map.description = "Line one\nLine two & <more>";
+            map.groups[0].description = "Main \"articulations\"";
+            map.groups[0].articulations[1].symbol = juce::String::fromUTF8 ("\xe2\x99\xa9");   // a music note
+            map.groups[0].articulations[1].keyLow = 55;
+            map.groups[0].articulations[1].keyHigh = 103;
+            map.groups[0].articulations[1].timingOffsetMs = -70.5;
+            map.groups[0].articulations[1].outputs = { { Out::Type::keyswitch, 12, 90, true, -1 },
+                                                       { Out::Type::controller, 7, 64, false, -1 },
+                                                       { Out::Type::programChange, 4, 0, false, 130 } };
+            map.groups[0].articulations[2].outputs.clear();
+            map.groups[0].articulations[2].name = "Trem|olo";   // names are free text
+            map.groups[1].articulations[1].appliesTo = { "Legato", "Trem|olo" };
+
+            const auto xml = map.toXml();
+            const auto reread = Map::fromXml (*juce::XmlDocument::parse (xml->toString()));
+
+            expectEquals (reread.name, map.name);
+            expectEquals (reread.description, map.description);
+            expectEquals ((int) reread.groups.size(), 3);
+
+            for (size_t g = 0; g < map.groups.size(); ++g)
+            {
+                expectEquals (reread.groups[g].name, map.groups[g].name);
+                expectEquals (reread.groups[g].description, map.groups[g].description);
+                expectEquals ((int) reread.groups[g].articulations.size(), (int) map.groups[g].articulations.size());
+
+                for (size_t a = 0; a < map.groups[g].articulations.size(); ++a)
+                {
+                    auto& x = map.groups[g].articulations[a];
+                    auto& y = reread.groups[g].articulations[a];
+                    expectEquals (y.name, x.name);
+                    expectEquals (y.symbol, x.symbol);
+                    expectEquals (y.description, x.description);
+                    expectEquals (y.timingOffsetMs, x.timingOffsetMs);
+                    expectEquals (y.keyLow, x.keyLow);
+                    expectEquals (y.keyHigh, x.keyHigh);
+                    expect (y.appliesTo == x.appliesTo);
+                    expectEquals ((int) y.outputs.size(), (int) x.outputs.size());
+
+                    for (size_t o = 0; o < x.outputs.size(); ++o)
+                    {
+                        expect (y.outputs[o].type == x.outputs[o].type);
+                        expectEquals (y.outputs[o].number, x.outputs[o].number);
+                        expectEquals (y.outputs[o].value, x.outputs[o].value);
+                        expect (y.outputs[o].held == x.outputs[o].held);
+                        expectEquals (y.outputs[o].bank, x.outputs[o].bank);
+                    }
+                }
+            }
+
+            expect (reread.isValid(), reread.validate().joinIntoString ("; "));
+        }
+
+        beginTest ("reading is forgiving: defaults for missing attributes, unknown output types skipped");
+        {
+            const auto xml = juce::XmlDocument::parse (
+                R"(<EXPRESSIONMAP name="Tiny"><GROUP name="Root"><ARTICULATION name="A">
+                   <OUTPUT type="sysex" number="1"/><OUTPUT type="controller" number="32"/></ARTICULATION></GROUP></EXPRESSIONMAP>)");
+            const auto map = Map::fromXml (*xml);
+            expectEquals (map.name, juce::String ("Tiny"));
+            const auto& a = map.groups[0].articulations[0];
+            expectEquals ((int) a.outputs.size(), 1);   // the unknown type was skipped
+            expectEquals (a.outputs[0].number, 32);
+            expectEquals (a.outputs[0].value, 100);     // default
+            expectEquals (a.outputs[0].bank, -1);
+            expectEquals (a.keyLow, -1);
+            expectEquals (a.timingOffsetMs, 0.0);
+        }
+
         beginTest ("no restrictions on combining keys, CCs and program changes (left to the user)");
         {
             // A root and a modifier that works with it on the same CC

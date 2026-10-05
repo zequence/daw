@@ -194,7 +194,125 @@ struct ExpressionMap
 
     bool isValid() const    { return validate().isEmpty(); }
 
+    //==========================================================================
+    // Project / library files. Group order is preserved (the first is the root
+    // group). Reading is forgiving: missing attributes take their defaults and
+    // unknown output types are skipped; validate() says what is wrong.
+    //
+    //   <EXPRESSIONMAP name description>
+    //     <GROUP name description>
+    //       <ARTICULATION name symbol description timingOffsetMs keyLow keyHigh>
+    //         <APPLIESTO root="Staccato"/> ...
+    //         <OUTPUT type="keyswitch|controller|programChange" number value held bank/> ...
+    std::unique_ptr<juce::XmlElement> toXml() const
+    {
+        auto xml = std::make_unique<juce::XmlElement> ("EXPRESSIONMAP");
+        xml->setAttribute ("name", name);
+        xml->setAttribute ("description", description);
+
+        for (auto& group : groups)
+        {
+            auto* g = xml->createNewChildElement ("GROUP");
+            g->setAttribute ("name", group.name);
+            g->setAttribute ("description", group.description);
+
+            for (auto& articulation : group.articulations)
+            {
+                auto* a = g->createNewChildElement ("ARTICULATION");
+                a->setAttribute ("name", articulation.name);
+                a->setAttribute ("symbol", articulation.symbol);
+                a->setAttribute ("description", articulation.description);
+                a->setAttribute ("timingOffsetMs", articulation.timingOffsetMs);
+                a->setAttribute ("keyLow", articulation.keyLow);
+                a->setAttribute ("keyHigh", articulation.keyHigh);
+
+                for (auto& root : articulation.appliesTo)
+                    a->createNewChildElement ("APPLIESTO")->setAttribute ("root", root);
+
+                for (auto& output : articulation.outputs)
+                {
+                    auto* o = a->createNewChildElement ("OUTPUT");
+                    o->setAttribute ("type", typeToString (output.type));
+                    o->setAttribute ("number", output.number);
+                    o->setAttribute ("value", output.value);
+                    o->setAttribute ("held", output.held);
+                    o->setAttribute ("bank", output.bank);
+                }
+            }
+        }
+
+        return xml;
+    }
+
+    static ExpressionMap fromXml (const juce::XmlElement& xml)
+    {
+        ExpressionMap map;
+        map.name = xml.getStringAttribute ("name");
+        map.description = xml.getStringAttribute ("description");
+
+        for (auto* g : xml.getChildWithTagNameIterator ("GROUP"))
+        {
+            Group group;
+            group.name = g->getStringAttribute ("name");
+            group.description = g->getStringAttribute ("description");
+
+            for (auto* a : g->getChildWithTagNameIterator ("ARTICULATION"))
+            {
+                Articulation articulation;
+                articulation.name = a->getStringAttribute ("name");
+                articulation.symbol = a->getStringAttribute ("symbol");
+                articulation.description = a->getStringAttribute ("description");
+                articulation.timingOffsetMs = a->getDoubleAttribute ("timingOffsetMs", 0.0);
+                articulation.keyLow = a->getIntAttribute ("keyLow", -1);
+                articulation.keyHigh = a->getIntAttribute ("keyHigh", -1);
+
+                for (auto* applies : a->getChildWithTagNameIterator ("APPLIESTO"))
+                    articulation.appliesTo.add (applies->getStringAttribute ("root"));
+
+                for (auto* o : a->getChildWithTagNameIterator ("OUTPUT"))
+                {
+                    Output output;
+
+                    if (! typeFromString (o->getStringAttribute ("type"), output.type))
+                        continue;
+
+                    output.number = o->getIntAttribute ("number", 0);
+                    output.value = o->getIntAttribute ("value", 100);
+                    output.held = o->getBoolAttribute ("held", false);
+                    output.bank = o->getIntAttribute ("bank", -1);
+                    articulation.outputs.push_back (output);
+                }
+
+                group.articulations.push_back (std::move (articulation));
+            }
+
+            map.groups.push_back (std::move (group));
+        }
+
+        return map;
+    }
+
 private:
+    static const char* typeToString (Output::Type type)
+    {
+        switch (type)
+        {
+            case Output::Type::keyswitch:      return "keyswitch";
+            case Output::Type::controller:     return "controller";
+            case Output::Type::programChange:  return "programChange";
+        }
+
+        return "keyswitch";
+    }
+
+    static bool typeFromString (const juce::String& text, Output::Type& type)
+    {
+        if (text == "keyswitch")      { type = Output::Type::keyswitch;      return true; }
+        if (text == "controller")     { type = Output::Type::controller;     return true; }
+        if (text == "programChange")  { type = Output::Type::programChange;  return true; }
+        return false;
+    }
+
     static juce::String names (const Group& group)
     {
         juce::StringArray list;
