@@ -2,6 +2,7 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 #include <cstring>
+#include <array>
 
 #include "Transport.h"
 #include "../model/MidiSequence.h"
@@ -30,6 +31,24 @@ public:
     // a full render-sequence rebuild (>1 s with 1000+ tracks) per selection.
     void setLiveEnabled (bool shouldPass)        { liveEnabled.store (shouldPass); }
 
+    // Message thread: send a message at the start of the next block, ahead of the live input
+    // (an articulation switch chosen while playing - not recorded, it doesn't come from the input)
+    void injectLive (const juce::MidiMessage& message)
+    {
+        if (message.getRawDataSize() > 3)
+            return;
+
+        const auto scope = injectFifo.write (1);
+        auto* slot = scope.blockSize1 > 0 ? &injected[(size_t) scope.startIndex1]
+                   : scope.blockSize2 > 0 ? &injected[(size_t) scope.startIndex2] : nullptr;
+
+        if (slot != nullptr)
+        {
+            slot->size = message.getRawDataSize();
+            std::memcpy (slot->bytes, message.getRawData(), (size_t) slot->size);
+        }
+    }
+
     // Any thread; the audio thread picks the new sequence up at the next block.
     void setSequence (MidiSequence::Ptr s)       { sequence.store (std::move (s)); }
     MidiSequence::Ptr getSequence() const        { return sequence.load(); }
@@ -51,6 +70,18 @@ public:
             liveIn.addEvents (midi, 0, -1, 0);
 
         renderSequence (midi);
+
+        if (const auto ready = injectFifo.getNumReady(); ready > 0)
+        {
+            const auto scope = injectFifo.read (ready);
+
+            for (int i = 0; i < scope.blockSize1; ++i)
+                midi.addEvent (injected[(size_t) (scope.startIndex1 + i)].bytes, injected[(size_t) (scope.startIndex1 + i)].size, 0);
+
+            for (int i = 0; i < scope.blockSize2; ++i)
+                midi.addEvent (injected[(size_t) (scope.startIndex2 + i)].bytes, injected[(size_t) (scope.startIndex2 + i)].size, 0);
+        }
+
         midi.addEvents (liveIn, 0, -1, 0);
     }
 
@@ -406,6 +437,10 @@ private:
     std::atomic<MidiSequence::Ptr> sequence;
     std::atomic<bool> killAllRequest { false }, suppressed { false }, liveEnabled { false };
     juce::MidiBuffer liveIn;   // audio-thread scratch for the passed-through live input
+
+    struct Injected { juce::uint8 bytes[3] {}; int size = 0; };
+    juce::AbstractFifo injectFifo { 64 };
+    std::array<Injected, 64> injected;
 
     std::vector<ActiveNote> activeNotes;
     bool sustainDown[16] = {};

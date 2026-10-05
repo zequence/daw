@@ -1291,6 +1291,8 @@ private:
             return true;
         }, 52, true);
 
+        buildRemoteControl (*articulation);
+
         if (working->hasSlots())
         {
             buildDefaults (*articulation);
@@ -1411,6 +1413,124 @@ private:
             }
         };
         rows.push_back ({ nullptr, add, 26, 140 });
+    }
+
+    // A button that records the next key pressed (Escape cancels, Backspace clears)
+    struct KeyCaptureButton final : juce::TextButton
+    {
+        std::function<void (const juce::String&)> onCapture;   // "" = cleared
+        juce::String current;
+
+        void showCurrent()    { setButtonText (current.isEmpty() ? "None (click, then press a key)" : current); }
+
+        void clicked() override
+        {
+            setButtonText ("Press a key...   Esc cancels, Backspace clears");
+            setWantsKeyboardFocus (true);
+            grabKeyboardFocus();
+        }
+
+        bool keyPressed (const juce::KeyPress& key) override
+        {
+            if (! hasKeyboardFocus (false))
+                return false;
+
+            if (key == juce::KeyPress::escapeKey)
+                showCurrent();
+            else if (key == juce::KeyPress::backspaceKey || key == juce::KeyPress::deleteKey)
+                capture ({});
+            else
+                capture (key.getTextDescription());
+
+            setWantsKeyboardFocus (false);
+            giveAwayKeyboardFocus();
+            return true;
+        }
+
+        void focusLost (FocusChangeType) override    { showCurrent(); }
+
+    private:
+        void capture (const juce::String& description)
+        {
+            current = description;
+            showCurrent();
+
+            if (onCapture)
+                onCapture (description);
+        }
+    };
+
+    // Remote control: the articulation's key command and MIDI trigger (MILESTONES.md
+    // "Articulation remote control")
+    void buildRemoteControl (const ExpressionMap::Articulation& articulation)
+    {
+        addHeading ("Remote control");
+        addHint ("Choose this articulation with a computer key or a control of a MIDI controller "
+                 "(Settings > Audio & MIDI) - in the MIDI editor, on the selected notes or for new notes, and live.", 44);
+
+        auto* keyButton = own<KeyCaptureButton>();
+        keyButton->current = articulation.keyCommand;
+        keyButton->showCurrent();
+        keyButton->onCapture = [this] (const juce::String& description)
+        {
+            if (auto* a = currentArticulation())
+            {
+                a->keyCommand = description;
+                commit();
+            }
+        };
+        rows.push_back ({ makeLabel ("Key command"), keyButton, 26, 330 });
+
+        auto* trigger = makeLabel (articulation.trigger.isSet() ? articulation.trigger.describe() : juce::String ("None"));
+        rows.push_back ({ makeLabel ("MIDI trigger"), trigger, 24, 330 });
+
+        auto* learn = own<juce::TextButton> (learning ? "Waiting for a controller message..." : "Learn");
+        learn->setTooltip ("Assigns the next control you move or press on a MIDI controller (a note, CC or program change)");
+        learn->onClick = [this]
+        {
+            if (engine.getControllers().isEmpty())
+            {
+                problems = { "no MIDI controller yet: add one in Settings > Audio & MIDI" };
+                updateStatus();
+                return;
+            }
+
+            if (learning)
+                return;
+
+            learning = true;
+            previousControllerMidi = engine.onControllerMidi;
+            engine.onControllerMidi = [safe = juce::Component::SafePointer<ExpressionMapEditorView> (this)] (const juce::MidiMessage& message)
+            {
+                if (safe == nullptr)
+                    return;
+
+                safe->learning = false;
+                safe->engine.onControllerMidi = safe->previousControllerMidi;
+
+                if (auto* a = safe->currentArticulation())
+                {
+                    a->trigger = ExpressionMap::MidiTrigger::from (message);
+                    safe->commit();
+                }
+
+                safe->rebuildDetailsSoon();
+            };
+            rebuildDetailsSoon();
+        };
+
+        auto* clear = own<juce::TextButton> ("Clear");
+        clear->onClick = [this]
+        {
+            if (auto* a = currentArticulation())
+            {
+                a->trigger = {};
+                commit();
+                rebuildDetailsSoon();
+            }
+        };
+
+        rows.push_back ({ learn, clear, 26, 90 });
     }
 
     // Defaults (maps with slots): per other modifier group, what is chosen along with this articulation
@@ -1704,6 +1824,8 @@ private:
     std::optional<ExpressionMap> working;
     juce::StringArray problems;
     int selectedGroup = 0, selectedArticulation = -1, selectedSlot = -1;
+    bool learning = false;                                              // MIDI Learn waits for a controller message
+    std::function<void (const juce::MidiMessage&)> previousControllerMidi;   // restored after learning
     std::vector<int> visibleSlots;   // indices into working->slots that pass the filter
     Focus focus = Focus::map;
     bool programmatic = false;

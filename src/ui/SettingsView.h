@@ -46,6 +46,21 @@ public:
             engine.getDeviceManager(), 0, 0, 2, 64, true, false, true, false);
         page.addAndMakeVisible (*deviceSelector);
 
+        // MIDI controllers: MIDI inputs used as control surfaces
+        controllersHeading.setText ("MIDI controllers", juce::dontSendNotification);
+        controllersHeading.setFont (juce::FontOptions (15.0f, juce::Font::bold));
+        controllersHeading.setColour (juce::Label::textColourId, juce::Colours::white);
+        page.addAndMakeVisible (controllersHeading);
+
+        controllersHint.setText ("A MIDI input added as a controller is a control surface: its notes and controllers never reach tracks "
+                                 "or recording. Its controls are assigned to functions - for now articulations (an expression map's MIDI triggers).",
+                                 juce::dontSendNotification);
+        controllersHint.setColour (juce::Label::textColourId, juce::Colours::grey);
+        controllersHint.setFont (juce::FontOptions (12.0f));
+        controllersHint.setJustificationType (juce::Justification::topLeft);
+        page.addAndMakeVisible (controllersHint);
+        rebuildControllerToggles();
+
         // --- Plugins ---
         pluginList = std::make_unique<juce::PluginListComponent> (
             engine.getFormatManager(), engine.getKnownPlugins(), engine.getDeadMansPedalFile(), nullptr, true);
@@ -271,6 +286,11 @@ private:
         int y = 8;
 
         deviceSelector->setVisible (category == audioMidi);
+        controllersHeading.setVisible (category == audioMidi);
+        controllersHint.setVisible (category == audioMidi);
+
+        for (auto& toggle : controllerToggles)
+            toggle->setVisible (category == audioMidi);
         pluginList->setVisible (category == plugins);
 
         for (auto* c : std::initializer_list<juce::Component*> { &scanButton, &retryButton, &rescanButton, &onTopToggle })
@@ -297,6 +317,18 @@ private:
             case audioMidi:
                 deviceSelector->setBounds (4, y, juce::jmin (width - 8, 560), 460);
                 y += 470;
+                controllersHeading.setBounds (4, y, 300, 24);
+                y += 28;
+                controllersHint.setBounds (4, y, juce::jmin (width - 8, 640), 34);
+                y += 38;
+
+                for (auto& toggle : controllerToggles)
+                {
+                    toggle->setBounds (4, y, juce::jmin (width - 8, 520), 24);
+                    y += 26;
+                }
+
+                y += 8;
                 break;
 
             case plugins:
@@ -444,6 +476,42 @@ private:
     Page page { *this };
 
     std::unique_ptr<juce::AudioDeviceSelectorComponent> deviceSelector;
+    juce::Label controllersHeading, controllersHint;
+    std::vector<std::unique_ptr<juce::ToggleButton>> controllerToggles;
+
+    // One toggle per MIDI input device ("use as a controller")
+    void rebuildControllerToggles()
+    {
+        controllerToggles.clear();
+        const auto chosen = engine.getControllers();
+        const auto devices = juce::MidiInput::getAvailableDevices();
+
+        for (auto& device : devices)
+        {
+            auto toggle = std::make_unique<juce::ToggleButton> (device.name + ": use as a controller");
+            toggle->setToggleState (chosen.contains (device.identifier), juce::dontSendNotification);
+            toggle->onClick = [this, id = device.identifier, t = toggle.get()]
+            {
+                auto list = engine.getControllers();
+                list.removeString (id);
+
+                if (t->getToggleState())
+                    list.add (id);
+
+                engine.setControllers (list);
+            };
+            page.addAndMakeVisible (*toggle);
+            controllerToggles.push_back (std::move (toggle));
+        }
+
+        if (devices.isEmpty())
+        {
+            auto none = std::make_unique<juce::ToggleButton> ("(no MIDI inputs found)");
+            none->setEnabled (false);
+            page.addAndMakeVisible (*none);
+            controllerToggles.push_back (std::move (none));
+        }
+    }
     std::unique_ptr<juce::PluginListComponent> pluginList;
     juce::TextButton scanButton { "Scan for new plugins" }, retryButton { "Retry failed plugins" },
                      rescanButton { "Rescan everything" };

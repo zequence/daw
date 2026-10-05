@@ -14,7 +14,6 @@ Claude is unsure of an issue they will pose a question.
 # Top bar
 
 # Settings Window
-- [ ] controller or key commands for specific articulations
 
 # Instruments
 
@@ -45,7 +44,9 @@ Claude is unsure of an issue they will pose a question.
 
 # Midi editor
 
+- [ ] Note input mode. Note length is controlled with keys 1-9. 0 is pause. 1 - whole note, 2 - half note, etc.
 - [ ] CC edits are done by adding points rather then drawing. CC is either in staircase steps, ramps or "bent" ramps. The possible position of points is determined by Q and grid settings.
+      (Written up: milestone "CC editing with points" in MILESTONES.md.)
 - [ ] Show midi for multiple tracks. Midi for the selected channel is normal, while other channel midi is greyed out.
 - [ ] A dropdown in the top editor bar to select which channel to edit. It will only show the selected midi channels.
 - [ ] A button for enabling editing on multi-channel (for example copy paste)

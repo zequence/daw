@@ -43,6 +43,11 @@ public:
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     bool keyPressed (const juce::KeyPress&) override;
 
+    // Remote control (a key command or a MIDI controller's control): choose an articulation as
+    // the articulation panel does - on the selected notes, or the one new notes get. Returns the
+    // new-note choice afterwards (what plays live), unless notes were changed instead.
+    std::optional<ExpressionMap::Selection> remoteChoose (const juce::String& group, const juce::String& name);
+
 private:
     enum class Drag { none, marquee, move, resize, lane, draw };
     enum class LaneMode { velocity, pitchBend, controller };

@@ -267,6 +267,12 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     instrumentsView.onOpenPluginGui = [this] (auto id) { openPluginWindow (id); };
     commandDispatcher.onBeforeInstrumentRemove = [this] (int id) { pluginWindows.erase (id); };
+
+    // MIDI controllers (Settings > Audio & MIDI): their assigned controls choose articulations
+    engine.onControllerMidi = [this] (const juce::MidiMessage& message)
+    {
+        triggerArticulation ([&message] (const ExpressionMap& map) { return map.findByTrigger (message); });
+    };
     instrumentsView.onRemoveInstrument = [this] (auto id) { removeInstrumentAsking (id); };
     instrumentsView.onEditInstrument = [this] (auto id)
     {
@@ -433,6 +439,39 @@ void MainComponent::createDefaultTrack()
             if (entries.getArray() == nullptr || entries.getArray()->size() <= 3)
                 safe->engine.markProjectClean();
         });
+}
+
+// Remote control of articulations: a key command or a MIDI controller's control chooses
+// an articulation of the current track's map, as the articulation panel does (MILESTONES.md
+// "Articulation remote control"). With no notes selected it becomes what new notes get, and is
+// sent to the instrument at once so it is heard on the next note played live.
+bool MainComponent::triggerArticulation (const std::function<std::optional<ExpressionMap::Target> (const ExpressionMap&)>& find)
+{
+    const auto track = pianoRollView.getTrack() != 0 ? pianoRollView.getTrack() : selectedTrack;
+    const auto map = track != 0 ? engine.getTrackExpressionMap (track) : std::nullopt;
+
+    if (! map.has_value())
+        return false;
+
+    const auto target = find (*map);
+
+    if (! target.has_value())
+        return false;
+
+    if (pianoRollView.getTrack() != track)
+        pianoRollView.setTrack (track);
+
+    if (const auto live = pianoRollView.remoteChoose (target->group, target->name))
+    {
+        engine.sendLiveArticulation (track, map->outputsOf (*live));
+        statusLabel.setText ("Articulation: " + ExpressionMap::labelOf (*live), juce::dontSendNotification);
+    }
+    else
+    {
+        statusLabel.setText ("Articulation of the selected notes: " + target->name, juce::dontSendNotification);
+    }
+
+    return true;
 }
 
 // Remove an instrument; when tracks play it, ask whether they go too (ISSUES.md "Instruments")
@@ -1307,6 +1346,10 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
 
         return false;
     }
+
+    // An articulation's key command (in the current track's expression map)
+    if (triggerArticulation ([&key] (const ExpressionMap& map) { return map.findByKeyCommand (key.getTextDescription()); }))
+        return true;
 
     if (key == juce::KeyPress::F12Key)
     {

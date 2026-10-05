@@ -68,14 +68,16 @@ AudioEngine::AudioEngine (juce::PropertiesFile& settingsToUse)
 
     player.setProcessor (&graph);
     deviceManager.addAudioCallback (&ioCallback);
-    deviceManager.addMidiInputDeviceCallback ({}, &player);
+    controllerDevices = juce::StringArray::fromLines (settings.getValue ("midiControllers"));
+    controllerDevices.removeEmptyStrings();
+    deviceManager.addMidiInputDeviceCallback ({}, &inputRouter);
 }
 
 AudioEngine::~AudioEngine()
 {
     saveSettings();
 
-    deviceManager.removeMidiInputDeviceCallback ({}, &player);
+    deviceManager.removeMidiInputDeviceCallback ({}, &inputRouter);
     deviceManager.removeAudioCallback (&ioCallback);
     player.setProcessor (nullptr);
     graph.clear();
@@ -88,6 +90,97 @@ void AudioEngine::enableAllMidiInputsIfFirstRun (bool hadSavedState)
 
     for (auto& device : juce::MidiInput::getAvailableDevices())
         deviceManager.setMidiInputDeviceEnabled (device.identifier, true);
+}
+
+//==============================================================================
+// MIDI controllers (control surfaces)
+void AudioEngine::InputRouter::handleIncomingMidiMessage (juce::MidiInput* source, const juce::MidiMessage& message)
+{
+    bool isController = false;
+
+    if (source != nullptr)
+    {
+        const juce::ScopedLock lock (engine.controllerLock);
+        isController = engine.controllerDevices.contains (source->getIdentifier());
+    }
+
+    if (! isController)
+    {
+        engine.player.handleIncomingMidiMessage (source, message);
+        return;
+    }
+
+    if (message.isNoteOn() || message.isController() || message.isProgramChange())
+        juce::MessageManager::callAsync ([&e = engine, token = std::weak_ptr<int> (engine.lifetimeToken), message]
+        {
+            if (! token.expired() && e.onControllerMidi)
+                e.onControllerMidi (message);
+        });
+}
+
+void AudioEngine::setControllers (const juce::StringArray& deviceIdentifiers)
+{
+    {
+        const juce::ScopedLock lock (controllerLock);
+        controllerDevices = deviceIdentifiers;
+    }
+
+    settings.setValue ("midiControllers", deviceIdentifiers.joinIntoString (juce::newLine));
+    settings.saveIfNeeded();
+}
+
+juce::StringArray AudioEngine::getControllers() const
+{
+    const juce::ScopedLock lock (controllerLock);
+    return controllerDevices;
+}
+
+void AudioEngine::sendLiveArticulation (TrackId trackId, const std::vector<ExpressionMap::Output>& outputs)
+{
+    const auto sourceOf = [this] (TrackId id) -> MidiSourceProcessor*
+    {
+        if (auto* track = findTrack (id))
+            if (auto* node = graph.getNodeForId (track->midiSourceNode))
+                return dynamic_cast<MidiSourceProcessor*> (node->getProcessor());
+
+        return nullptr;
+    };
+
+    auto* source = sourceOf (trackId);
+
+    if (source == nullptr)
+        return;
+
+    // Channel 1: the track's route rewrites it to the output's channel
+    for (auto& output : outputs)
+    {
+        switch (output.type)
+        {
+            case ExpressionMap::Output::Type::programChange:
+                if (output.bank >= 0)
+                {
+                    source->injectLive (juce::MidiMessage::controllerEvent (1, 0, (output.bank >> 7) & 127));
+                    source->injectLive (juce::MidiMessage::controllerEvent (1, 32, output.bank & 127));
+                }
+
+                source->injectLive (juce::MidiMessage::programChange (1, output.number));
+                break;
+
+            case ExpressionMap::Output::Type::controller:
+                source->injectLive (juce::MidiMessage::controllerEvent (1, output.number, output.value));
+                break;
+
+            case ExpressionMap::Output::Type::keyswitch:
+                source->injectLive (juce::MidiMessage::noteOn (1, output.number, (juce::uint8) juce::jlimit (1, 127, output.value)));
+                juce::Timer::callAfterDelay (30, [token = std::weak_ptr<int> (lifetimeToken), trackId, sourceOf, key = output.number]
+                {
+                    if (! token.expired())
+                        if (auto* s = sourceOf (trackId))
+                            s->injectLive (juce::MidiMessage::noteOff (1, key));
+                });
+                break;
+        }
+    }
 }
 
 void AudioEngine::saveSettings()

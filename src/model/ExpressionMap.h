@@ -1,7 +1,9 @@
 #pragma once
 
 #include <juce_core/juce_core.h>
+#include <juce_audio_basics/juce_audio_basics.h>
 #include <vector>
+#include <optional>
 
 // Expression maps (MILESTONES.md "Articulation / expression maps").
 //
@@ -44,6 +46,81 @@ struct ExpressionMap
         int bank = -1;           // programChange only: -1 = none, else 0..16383
     };
 
+    // A control of a MIDI controller (Settings > Audio & MIDI) assigned to an articulation:
+    // a note, a CC (any value, or one), or a program change
+    struct MidiTrigger
+    {
+        enum class Type { none, note, controller, program };
+
+        Type type = Type::none;
+        int number = 0;      // note, CC number or program (0..127)
+        int value = -1;      // controller only: the value it must have (-1 = any)
+        int channel = 0;     // 1..16, 0 = any
+
+        bool isSet() const noexcept    { return type != Type::none; }
+
+        bool matches (const juce::MidiMessage& message) const
+        {
+            if (type == Type::none || (channel != 0 && message.getChannel() != channel))
+                return false;
+
+            switch (type)
+            {
+                case Type::note:        return message.isNoteOn() && message.getNoteNumber() == number;
+                case Type::controller:  return message.isController() && message.getControllerNumber() == number
+                                                && (value < 0 || message.getControllerValue() == value);
+                case Type::program:     return message.isProgramChange() && message.getProgramChangeNumber() == number;
+                case Type::none:        break;
+            }
+
+            return false;
+        }
+
+        // The trigger a message would set (Learn): notes, CCs (with their value) and program changes
+        static MidiTrigger from (const juce::MidiMessage& message)
+        {
+            MidiTrigger t;
+            t.channel = message.getChannel();
+
+            if (message.isNoteOn())             { t.type = Type::note;       t.number = message.getNoteNumber(); }
+            else if (message.isController())    { t.type = Type::controller; t.number = message.getControllerNumber(); t.value = message.getControllerValue(); }
+            else if (message.isProgramChange()) { t.type = Type::program;    t.number = message.getProgramChangeNumber(); }
+
+            return t;
+        }
+
+        bool operator== (const MidiTrigger& o) const
+        {
+            return type == o.type && number == o.number && value == o.value && channel == o.channel;
+        }
+
+        // "Note 36, ch 1" / "CC 20 = 127, any channel" / "Program 5"
+        juce::String describe() const
+        {
+            const auto where = channel == 0 ? juce::String (", any channel") : ", ch " + juce::String (channel);
+
+            switch (type)
+            {
+                case Type::note:        return "Note " + juce::String (number) + where;
+                case Type::controller:  return "CC " + juce::String (number) + (value >= 0 ? " = " + juce::String (value) : juce::String()) + where;
+                case Type::program:     return "Program " + juce::String (number + 1) + where;
+                case Type::none:        break;
+            }
+
+            return "none";
+        }
+
+        static const char* typeName (Type t)
+        {
+            return t == Type::note ? "note" : t == Type::controller ? "controller" : t == Type::program ? "program" : "none";
+        }
+
+        static Type typeFrom (const juce::String& text)
+        {
+            return text == "note" ? Type::note : text == "controller" ? Type::controller : text == "program" ? Type::program : Type::none;
+        }
+    };
+
     struct Articulation
     {
         juce::String name;           // identifier, unique (ignoring case) within its group
@@ -63,6 +140,11 @@ struct ExpressionMap
         // Maps with slots: chosen along with this articulation when their group
         // has nothing chosen yet, as (group, articulation): Rep. -> (Tempo, 120)
         std::vector<std::pair<juce::String, juce::String>> defaults;
+
+        // Remote control: a computer key command (its text description, "ctrl + 1"; empty =
+        // none) and a MIDI trigger (a MIDI controller's control) choose it
+        juce::String keyCommand;
+        MidiTrigger trigger;
     };
 
     struct Group
@@ -343,6 +425,36 @@ struct ExpressionMap
     }
 
     //==========================================================================
+    // Remote control: which articulation a key command / MIDI message chooses
+    struct Target
+    {
+        juce::String group, name;
+    };
+
+    std::optional<Target> findByKeyCommand (const juce::String& keyDescription) const
+    {
+        if (keyDescription.trim().isEmpty())
+            return std::nullopt;
+
+        for (auto& group : groups)
+            for (auto& articulation : group.articulations)
+                if (articulation.keyCommand.trim().equalsIgnoreCase (keyDescription.trim()))
+                    return Target { group.name, articulation.name };
+
+        return std::nullopt;
+    }
+
+    std::optional<Target> findByTrigger (const juce::MidiMessage& message) const
+    {
+        for (auto& group : groups)
+            for (auto& articulation : group.articulations)
+                if (articulation.trigger.matches (message))
+                    return Target { group.name, articulation.name };
+
+        return std::nullopt;
+    }
+
+    //==========================================================================
     // Sound slots: finding the slot of a choice, and what can still be chosen
 
     // Does the combination 'whole' contain everything in 'part'? (Same root, and
@@ -368,6 +480,31 @@ struct ExpressionMap
                 return &slot;
 
         return nullptr;
+    }
+
+    // What a choice sends: its slot's outputs, or (a map without slots) the root's, then the
+    // modifiers' in group order. Empty when it has none or the map doesn't know it.
+    std::vector<Output> outputsOf (const Selection& selection) const
+    {
+        if (hasSlots())
+        {
+            const auto* slot = findSlot (selection);
+            return slot != nullptr ? slot->outputs : std::vector<Output>();
+        }
+
+        std::vector<Output> outputs;
+
+        if (groups.empty())
+            return outputs;
+
+        if (const auto* root = findArticulation (groups.front(), selection.root))
+            outputs = root->outputs;
+
+        for (auto& modifier : canonical (selection).modifiers)
+            if (const auto* articulation = findArticulation (modifier.first, modifier.second))
+                outputs.insert (outputs.end(), articulation->outputs.begin(), articulation->outputs.end());
+
+        return outputs;
     }
 
     // Can this (partial) choice still become a slot?
@@ -724,6 +861,38 @@ struct ExpressionMap
         if (hasSlots())
             validateSlots (problems);
 
+        // Remote control: a key command or a MIDI trigger chooses one articulation
+        std::vector<std::pair<juce::String, const Articulation*>> keys, triggers;
+
+        for (auto& group : groups)
+            for (auto& articulation : group.articulations)
+            {
+                const auto label = "'" + articulation.name + "' (" + group.name + ")";
+
+                if (articulation.keyCommand.trim().isNotEmpty())
+                {
+                    for (auto& [otherLabel, other] : keys)
+                        if (other->keyCommand.trim().equalsIgnoreCase (articulation.keyCommand.trim()))
+                            problems.add ("the key command '" + articulation.keyCommand + "' is used by both " + otherLabel + " and " + label);
+
+                    keys.emplace_back (label, &articulation);
+                }
+
+                if (articulation.trigger.isSet())
+                {
+                    const auto& t = articulation.trigger;
+
+                    if (t.number < 0 || t.number > 127 || t.value < -1 || t.value > 127 || t.channel < 0 || t.channel > 16)
+                        problems.add (label + " has an invalid MIDI trigger (" + t.describe() + ")");
+
+                    for (auto& [otherLabel, other] : triggers)
+                        if (other->trigger == t)
+                            problems.add ("the MIDI trigger '" + t.describe() + "' is used by both " + otherLabel + " and " + label);
+
+                    triggers.emplace_back (label, &articulation);
+                }
+            }
+
         return problems;
     }
 
@@ -887,6 +1056,19 @@ struct ExpressionMap
                     a->setProperty ("defaults", defaultList);
                 }
 
+                if (articulation.keyCommand.isNotEmpty())
+                    a->setProperty ("keyCommand", articulation.keyCommand);
+
+                if (articulation.trigger.isSet())
+                {
+                    auto t = new juce::DynamicObject();
+                    t->setProperty ("type", MidiTrigger::typeName (articulation.trigger.type));
+                    t->setProperty ("number", articulation.trigger.number);
+                    t->setProperty ("value", articulation.trigger.value);
+                    t->setProperty ("channel", articulation.trigger.channel);
+                    a->setProperty ("trigger", juce::var (t));
+                }
+
                 juce::Array<juce::var> outputList;
 
                 for (auto& output : articulation.outputs)
@@ -1027,6 +1209,16 @@ struct ExpressionMap
 
                             articulation.defaults.emplace_back (d.getProperty ("group", {}).toString(), d.getProperty ("name", {}).toString());
                         }
+
+                    articulation.keyCommand = a.getProperty ("keyCommand", {}).toString();
+
+                    if (const auto t = a.getProperty ("trigger", {}); t.isObject())
+                    {
+                        articulation.trigger.type = MidiTrigger::typeFrom (t.getProperty ("type", "none").toString());
+                        articulation.trigger.number = (int) t.getProperty ("number", 0);
+                        articulation.trigger.value = (int) t.getProperty ("value", -1);
+                        articulation.trigger.channel = (int) t.getProperty ("channel", 0);
+                    }
 
                     const auto outputList = a.getProperty ("outputs", {});
 
@@ -1431,6 +1623,18 @@ struct ExpressionMap
                     d->setAttribute ("name", articulationName);
                 }
 
+                if (articulation.keyCommand.isNotEmpty())
+                    a->setAttribute ("keyCommand", articulation.keyCommand);
+
+                if (articulation.trigger.isSet())
+                {
+                    auto* t = a->createNewChildElement ("TRIGGER");
+                    t->setAttribute ("type", MidiTrigger::typeName (articulation.trigger.type));
+                    t->setAttribute ("number", articulation.trigger.number);
+                    t->setAttribute ("value", articulation.trigger.value);
+                    t->setAttribute ("channel", articulation.trigger.channel);
+                }
+
                 for (auto& output : articulation.outputs)
                 {
                     auto* o = a->createNewChildElement ("OUTPUT");
@@ -1500,6 +1704,16 @@ struct ExpressionMap
 
                 for (auto* d : a->getChildWithTagNameIterator ("DEFAULT"))
                     articulation.defaults.emplace_back (d->getStringAttribute ("group"), d->getStringAttribute ("name"));
+
+                articulation.keyCommand = a->getStringAttribute ("keyCommand");
+
+                if (auto* t = a->getChildByName ("TRIGGER"))
+                {
+                    articulation.trigger.type = MidiTrigger::typeFrom (t->getStringAttribute ("type"));
+                    articulation.trigger.number = t->getIntAttribute ("number", 0);
+                    articulation.trigger.value = t->getIntAttribute ("value", -1);
+                    articulation.trigger.channel = t->getIntAttribute ("channel", 0);
+                }
 
                 for (auto* o : a->getChildWithTagNameIterator ("OUTPUT"))
                 {

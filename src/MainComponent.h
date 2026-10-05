@@ -69,6 +69,7 @@ private:
     void updateWindowTitle();
     static juce::File getProjectsDirectory();
     void removeInstrumentAsking (AudioEngine::InstrumentId);
+    bool triggerArticulation (const std::function<std::optional<ExpressionMap::Target> (const ExpressionMap&)>& find);
     static juce::File startupProjectFile()    { return UserData::getDir().getChildFile ("Startup.odaw"); }
     void openSettings();
     void closeSettings();

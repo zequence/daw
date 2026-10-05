@@ -651,15 +651,15 @@ Window": controller or key commands for specific articulations.)
   articulation an optional **key command** (e.g. Ctrl+1) and an optional **MIDI
   trigger** (a note, a CC with a value, or a program change, on a channel or any).
   Set in the map editor's articulation details: a key field that records the
-  next key pressed, and "Learn" for the MIDI trigger (the next message from an
-  articulation controller). A binding used twice in a map is refused with the
-  reason.
-- **Articulation controllers (Settings > Audio & MIDI).** Any MIDI input device
-  can be added as an **articulation controller**: its messages then only
-  trigger articulations - they never reach tracks, recording or the MIDI
-  monitor's note stream. Add / remove in the MIDI input list ("Use for
-  articulations"); saved in the settings. A device that is not an articulation
-  controller plays notes as today.
+  next key pressed, and "Learn" for the MIDI trigger (the next control moved or
+  pressed on a MIDI controller). A binding used twice in a map is refused with
+  the reason.
+- **MIDI controllers (Settings > Audio & MIDI).** A MIDI controller is a control
+  surface: any MIDI input device can be added as one ("use as a controller").
+  Its notes and controllers then never reach tracks or recording; its controls
+  are assigned to functions - articulations first (an articulation's MIDI
+  trigger), other functions (transport, ...) can follow. Saved in the
+  settings. A device that is not a controller plays notes as today.
 - **What a trigger does:** exactly what choosing that articulation in the
   articulation panel does, with the same rules (defaults filled in, alternatives
   replaced, only what a slot has): on the selected notes in the MIDI editor; with
@@ -672,7 +672,7 @@ Window": controller or key commands for specific articulations.)
   articulation in effect when each note started (a switch timeline per take),
   so a played performance keeps its articulations.
 
-Phases: (1) settings: articulation controllers (their input kept away from
+Phases: (1) settings: MIDI controllers (their input kept away from
 tracks), the bindings in the map and the map editor (key field, MIDI Learn),
 triggers applying to the selection / the new-note choice, live switching;
 (2) recording stamps the articulation on recorded notes.

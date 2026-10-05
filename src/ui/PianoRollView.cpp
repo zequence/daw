@@ -518,6 +518,17 @@ void PianoRollView::showArticulationMenu()
     juce::CallOutBox::launchAsynchronously (std::move (panel), articulationButton.getScreenBounds(), nullptr);
 }
 
+std::optional<ExpressionMap::Selection> PianoRollView::remoteChoose (const juce::String& group, const juce::String& name)
+{
+    const auto notesSelected = ! selectedNoteIndices().empty();
+    chooseArticulation (group, name);
+
+    if (notesSelected)
+        return std::nullopt;
+
+    return newNoteArticulation;
+}
+
 void PianoRollView::chooseArticulation (const juce::String& group, const juce::String& name)
 {
     const auto map = engine.getTrackExpressionMap (trackId);

@@ -48,6 +48,14 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Settings Window
 
+- [x] controller or key commands for specific articulations
+      (phase 1 of milestone "Articulation remote control": an articulation has
+      an optional key command and an optional MIDI trigger, set in the map
+      editor (key capture, MIDI Learn); Settings > Audio & MIDI adds MIDI
+      inputs as MIDI controllers - control surfaces whose MIDI never reaches
+      tracks or recording. A trigger chooses the articulation as the panel
+      does (selected notes, or new notes) and switches the instrument live.
+      Still to come: recorded notes carry the articulation in effect.)
 - [x] Use a tab system for displaying the different options. On the left, a column with all the categories (Audio, Midi, etc), on the right, the actual settings
       (category column on the left - Audio & MIDI, Plugins, Tracks,
       Agents (MCP), Key commands - with the selected category's settings on

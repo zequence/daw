@@ -340,6 +340,18 @@ public:
     // What the routes hand the instruments, when recording (midi.monitor)
     MidiMonitor& getMidiMonitor() noexcept  { return midiMonitor; }
 
+    // MIDI controllers (Settings > Audio & MIDI): MIDI input devices used as control surfaces.
+    // Their messages never reach tracks or recording; their controls are assigned to functions
+    // (for now: articulations, an articulation's MIDI trigger). Identifiers as juce::MidiInput
+    // reports them; saved in the settings.
+    void setControllers (const juce::StringArray& deviceIdentifiers);
+    juce::StringArray getControllers() const;
+    std::function<void (const juce::MidiMessage&)> onControllerMidi;   // message thread: a controller's note on / CC / program change
+
+    // Send an articulation switch to a track's instrument now (heard on the next note played
+    // live): program changes (with bank select), CCs, keyswitches (tapped)
+    void sendLiveArticulation (TrackId, const std::vector<ExpressionMap::Output>&);
+
     // True when anything changed since the last save/load/clear (every emitted
     // mutation marks the project dirty).
     bool isProjectDirty() const noexcept    { return projectDirty; }
@@ -544,6 +556,19 @@ private:
     TempoMap::Ptr masterTempoMap;             // message-thread authority; transport gets snapshots
     Transport transport;
     IOCallback ioCallback { *this };
+
+    // Every MIDI input device's messages: a MIDI controller's go to onControllerMidi
+    // (message thread), everyone else's to the graph's live input as before
+    struct InputRouter final : juce::MidiInputCallback
+    {
+        explicit InputRouter (AudioEngine& e) : engine (e) {}
+        void handleIncomingMidiMessage (juce::MidiInput*, const juce::MidiMessage&) override;
+        AudioEngine& engine;
+    };
+
+    InputRouter inputRouter { *this };
+    juce::CriticalSection controllerLock;
+    juce::StringArray controllerDevices;
 
     NodeID audioOutNode, midiInNode, recorderNode;
     std::unique_ptr<MidiRecorder> recorder;

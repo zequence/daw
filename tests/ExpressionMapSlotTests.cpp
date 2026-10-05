@@ -238,6 +238,45 @@ public:
             expect (problems.contains ("not another modifier group"), problems);
         }
 
+        beginTest ("remote control: key commands and MIDI triggers choose articulations, are saved, and are unique");
+        {
+            auto remote = map;
+            remote.groups[1].articulations[2].keyCommand = "ctrl + 1";                 // Main: Staccato
+            remote.groups[1].articulations[1].trigger = { Map::MidiTrigger::Type::note, 36, -1, 0 };            // Main: Rep., any channel
+            remote.groups[4].articulations[1].trigger = { Map::MidiTrigger::Type::controller, 20, 127, 1 };     // Tempo: 130
+
+            expect (remote.validate().isEmpty(), remote.validate().joinIntoString ("; "));
+
+            const auto byKey = remote.findByKeyCommand ("Ctrl + 1");
+            expect (byKey.has_value() && byKey->group == "Main" && byKey->name == "Staccato");
+            expect (! remote.findByKeyCommand ("ctrl + 2").has_value());
+
+            const auto byNote = remote.findByTrigger (juce::MidiMessage::noteOn (5, 36, (juce::uint8) 100));
+            expect (byNote.has_value() && byNote->name == "Rep.", "a note on any channel");
+            expect (! remote.findByTrigger (juce::MidiMessage::noteOff (5, 36)).has_value(), "note offs don't trigger");
+            expect (remote.findByTrigger (juce::MidiMessage::controllerEvent (1, 20, 127)).has_value());
+            expect (! remote.findByTrigger (juce::MidiMessage::controllerEvent (2, 20, 127)).has_value(), "wrong channel");
+            expect (! remote.findByTrigger (juce::MidiMessage::controllerEvent (1, 20, 0)).has_value(), "wrong value");
+
+            const auto learnt = Map::MidiTrigger::from (juce::MidiMessage::programChange (3, 7));
+            expect (learnt.type == Map::MidiTrigger::Type::program && learnt.number == 7 && learnt.channel == 3);
+
+            const auto back = Map::fromXml (*remote.toXml());
+            expect (back.groups[1].articulations[2].keyCommand == "ctrl + 1" && back.groups[1].articulations[1].trigger == remote.groups[1].articulations[1].trigger);
+            Map backJson;
+            expect (Map::fromVar (remote.toVar(), backJson).isEmpty() && backJson.groups[4].articulations[1].trigger == remote.groups[4].articulations[1].trigger);
+
+            remote.groups[0].articulations[1].keyCommand = "CTRL + 1";
+            remote.groups[2].articulations[0].trigger = remote.groups[1].articulations[1].trigger;
+            const auto problems = remote.validate().joinIntoString ("\n");
+            expect (problems.contains ("key command") && problems.contains ("MIDI trigger"), problems);
+
+            // what a choice sends (live switching)
+            const auto outputs = map.outputsOf (sel ("Regular", { { "Main", "Staccato" } }));
+            expect (outputs.size() == 3 && outputs[0].number == 112 && outputs[2].number == 18);
+            expect (map.outputsOf (sel ("Regular", { { "Main", "Pizz." } })).empty());
+        }
+
         beginTest ("a map with outputs on its articulations converts to one slot per combination");
         {
             Map additive;
