@@ -151,6 +151,12 @@ says "slot" it means an **expression-map sound slot**.
   has with it. Choosing a root keeps the modifiers that still lead to a slot and
   drops the rest (ask or drop, as today). A note's stored selection is always the
   combination of one slot.
+- **Same depth.** Two modifier groups are at the same depth for a choice when no
+  slot that fits it has an articulation from both (repetitions: a transition -
+  Legato / Slur - or a release - Cut - never both; under Long they combine). It
+  follows from the slots, nothing is stored. Alternatives don't hide each other,
+  choosing one replaces the other silently, and the articulation panel stacks
+  them in one column.
 - **Defaults.** An articulation can name a default articulation per group
   (Rep. -> Tempo 120; colour Con sordino -> Main Long notes). Choosing it fills its
   defaults into the groups that have nothing chosen, and the defaults' own defaults

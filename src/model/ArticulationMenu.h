@@ -119,6 +119,7 @@ namespace articulations
         bool isRoot = false;
         bool enabled = true;
         bool ticked = false;         // chosen on every target (a partial choice is not ticked)
+        bool sameDepthAsPrevious = false;   // a header: an alternative to the group shown before it (stack them)
     };
 
     // 'targets': the choice of each note being edited (or the one for new notes),
@@ -173,6 +174,8 @@ namespace articulations
         if (! everyTargetHasARoot)
             return menu;
 
+        size_t lastShown = 0;   // the modifier group shown last (0: none yet)
+
         for (size_t g = 1; g < map.groups.size(); ++g)
         {
             std::vector<MenuItem> items;
@@ -213,8 +216,11 @@ namespace articulations
             MenuItem header;
             header.kind = MenuItem::Kind::header;
             header.text = map.groups[g].name;
+            header.sameDepthAsPrevious = map.hasSlots() && lastShown > 0
+                                           && allTargets ([&] (const Selection& s) { return map.sameDepth (s, lastShown, g); });
             menu.push_back (header);
             menu.insert (menu.end(), items.begin(), items.end());
+            lastShown = g;
         }
 
         return menu;

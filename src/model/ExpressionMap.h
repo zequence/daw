@@ -454,15 +454,58 @@ struct ExpressionMap
         std::vector<const Articulation*> articulations;
     };
 
+    // Are two modifier groups at the same depth for this choice - alternatives, mutually exclusive?
+    // True when no slot that fits the choices before both of them has an articulation from each
+    // (repetitions: Legato / Slur or the release Cut, never both; under Long they combine).
+    bool sameDepth (const Selection& selection, size_t g, size_t h) const
+    {
+        if (g == 0 || h == 0 || g == h || g >= groups.size() || h >= groups.size())
+            return false;
+
+        const auto base = before (selection, juce::jmin (g, h));
+        const auto hasGroup = [this] (const Selection& s, size_t index)
+        {
+            return std::any_of (s.modifiers.begin(), s.modifiers.end(), [&] (const auto& m) { return groupIndex (m.first) == index; });
+        };
+
+        bool g_used = false, h_used = false;
+
+        for (auto& slot : slots)
+        {
+            if (! contains (slot.selection, base))
+                continue;
+
+            const auto withG = hasGroup (slot.selection, g), withH = hasGroup (slot.selection, h);
+
+            if (withG && withH)
+                return false;
+
+            g_used = g_used || withG;
+            h_used = h_used || withH;
+        }
+
+        return g_used && h_used;   // both possible here, never together
+    }
+
+    // The choices before group g that it is built on: the earlier groups' choices, without
+    // those of a group at the same depth as g (an alternative to it, not a prerequisite)
+    Selection basis (const Selection& selection, size_t g) const
+    {
+        auto result = before (selection, g);
+        std::erase_if (result.modifiers, [&] (const auto& m) { return sameDepth (selection, groupIndex (m.first), g); });
+        return result;
+    }
+
     // Is this articulation of group g offered for the choice? Only when a slot has it together
     // with exactly the choices made in the groups before g: what it needs there (its
     // prerequisites: Tempo needs Main "Rep.") must already be chosen, not merely possible.
+    // A choice in a group at the same depth doesn't count: the two are alternatives.
     bool offers (const Selection& selection, size_t g, const juce::String& articulationName) const
     {
         if (g == 0 || g >= groups.size() || selection.root.trim().isEmpty())
             return false;
 
-        auto candidate = before (selection, g);
+        auto candidate = basis (selection, g);
         const auto earlierChoices = candidate.modifiers.size();
         candidate.modifiers.emplace_back (groups[g].name, articulationName);
 
@@ -1586,7 +1629,7 @@ private:
         }
         else
         {
-            next = before (current, index);
+            next = basis (current, index);   // an alternative at the same depth gives way
 
             if (isRoot)
                 next.root = articulation.name;
@@ -1610,8 +1653,8 @@ private:
 
                 if (leadsToSlot (candidate))
                     next = canonical (candidate);
-                else if (! wasDefault (modifier))
-                    result.dropped.push_back (modifier);
+                else if (! wasDefault (modifier) && ! sameDepth (current, index, groupIndex (modifier.first)))
+                    result.dropped.push_back (modifier);   // (an alternative at the same depth gives way silently)
             }
         }
 

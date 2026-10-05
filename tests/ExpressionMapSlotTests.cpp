@@ -1,4 +1,5 @@
 #include "../src/model/ExpressionMap.h"
+#include "../src/model/ArticulationMenu.h"
 #include <juce_events/juce_events.h>
 
 namespace
@@ -304,6 +305,45 @@ public:
             choice = duality.choose (regularLong, "Main", "Rep.");
             expect (choice.ok() && choice.selection == sel ("Regular", { { "Main", "Rep." }, { "Tempo", "120" } }), Map::labelOf (choice.selection));
             expectEquals (offeredNames (duality, choice.selection, "Legato").joinIntoString (","), juce::String ("Legato,Slur"));
+
+            // Same depth: a repetition has a transition (Legato / Slur) or a release (Cut), never both
+            const auto indexOf = [&duality] (const char* group)
+            {
+                for (size_t g = 0; g < duality.groups.size(); ++g)
+                    if (duality.groups[g].name == group)
+                        return g;
+
+                return (size_t) 0;
+            };
+            const auto legato = indexOf ("Legato"), release = indexOf ("Release");
+            const auto rep = sel ("Regular", { { "Main", "Rep." }, { "Tempo", "120" } });
+            expect (duality.sameDepth (rep, legato, release), "repetitions: Legato or Cut");
+            expect (! duality.sameDepth (regularLong, legato, release), "long notes: Legato and Soft combine");
+
+            const auto repLegato = sel ("Regular", { { "Main", "Rep." }, { "Legato", "Legato" }, { "Tempo", "120" } });
+            expectEquals (offeredNames (duality, repLegato, "Release").joinIntoString (","), juce::String ("Cut"),
+                          "the alternative stays offered while Legato is chosen");
+
+            choice = duality.choose (repLegato, "Release", "Cut");
+            expect (choice.ok() && choice.dropped.empty(), choice.error);
+            expect (choice.selection == sel ("Regular", { { "Main", "Rep." }, { "Release", "Cut" }, { "Tempo", "120" } }),
+                    Map::labelOf (choice.selection));
+
+            choice = duality.choose (choice.selection, "Legato", "Slur");
+            expect (choice.ok() && choice.dropped.empty(), choice.error);
+            expect (choice.selection == sel ("Regular", { { "Main", "Rep." }, { "Legato", "Slur" }, { "Tempo", "120" } }),
+                    Map::labelOf (choice.selection));
+
+            // The panel stacks them: Release's header says it is at Legato's depth
+            const auto menu = articulations::buildMenu (duality, { rep });
+            const auto releaseHeader = std::find_if (menu.begin(), menu.end(), [] (const auto& m)
+                                                     { return m.kind == articulations::MenuItem::Kind::header && m.text == "Release"; });
+            expect (releaseHeader != menu.end() && releaseHeader->sameDepthAsPrevious);
+
+            const auto longMenu = articulations::buildMenu (duality, { regularLong });
+            const auto longRelease = std::find_if (longMenu.begin(), longMenu.end(), [] (const auto& m)
+                                                   { return m.kind == articulations::MenuItem::Kind::header && m.text == "Release"; });
+            expect (longRelease != longMenu.end() && ! longRelease->sameDepthAsPrevious);
 
             // Each colour has its own programs for the same name
             const auto* sordino = duality.findSlot (sel ("Con sordino", { { "Main", "Staccato" } }));

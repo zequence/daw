@@ -102,7 +102,7 @@ private:
         juce::String text;
 
         for (auto& item : list)
-            text << item.text << (item.enabled ? "+" : "-") << (item.ticked ? "x" : "o") << "|";
+            text << item.text << (item.enabled ? "+" : "-") << (item.ticked ? "x" : "o") << (item.sameDepthAsPrevious ? "^" : "") << "|";
 
         return text;
     }
@@ -114,68 +114,89 @@ private:
         rows.clear();
         labels.clear();
 
-        // Split into columns (a header starts one)
-        std::vector<std::pair<juce::String, std::vector<const articulations::MenuItem*>>> columns;
+        // Columns of sections: a header starts a section, in a new column - or, when its group is at
+        // the same depth as the one before (alternatives: repetitions' Legato or Release), below it
+        struct Section { juce::String heading; std::vector<const articulations::MenuItem*> members; };
+        std::vector<std::vector<Section>> columns;
 
         for (auto& item : list)
         {
             if (item.kind == articulations::MenuItem::Kind::header)
-                columns.push_back ({ item.text, {} });
+            {
+                if (item.sameDepthAsPrevious && ! columns.empty())
+                    columns.back().push_back ({ item.text, {} });
+                else
+                    columns.push_back ({ { item.text, {} } });
+            }
             else if (! columns.empty())
-                columns.back().second.push_back (&item);
+            {
+                columns.back().back().members.push_back (&item);
+            }
         }
 
-        int x = gap, maxRows = 0;
+        int x = gap, height = 0;
 
-        for (auto& [heading, members] : columns)
+        for (auto& sections : columns)
         {
-            int symbolWidth = 0, nameWidth = widthOf (heading, juce::FontOptions (12.0f, juce::Font::bold)), descriptionWidth = 0;
+            // one set of sub-column widths for the whole column
+            int symbolWidth = 0, nameWidth = 0, descriptionWidth = 0;
 
-            for (auto* item : members)
+            for (auto& section : sections)
             {
-                if (item->symbol.isNotEmpty())
-                    symbolWidth = juce::jmax (symbolWidth, widthOf (item->symbol, nameFont()));
+                nameWidth = juce::jmax (nameWidth, widthOf (section.heading, juce::FontOptions (12.0f, juce::Font::bold)));
 
-                nameWidth = juce::jmax (nameWidth, widthOf (item->name, nameFont()));
+                for (auto* item : section.members)
+                {
+                    if (item->symbol.isNotEmpty())
+                        symbolWidth = juce::jmax (symbolWidth, widthOf (item->symbol, nameFont()));
 
-                if (item->description.isNotEmpty() && item->description != item->name)
-                    descriptionWidth = juce::jmax (descriptionWidth, widthOf (item->description, descriptionFont()));
+                    nameWidth = juce::jmax (nameWidth, widthOf (item->name, nameFont()));
+
+                    if (item->description.isNotEmpty() && item->description != item->name)
+                        descriptionWidth = juce::jmax (descriptionWidth, widthOf (item->description, descriptionFont()));
+                }
             }
 
             const auto columnWidth = cellPad + (symbolWidth > 0 ? symbolWidth + subGap : 0) + nameWidth
                                      + (descriptionWidth > 0 ? subGap + descriptionWidth : 0) + cellPad;
+            auto y = gap;
 
-            auto label = std::make_unique<juce::Label> (juce::String(), heading);
-            label->setFont (juce::FontOptions (12.0f, juce::Font::bold));
-            label->setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.65f));
-            label->setBorderSize ({ 0, cellPad, 0, 0 });
-            label->setBounds (x, gap, columnWidth, headerHeight);
-            addAndMakeVisible (*label);
-            labels.push_back (std::move (label));
-
-            int row = 0;
-
-            for (auto* item : members)
+            for (auto& section : sections)
             {
-                auto button = std::make_unique<Row> (*item, symbolWidth, nameWidth);
-                button->setBounds (x, gap + headerHeight + row * (rowHeight + 2), columnWidth, rowHeight);
-                button->onClick = [this, group = item->group, name = item->name]
+                if (y > gap)
+                    y += gap;   // space between stacked groups
+
+                auto label = std::make_unique<juce::Label> (juce::String(), section.heading);
+                label->setFont (juce::FontOptions (12.0f, juce::Font::bold));
+                label->setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.65f));
+                label->setBorderSize ({ 0, cellPad, 0, 0 });
+                label->setBounds (x, y, columnWidth, headerHeight);
+                addAndMakeVisible (*label);
+                labels.push_back (std::move (label));
+                y += headerHeight;
+
+                for (auto* item : section.members)
                 {
-                    choose (group, name);
-                    // after the click has finished (the choice may have rebuilt everything)
-                    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<ArticulationPanel> (this)]
-                                                     { if (safe != nullptr) safe->refresh(); });
-                };
-                addAndMakeVisible (*button);
-                rows.push_back (std::move (button));
-                ++row;
+                    auto button = std::make_unique<Row> (*item, symbolWidth, nameWidth);
+                    button->setBounds (x, y, columnWidth, rowHeight);
+                    button->onClick = [this, group = item->group, name = item->name]
+                    {
+                        choose (group, name);
+                        // after the click has finished (the choice may have rebuilt everything)
+                        juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<ArticulationPanel> (this)]
+                                                         { if (safe != nullptr) safe->refresh(); });
+                    };
+                    addAndMakeVisible (*button);
+                    rows.push_back (std::move (button));
+                    y += rowHeight + 2;
+                }
             }
 
-            maxRows = juce::jmax (maxRows, row);
+            height = juce::jmax (height, y);
             x += columnWidth + gap;
         }
 
-        setSize (juce::jmax (120, x), gap + headerHeight + juce::jmax (1, maxRows) * (rowHeight + 2) + gap);
+        setSize (juce::jmax (120, x), juce::jmax (height, gap + headerHeight + rowHeight) + gap);
     }
 
     void refresh()
