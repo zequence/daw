@@ -121,6 +121,7 @@ private:
     int keyboardKey = -1;                  // the key being played by clicking the keyboard, -1 = none
 
     void playKey (int key, int x);
+    void updateHoveredKey (juce::Point<int>);
     void releaseKey();
 
     static juce::MouseCursor penCursor();

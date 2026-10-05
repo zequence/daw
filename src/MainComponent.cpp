@@ -436,8 +436,8 @@ void MainComponent::createDefaultTrack()
 
 // Remote control of articulations: a key command or a MIDI controller's control chooses
 // an articulation of the current track's map, as the articulation panel does (MILESTONES.md
-// "Articulation remote control"). With no notes selected it becomes what new notes get, and is
-// sent to the instrument at once so it is heard on the next note played live.
+// "Articulation remote control"). With no notes selected it becomes what new notes get; either
+// way the instrument switches at once (PianoRollView sends the sound slot), so it plays live.
 bool MainComponent::triggerArticulation (const std::function<std::optional<ExpressionMap::Target> (const ExpressionMap&)>& find)
 {
     const auto track = pianoRollView.getTrack() != 0 ? pianoRollView.getTrack() : selectedTrack;
@@ -454,11 +454,8 @@ bool MainComponent::triggerArticulation (const std::function<std::optional<Expre
     if (pianoRollView.getTrack() != track)
         pianoRollView.setTrack (track);
 
-    if (const auto live = pianoRollView.remoteChoose (target->group, target->name))
-    {
-        engine.sendLiveArticulation (track, map->outputsOf (*live));
+    if (const auto live = pianoRollView.remoteChoose (target->group, target->name))   // (the editor sends it to the player)
         statusLabel.setText ("Articulation: " + ExpressionMap::labelOf (*live), juce::dontSendNotification);
-    }
     else
     {
         statusLabel.setText ("Articulation of the selected notes: " + target->name, juce::dontSendNotification);

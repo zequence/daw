@@ -577,6 +577,12 @@ void PianoRollView::commitArticulations (const std::vector<ExpressionMap::Select
 {
     const auto indices = selectedNoteIndices();
 
+    // The player switches at once (its sound slot is sent to the instrument), so the chosen
+    // articulation can be played live - from the panel, a key command or a MIDI controller
+    if (! results.empty())
+        if (const auto map = engine.getTrackExpressionMap (trackId))
+            engine.sendLiveArticulation (trackId, map->outputsOf (results.front()));
+
     if (indices.empty())
     {
         if (! results.empty())
@@ -956,6 +962,8 @@ void PianoRollView::releaseKey()
 
 void PianoRollView::mouseDrag (const juce::MouseEvent& event)
 {
+    updateHoveredKey (event.getPosition());
+
     if (keyboardKey >= 0)
     {
         playKey (yToKey (event.y), juce::jlimit (0, keysWidth - 2, event.x));
@@ -1125,8 +1133,14 @@ void PianoRollView::mouseMove (const juce::MouseEvent& event)
     else
         setMouseCursor (juce::MouseCursor::NormalCursor);
 
-    // The key under the pointer is lit on the keyboard (and its row, faintly)
-    const auto key = (overGrid || keysArea().contains (event.getPosition())) ? yToKey (event.y) : -1;
+    updateHoveredKey (event.getPosition());
+}
+
+// The key under the pointer is lit on the keyboard (and its row, faintly) - while moving and
+// while a button is held (dragging a note, playing the keyboard)
+void PianoRollView::updateHoveredKey (juce::Point<int> position)
+{
+    const auto key = (gridArea().contains (position) || keysArea().contains (position)) ? yToKey (position.y) : -1;
 
     if (key != hoveredKey)
     {
