@@ -322,6 +322,7 @@ selection. The UI is a client of the same commands.
 **Renaming inside a map** (delivered the same day): `expressionmap.renameGroup` /   `expressionmap.renameArticulation` keep names unique ignoring case, update the   modifiers' applies-to lists when a root is renamed, and rewrite the notes of   every track playing a channel that uses the map, as one undo step. (`expressionmap.set`   still replaces a whole map without touching notes; those that no longer   match show as visible errors.) **Phase 1 is complete.**
 2. Editor: the dropdown, note assignment, symbols on notes, named keys and
    per-articulation key ranges.
+**Delivered 2026-10-05:** the dropdown in the top bar (the shared menu rules,   toggle, exclusive groups, ask-or-drop per Settings > Editor > Midi, one undo   step), the Editor settings tab (drop behaviour, first root as default),   symbols and error marks on notes, key names and keyswitch marks on the piano   keys with instructions as tooltips, and the greyed-out range following the   articulation in effect. **Still to do:** a menu entry that selects the notes   whose articulation is missing; the editor's new colors (keyswitch mark, error   red) are hard-coded and belong in the theme; maps can only be created through   the API until the map editor (phase 4).
 3. Playback: first the pre-roll spike (transport counting from -N, playback
    sequence with negative times, loop wrap); then the generated playback sequence
    (switch events and timing offsets), regenerated on change, and the chase of
