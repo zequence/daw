@@ -410,21 +410,24 @@ namespace theme
         return { fill, border };
     }
 
+    // Corners of buttons, rows, clips and other selectables: only ever so slightly rounded
+    constexpr float corner = 2.0f;
+
     // The rounded box of a channel row or a folder row in the sidebar lists:
     // background, then the always-on border, then the selection outline.
     inline void paintRowBox (juce::Graphics& g, juce::Rectangle<float> bounds, bool isFolder, bool selected)
     {
         g.setColour (isFolder ? (selected ? colour (Token::selectionBg) : colour (Token::folderBg))
                               : colour (selected ? Token::channelSelectedBg : Token::channelBg));
-        g.fillRoundedRectangle (bounds, 4.0f);
+        g.fillRoundedRectangle (bounds, corner);
 
         g.setColour (colour (isFolder ? Token::folderBorder : Token::channelBorder));
-        g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
+        g.drawRoundedRectangle (bounds, corner, 1.0f);
 
         if (selected)
         {
             g.setColour (colour (isFolder ? Token::selectionBorder : Token::channelSelectedBorder));
-            g.drawRoundedRectangle (bounds, 4.0f, 1.0f);
+            g.drawRoundedRectangle (bounds, corner, 1.0f);
         }
     }
 }

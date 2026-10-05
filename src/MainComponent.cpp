@@ -1471,9 +1471,9 @@ void MainComponent::paint (juce::Graphics& g)
 
     // The transport unit's panel
     g.setColour (juce::Colour (0xff1f2227));
-    g.fillRoundedRectangle (transportPanel.toFloat(), 6.0f);
+    g.fillRoundedRectangle (transportPanel.toFloat(), 2.0f * theme::corner);
     g.setColour (juce::Colour (0xff43464d));
-    g.drawRoundedRectangle (transportPanel.toFloat(), 6.0f, 1.0f);
+    g.drawRoundedRectangle (transportPanel.toFloat(), 2.0f * theme::corner, 1.0f);
 
     // Separators between the topbar's groups (hamburger | view buttons | ... | Perf)
     g.setColour (juce::Colour (0xff43464d));

@@ -404,10 +404,10 @@ void ArrangementView::paint (juce::Graphics& g)
                 const auto style = theme::regionStyle (base, isSelected || isDragged);
 
                 g.setColour (style.fill);
-                g.fillRoundedRectangle (rect.toFloat(), 4.0f);
+                g.fillRoundedRectangle (rect.toFloat(), theme::corner);
 
                 g.setColour (style.border);
-                g.drawRoundedRectangle (rect.toFloat(), 4.0f, 1.8f);
+                g.drawRoundedRectangle (rect.toFloat(), theme::corner, 1.8f);
 
                 // Mini note preview
                 if (sequence != nullptr && block.noteCount > 0)

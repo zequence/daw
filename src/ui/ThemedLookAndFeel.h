@@ -49,7 +49,44 @@ public:
         else if (role == "accent")    pick (T::buttonBg, T::buttonAccentOn);
         else if (role == "topbar")    pick (T::topbarButtonBg, T::topbarButtonOn);
 
-        juce::LookAndFeel_V4::drawButtonBackground (g, button, colour, highlighted, down);
+        // Stock shading (hover brightens, press darkens), but barely rounded corners;
+        // edges joined to a neighbour stay square
+        auto base = colour.withMultipliedSaturation (button.hasKeyboardFocus (true) ? 1.3f : 0.9f)
+                          .withMultipliedAlpha (button.isEnabled() ? 1.0f : 0.5f);
+
+        if (down || highlighted)
+            base = base.contrasting (down ? 0.2f : 0.05f);
+
+        const auto bounds = button.getLocalBounds().toFloat().reduced (0.5f);
+        const auto left = button.isConnectedOnLeft(), right = button.isConnectedOnRight(),
+                   top = button.isConnectedOnTop(), bottom = button.isConnectedOnBottom();
+        juce::Path path;
+        path.addRoundedRectangle (bounds.getX(), bounds.getY(), bounds.getWidth(), bounds.getHeight(),
+                                  theme::corner, theme::corner,
+                                  ! (left || top), ! (right || top), ! (left || bottom), ! (right || bottom));
+
+        g.setColour (base);
+        g.fillPath (path);
+        g.setColour (button.findColour (juce::ComboBox::outlineColourId));
+        g.strokePath (path, juce::PathStrokeType (1.0f));
+    }
+
+    void drawComboBox (juce::Graphics& g, int width, int height, bool, int, int, int, int, juce::ComboBox& box) override
+    {
+        const auto bounds = juce::Rectangle<float> (0, 0, (float) width, (float) height).reduced (0.5f);
+        g.setColour (box.findColour (juce::ComboBox::backgroundColourId));
+        g.fillRoundedRectangle (bounds, theme::corner);
+        g.setColour (box.findColour (juce::ComboBox::outlineColourId));
+        g.drawRoundedRectangle (bounds, theme::corner, 1.0f);
+
+        // The arrow, as stock
+        const auto arrowZone = juce::Rectangle<int> (width - 30, 0, 20, height).toFloat();
+        juce::Path arrow;
+        arrow.startNewSubPath (arrowZone.getX() + 3.0f, arrowZone.getCentreY() - 2.0f);
+        arrow.lineTo (arrowZone.getCentreX(), arrowZone.getCentreY() + 3.0f);
+        arrow.lineTo (arrowZone.getRight() - 3.0f, arrowZone.getCentreY() - 2.0f);
+        g.setColour (box.findColour (juce::ComboBox::arrowColourId).withAlpha (box.isEnabled() ? 0.9f : 0.2f));
+        g.strokePath (arrow, juce::PathStrokeType (2.0f));
     }
 
 private:

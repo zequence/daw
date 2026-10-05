@@ -414,7 +414,7 @@ private:
                 if (i == selected)
                 {
                     g.setColour (theme::colour (theme::Token::selectionBg));
-                    g.fillRoundedRectangle (row.toFloat().reduced (3.0f, 2.0f), 4.0f);
+                    g.fillRoundedRectangle (row.toFloat().reduced (3.0f, 2.0f), theme::corner);
                 }
 
                 g.setColour (i == selected ? juce::Colours::white : juce::Colours::white.withAlpha (0.6f));

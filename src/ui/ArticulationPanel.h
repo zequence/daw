@@ -61,12 +61,12 @@ private:
             else
                 g.setColour (juce::Colours::white.withAlpha (down ? 0.14f : highlighted ? 0.08f : 0.0f));
 
-            g.fillRoundedRectangle (bounds, 3.0f);
+            g.fillRoundedRectangle (bounds, theme::corner);
 
             if (getToggleState())
             {
                 g.setColour (theme::colour (theme::Token::selectionBorder));
-                g.drawRoundedRectangle (bounds.reduced (0.5f), 3.0f, 1.0f);
+                g.drawRoundedRectangle (bounds.reduced (0.5f), theme::corner, 1.0f);
             }
 
             const auto alpha = isEnabled() ? 1.0f : 0.35f;

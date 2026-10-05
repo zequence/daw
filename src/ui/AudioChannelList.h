@@ -94,7 +94,7 @@ private:
             g.setColour (juce::Colours::gold.withAlpha (0.9f));
 
             if (dragState.intoFolder)
-                g.drawRoundedRectangle (dragState.folderHighlight.toFloat().reduced (2.0f, 1.5f), 4.0f, 2.0f);
+                g.drawRoundedRectangle (dragState.folderHighlight.toFloat().reduced (2.0f, 1.5f), theme::corner, 2.0f);
             else if (dragState.indicatorY >= 0)
                 g.fillRect (0, juce::jlimit (0, juce::jmax (0, getHeight() - 2), dragState.indicatorY - 1),
                             getWidth(), 2);

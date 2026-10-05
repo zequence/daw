@@ -106,12 +106,12 @@ private:
 
             auto bounds = getLocalBounds().toFloat().reduced (2.0f);
             g.setColour (juce::Colour (0xff2b2e33));
-            g.fillRoundedRectangle (bounds, 4.0f);
+            g.fillRoundedRectangle (bounds, theme::corner);
 
             if (focused)
             {
                 g.setColour (theme::colour (theme::Token::selectionBorder));
-                g.drawRoundedRectangle (bounds, 4.0f, 1.2f);
+                g.drawRoundedRectangle (bounds, theme::corner, 1.2f);
             }
 
             auto area = getLocalBounds().reduced (12, 8);

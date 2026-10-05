@@ -281,15 +281,15 @@ private:
 
                 // Checkerboard-ish backing so translucent colors are visible
                 g.setColour (juce::Colour (0xff555555));
-                g.fillRoundedRectangle (r, 3.0f);
+                g.fillRoundedRectangle (r, theme::corner);
                 g.setColour (juce::Colour (0xff888888));
                 g.fillRect (r.withWidth (r.getWidth() / 2).withHeight (r.getHeight() / 2));
 
                 g.setColour (colour);
-                g.fillRoundedRectangle (r, 3.0f);
+                g.fillRoundedRectangle (r, theme::corner);
 
                 g.setColour (juce::Colours::white.withAlpha (over ? 0.7f : 0.35f));
-                g.drawRoundedRectangle (r, 3.0f, 1.0f);
+                g.drawRoundedRectangle (r, theme::corner, 1.0f);
 
                 g.setColour (colour.getPerceivedBrightness() > 0.55f && colour.getAlpha() > 128
                                  ? juce::Colours::black.withAlpha (0.75f) : juce::Colours::white.withAlpha (0.85f));
@@ -425,9 +425,9 @@ private:
             {
                 const auto style = theme::regionStyle (trackColour, emphasised);
                 g.setColour (style.fill);
-                g.fillRoundedRectangle (r.toFloat(), 4.0f);
+                g.fillRoundedRectangle (r.toFloat(), theme::corner);
                 g.setColour (style.border);
-                g.drawRoundedRectangle (r.toFloat(), 4.0f, 1.8f);
+                g.drawRoundedRectangle (r.toFloat(), theme::corner, 1.8f);
             };
 
             drawRegion ({ area.getX() + gutter + 8, top + rowH + 5, 100, rowH - 10 }, strings, false);
