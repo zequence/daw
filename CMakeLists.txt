@@ -119,6 +119,7 @@ target_sources(OrchestralDAWTests PRIVATE
     tests/ArticulationMenuTests.cpp
     tests/WindowPlacementTests.cpp
     tests/PreRollTests.cpp
+    tests/PlaybackSequenceTests.cpp
     tests/VeproStateTests.cpp
     src/AudioEngine.cpp
     src/api/CommandDispatcher.cpp
