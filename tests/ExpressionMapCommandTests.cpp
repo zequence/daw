@@ -1,0 +1,341 @@
+#include "../src/api/CommandDispatcher.h"
+
+namespace
+{
+    constexpr auto Q = Ticks::perQuarterNote;
+    using Map = ExpressionMap;
+    using Out = ExpressionMap::Output;
+
+    juce::var params (std::initializer_list<std::pair<juce::String, juce::var>> pairs)
+    {
+        auto o = new juce::DynamicObject();
+        for (auto& [key, value] : pairs)
+            o->setProperty (juce::Identifier (key), value);
+        return juce::var (o);
+    }
+
+    juce::var note (juce::int64 start, int key)
+    {
+        return params ({ { "start", start }, { "length", Q }, { "key", key } });
+    }
+
+    Map::Articulation art (const juce::String& name, int cc, int value, std::initializer_list<const char*> appliesTo = {})
+    {
+        Map::Articulation a;
+        a.name = name;
+        a.outputs.push_back ({ Out::Type::controller, cc, value, false, -1 });
+
+        for (auto* root : appliesTo)
+            a.appliesTo.add (root);
+
+        return a;
+    }
+
+    // Roots Staccato/Legato; Release (Short: Staccato only, Long: Legato only); Mute (all)
+    Map makeMap (const juce::String& name)
+    {
+        Map map;
+        map.name = name;
+        map.groups.push_back ({ "Articulation", "", { art ("Staccato", 32, 10), art ("Legato", 32, 20) } });
+        map.groups.push_back ({ "Release", "", { art ("Short", 33, 10, { "Staccato" }), art ("Long", 33, 90, { "Legato" }) } });
+        map.groups.push_back ({ "Mute", "", { art ("Con sord", 34, 127) } });
+        return map;
+    }
+
+    juce::String errorOf (const juce::var& reply)    { return reply["error"].toString(); }
+
+    template <typename Condition>
+    void pumpUntil (Condition&& isDone, int timeoutMs = 15000)
+    {
+        const auto deadline = juce::Time::getMillisecondCounter() + (juce::uint32) timeoutMs;
+
+        while (! isDone() && juce::Time::getMillisecondCounter() < deadline)
+            juce::MessageManager::getInstance()->runDispatchLoopUntil (50);
+    }
+}
+
+class ExpressionMapCommandTests final : public juce::UnitTest
+{
+public:
+    ExpressionMapCommandTests() : UnitTest ("Expression map commands") {}
+
+    void runTest() override
+    {
+        juce::PropertiesFile::Options options;
+        options.storageFormat = juce::PropertiesFile::storeAsXML;
+        juce::PropertiesFile settings (juce::File::getSpecialLocation (juce::File::tempDirectory)
+                                           .getChildFile ("OrchestralDAWTestSettings.xml"), options);
+        AudioEngine engine (settings);
+        CommandDispatcher api (engine);
+
+        beginTest ("expressionmap.set creates and replaces; list and get report it");
+        {
+            auto reply = api.run ("expressionmap.set", params ({ { "map", makeMap ("Strings").toVar() } }));
+            expect (reply["ok"], errorOf (reply));
+            expect ((bool) reply["result"]["created"]);
+
+            reply = api.run ("expressionmap.set", params ({ { "map", makeMap ("strings").toVar() } }));
+            expect (reply["ok"] && ! (bool) reply["result"]["created"], errorOf (reply));   // same name ignoring case: replaced
+
+            const auto list = api.run ("expressionmap.list")["result"];
+            expectEquals ((int) list.size(), 1);
+            expectEquals ((int) list[0]["groups"], 3);
+            expectEquals ((int) list[0]["articulations"], 5);
+            expect ((bool) list[0]["valid"]);
+            expectEquals ((int) list[0]["usedBy"].size(), 0);
+
+            const auto get = api.run ("expressionmap.get", params ({ { "name", "STRINGS" } }));
+            expect (get["ok"], errorOf (get));
+            expectEquals (get["result"]["groups"][0]["name"].toString(), juce::String ("Articulation"));   // the root group first
+            expectEquals ((int) get["result"]["groups"][1]["articulations"][0]["outputs"][0]["number"], 33);
+
+            // The JSON round trips
+            Map back;
+            expectEquals (Map::fromVar (get["result"], back), juce::String());
+            expect (back.isValid());
+        }
+
+        beginTest ("expressionmap.set explains what is wrong, structurally and by validation");
+        {
+            auto reply = api.run ("expressionmap.set", params ({ { "map", params ({ { "name", "X" } }) } }));
+            expect (! reply["ok"] && errorOf (reply).contains ("needs 'groups'"), errorOf (reply));
+
+            auto bad = makeMap ("Bad").toVar();
+            bad["groups"][0]["articulations"][0]["outputs"][0].getDynamicObject()->setProperty ("type", "sysex");
+            reply = api.run ("expressionmap.set", params ({ { "map", bad } }));
+            expect (! reply["ok"] && errorOf (reply).contains ("must be one of keyswitch, controller, programChange (got 'sysex')"),
+                    errorOf (reply));
+
+            auto invalid = makeMap ("Invalid").toVar();
+            invalid["groups"][1]["articulations"][0].getDynamicObject()->setProperty ("appliesTo", juce::Array<juce::var> { "Pizzicato" });
+            reply = api.run ("expressionmap.set", params ({ { "map", invalid } }));
+            expect (! reply["ok"] && errorOf (reply).contains ("'Pizzicato', which is not a root articulation"), errorOf (reply));
+            expect (! engine.getExpressionMap ("Invalid").has_value());
+
+            reply = api.run ("expressionmap.get", params ({ { "name", "Nope" } }));
+            expect (! reply["ok"] && errorOf (reply).contains ("existing: strings"), errorOf (reply));
+        }
+
+        beginTest ("expressionmap.validate checks a stored map or an inline one");
+        {
+            auto reply = api.run ("expressionmap.validate", params ({ { "name", "Strings" } }));
+            expect (reply["ok"] && (bool) reply["result"]["valid"], errorOf (reply));
+
+            auto inline_ = makeMap ("Inline").toVar();
+            inline_["groups"][0]["articulations"][1].getDynamicObject()->setProperty ("name", "STACCATO");   // duplicate ignoring case
+            reply = api.run ("expressionmap.validate", params ({ { "map", inline_ } }));
+            expect (reply["ok"] && ! (bool) reply["result"]["valid"]);
+            expect (reply["result"]["problems"][0].toString().contains ("two articulations named"));
+
+            reply = api.run ("expressionmap.validate");
+            expect (! reply["ok"] && errorOf (reply).contains ("existing: strings"), errorOf (reply));
+        }
+
+        beginTest ("expressionmap.choose is the menu's rules as a query; nothing changes");
+        {
+            // From nothing: a root
+            auto reply = api.run ("expressionmap.choose", params ({ { "name", "Strings" }, { "group", "articulation" },
+                                                                    { "articulation", "staccato" } }));
+            expect (reply["ok"] && (bool) reply["result"]["ok"], errorOf (reply));
+            expectEquals (reply["result"]["selection"]["root"].toString(), juce::String ("Staccato"));
+
+            // Then a modifier of it, via the selection it just returned
+            reply = api.run ("expressionmap.choose", params ({ { "name", "Strings" }, { "selection", reply["result"]["selection"] },
+                                                               { "group", "Release" }, { "articulation", "Short" } }));
+            expect ((bool) reply["result"]["ok"], reply["result"]["error"].toString());
+            expectEquals (reply["result"]["selection"]["modifiers"][0]["name"].toString(), juce::String ("Short"));
+
+            // Switching the root reports what it would drop
+            const auto withShort = reply["result"]["selection"];
+            reply = api.run ("expressionmap.choose", params ({ { "name", "Strings" }, { "selection", withShort },
+                                                               { "group", "Articulation" }, { "articulation", "Legato" } }));
+            expect ((bool) reply["result"]["ok"]);
+            expectEquals ((int) reply["result"]["dropped"].size(), 1);
+            expectEquals (reply["result"]["dropped"][0]["name"].toString(), juce::String ("Short"));
+
+            // A refused choice is an answer, with the reason; the call itself succeeded
+            reply = api.run ("expressionmap.choose", params ({ { "name", "Strings" }, { "group", "Release" }, { "articulation", "Short" } }));
+            expect (reply["ok"] && ! (bool) reply["result"]["ok"] && reply["result"]["error"].toString().contains ("need a root"));
+
+            reply = api.run ("expressionmap.choose", params ({ { "name", "Nope" }, { "group", "A" }, { "articulation", "B" } }));
+            expect (! reply["ok"] && errorOf (reply).contains ("existing: strings"));
+        }
+
+        beginTest ("notes carry articulations through clip.addNotes, clip.updateNotes and clip.get");
+        {
+            const auto trackId = (int) api.run ("track.create")["result"]["id"];
+            const auto tid = juce::var (trackId);
+
+            auto withArticulation = note (0, 60);
+            withArticulation.getDynamicObject()->setProperty ("articulation",
+                params ({ { "root", "Legato" },
+                          { "modifiers", juce::Array<juce::var> { params ({ { "group", "Release" }, { "name", "Long" } }) } } }));
+
+            auto reply = api.run ("clip.set", params ({ { "trackId", tid },
+                                                        { "notes", juce::Array<juce::var> { withArticulation, note (Q, 62) } } }));
+            expect (reply["ok"], errorOf (reply));
+
+            auto notes = engine.getTrackSequence (trackId)->getNotes();
+            expectEquals (notes[0].articulation.root, juce::String ("Legato"));
+            expectEquals (notes[0].articulation.modifiers[0].second, juce::String ("Long"));
+            expect (notes[1].articulation.isEmpty());
+
+            // clip.get shows it only where there is one
+            const auto got = api.run ("clip.get", params ({ { "trackId", tid } }))["result"]["notes"];
+            expectEquals (got[0]["articulation"]["root"].toString(), juce::String ("Legato"));
+            expect (! got[1].hasProperty ("articulation"));
+
+            // updateNotes replaces the whole choice, and null clears it
+            reply = api.run ("clip.updateNotes", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var> {
+                params ({ { "index", 1 }, { "articulation", params ({ { "root", "Staccato" } }) } }),
+                params ({ { "index", 0 }, { "articulation", juce::var() } }) } } }));
+            expect (reply["ok"], errorOf (reply));
+            notes = engine.getTrackSequence (trackId)->getNotes();
+            expect (notes[0].articulation.isEmpty());
+            expectEquals (notes[1].articulation.root, juce::String ("Staccato"));
+
+            reply = api.run ("clip.updateNotes", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var> {
+                params ({ { "index", 0 }, { "articulation", 5 } }) } } }));
+            expect (! reply["ok"] && errorOf (reply).contains ("articulation must be an object"), errorOf (reply));
+
+            // Orphan names are stored as given: a visible error later, never refused or erased
+            reply = api.run ("clip.updateNotes", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var> {
+                params ({ { "index", 0 }, { "articulation", params ({ { "root", "No such" } }) } }) } } }));
+            expect (reply["ok"], errorOf (reply));
+            expectEquals (engine.getTrackSequence (trackId)->getNotes()[0].articulation.root, juce::String ("No such"));
+
+            // Without a map on the track, choosing is refused with the way out; clearing needs none
+            reply = api.run ("clip.setArticulation", params ({ { "trackId", tid }, { "indices", juce::Array<juce::var> { 0 } },
+                                                               { "group", "Articulation" }, { "articulation", "Legato" } }));
+            expect (! reply["ok"] && errorOf (reply).contains ("instrument.setChannelMap"), errorOf (reply));
+
+            reply = api.run ("clip.setArticulation", params ({ { "trackId", tid }, { "indices", juce::Array<juce::var> { 0, 1 } },
+                                                               { "clear", true } }));
+            expect (reply["ok"], errorOf (reply));
+            expect (engine.getTrackSequence (trackId)->getNotes()[0].articulation.isEmpty());
+            expect (engine.getTrackSequence (trackId)->getNotes()[1].articulation.isEmpty());
+        }
+
+        runChannelTests (engine, api);
+    }
+
+private:
+    void runChannelTests (AudioEngine& engine, CommandDispatcher& api)
+    {
+        beginTest ("instrument.setChannelMap and clip.setArticulation on a track playing that channel");
+
+        juce::PluginDescription description;
+        bool found = false;
+
+        for (const auto* wanted : { "TAL-NoiseMaker", "Twin 3" })
+        {
+            for (auto& type : engine.getInstrumentTypes())
+                if (type.name == wanted)
+                {
+                    description = type;
+                    found = true;
+                    break;
+                }
+
+            if (found)
+                break;
+        }
+
+        if (! found)
+        {
+            logMessage ("!!! no TAL-NoiseMaker or Twin 3 in the plugin cache - skipping the channel command tests");
+            return;
+        }
+
+        std::atomic<int> instrumentId { -1 };
+        engine.addInstrument (description, [&instrumentId] (auto id, const juce::String&) { instrumentId = id; });
+        pumpUntil ([&instrumentId] { return instrumentId.load() != -1; });
+        expect (instrumentId > 0, "instrument failed to load");
+
+        if (instrumentId <= 0)
+            return;
+
+        const auto iid = juce::var (instrumentId.load());
+
+        // Helpful failures
+        auto reply = api.run ("instrument.setChannelMap", params ({ { "instrumentId", 9999 }, { "channel", 2 }, { "map", "Strings" } }));
+        expect (! reply["ok"] && errorOf (reply).contains ("no instrument with id 9999"), errorOf (reply));
+        reply = api.run ("instrument.setChannelMap", params ({ { "instrumentId", iid }, { "channel", 2 }, { "map", "Brass" } }));
+        expect (! reply["ok"] && errorOf (reply).contains ("existing: strings"), errorOf (reply));
+
+        reply = api.run ("instrument.setChannelMap", params ({ { "instrumentId", iid }, { "channel", 2 }, { "map", "strings" } }));
+        expect (reply["ok"], errorOf (reply));
+
+        // It shows in instrument.list and in expressionmap.list
+        bool listed = false;
+
+        const auto instrumentList = api.run ("instrument.list")["result"];   // kept alive: getArray() points into it
+
+        for (auto& instrument : *instrumentList.getArray())
+        {
+            const auto channelList = instrument["midiChannels"];
+
+            for (auto& channel : *channelList.getArray())
+                if ((int) channel["channel"] == 2)
+                    listed = channel["expressionMap"].toString() == "strings";
+        }
+
+        expect (listed, "instrument.list does not show the channel's map");
+
+        const auto used = api.run ("expressionmap.list")["result"][0]["usedBy"];
+        expectEquals ((int) used.size(), 1);
+        expectEquals ((int) used[0]["channel"], 2);
+
+        // A track on that channel, with three notes
+        const auto trackId = (int) api.run ("track.create")["result"]["id"];
+        const auto tid = juce::var (trackId);
+        engine.addTrackOutput (trackId, instrumentId, 2);
+        api.run ("clip.set", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var> { note (0, 60), note (Q, 62), note (2 * Q, 64) } } }));
+
+        const auto choose = [&] (juce::Array<juce::var> indices, const char* group, const char* articulation, bool drop = false)
+        {
+            return api.run ("clip.setArticulation", params ({ { "trackId", tid }, { "indices", indices },
+                                                              { "group", group }, { "articulation", articulation },
+                                                              { "dropIncompatible", drop } }));
+        };
+
+        const auto articulationOf = [&engine, trackId] (size_t i) { return engine.getTrackSequence (trackId)->getNotes()[i].articulation; };
+
+        reply = choose ({ 0, 1 }, "Articulation", "Staccato");
+        expect (reply["ok"], errorOf (reply));
+        expectEquals (articulationOf (0).root, juce::String ("Staccato"));
+        expectEquals (articulationOf (1).root, juce::String ("Staccato"));
+        expect (articulationOf (2).isEmpty());
+
+        reply = choose ({ 0 }, "Release", "Short");
+        expect (reply["ok"], errorOf (reply));
+        expectEquals ((int) articulationOf (0).modifiers.size(), 1);
+
+        // The modifier doesn't apply to the other roots, and modifiers need a root
+        reply = choose ({ 1 }, "Release", "Long");
+        expect (! reply["ok"] && errorOf (reply).contains ("note 1:") && errorOf (reply).contains ("doesn't apply"), errorOf (reply));
+        reply = choose ({ 2 }, "Mute", "Con sord");
+        expect (! reply["ok"] && errorOf (reply).contains ("need a root"), errorOf (reply));
+
+        // Switching the root drops Short: refused until accepted; all or nothing
+        reply = choose ({ 0, 1 }, "Articulation", "Legato");
+        expect (! reply["ok"] && errorOf (reply).contains ("would drop 'Short' (Release)")
+                  && errorOf (reply).contains ("dropIncompatible=true"), errorOf (reply));
+        expectEquals (articulationOf (0).root, juce::String ("Staccato"));   // nothing changed, note 1 included
+        expectEquals (articulationOf (1).root, juce::String ("Staccato"));
+
+        reply = choose ({ 0, 1 }, "Articulation", "Legato", true);
+        expect (reply["ok"], errorOf (reply));
+        expectEquals (articulationOf (0).root, juce::String ("Legato"));
+        expect (articulationOf (0).modifiers.empty());
+
+        // Toggling the root off
+        reply = choose ({ 0, 1 }, "Articulation", "Legato", true);
+        expect (reply["ok"] && articulationOf (0).isEmpty() && articulationOf (1).isEmpty(), errorOf (reply));
+
+        reply = choose ({ 7 }, "Articulation", "Legato");
+        expect (! reply["ok"] && errorOf (reply).contains ("out of range"), errorOf (reply));
+    }
+};
+
+static ExpressionMapCommandTests expressionMapCommandTests;

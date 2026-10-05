@@ -83,6 +83,55 @@ struct ExpressionMap
 
         bool operator!= (const Selection& other) const    { return ! (*this == other); }
 
+        // {root, modifiers:[{group, name}]}
+        juce::var toVar() const
+        {
+            auto o = new juce::DynamicObject();
+            o->setProperty ("root", root);
+
+            juce::Array<juce::var> list;
+
+            for (auto& [group, articulationName] : modifiers)
+            {
+                auto m = new juce::DynamicObject();
+                m->setProperty ("group", group);
+                m->setProperty ("name", articulationName);
+                list.add (juce::var (m));
+            }
+
+            o->setProperty ("modifiers", list);
+            return juce::var (o);
+        }
+
+        // Void/null = none. Returns an error sentence (empty = parsed).
+        static juce::String fromVar (const juce::var& json, Selection& out)
+        {
+            out = {};
+
+            if (json.isVoid() || json.isUndefined())
+                return {};
+
+            if (! json.isObject())
+                return "an articulation must be an object {root, modifiers:[{group, name}]}";
+
+            out.root = json.getProperty ("root", {}).toString();
+            const auto list = json.getProperty ("modifiers", {});
+
+            if (! list.isVoid() && ! list.isArray())
+                return "'modifiers' must be an array of {group, name}";
+
+            if (auto* array = list.getArray())
+                for (auto& m : *array)
+                {
+                    if (! m.isObject() || ! m.hasProperty ("group") || ! m.hasProperty ("name"))
+                        return "every modifier needs a group and a name: {group, name}";
+
+                    out.modifiers.emplace_back (m.getProperty ("group", {}).toString(), m.getProperty ("name", {}).toString());
+                }
+
+            return {};
+        }
+
         //   <ARTICULATION root="Legato"><MODIFIER group="Release" name="Short"/>...</ARTICULATION>
         std::unique_ptr<juce::XmlElement> toXml() const
         {
@@ -247,6 +296,168 @@ struct ExpressionMap
     }
 
     bool isValid() const    { return validate().isEmpty(); }
+
+    //==========================================================================
+    // JSON for the API (the same shape as the XML). Unlike reading a file, parsing
+    // is strict: it says what is wrong, because a caller can fix it.
+    juce::var toVar() const
+    {
+        auto map = new juce::DynamicObject();
+        map->setProperty ("name", name);
+        map->setProperty ("description", description);
+
+        juce::Array<juce::var> groupList;
+
+        for (auto& group : groups)
+        {
+            auto g = new juce::DynamicObject();
+            g->setProperty ("name", group.name);
+            g->setProperty ("description", group.description);
+
+            juce::Array<juce::var> articulationList;
+
+            for (auto& articulation : group.articulations)
+            {
+                auto a = new juce::DynamicObject();
+                a->setProperty ("name", articulation.name);
+                a->setProperty ("symbol", articulation.symbol);
+                a->setProperty ("description", articulation.description);
+                a->setProperty ("timingOffsetMs", articulation.timingOffsetMs);
+                a->setProperty ("keyLow", articulation.keyLow);
+                a->setProperty ("keyHigh", articulation.keyHigh);
+
+                juce::Array<juce::var> appliesTo;
+
+                for (auto& root : articulation.appliesTo)
+                    appliesTo.add (root);
+
+                a->setProperty ("appliesTo", appliesTo);
+
+                juce::Array<juce::var> outputList;
+
+                for (auto& output : articulation.outputs)
+                {
+                    auto o = new juce::DynamicObject();
+                    o->setProperty ("type", typeToString (output.type));
+                    o->setProperty ("number", output.number);
+                    o->setProperty ("value", output.value);
+                    o->setProperty ("held", output.held);
+                    o->setProperty ("bank", output.bank);
+                    outputList.add (juce::var (o));
+                }
+
+                a->setProperty ("outputs", outputList);
+                articulationList.add (juce::var (a));
+            }
+
+            g->setProperty ("articulations", articulationList);
+            groupList.add (juce::var (g));
+        }
+
+        map->setProperty ("groups", groupList);
+        return juce::var (map);
+    }
+
+    // Returns an error sentence (empty = parsed). Whether the map is valid is
+    // validate()'s question.
+    static juce::String fromVar (const juce::var& json, ExpressionMap& out)
+    {
+        if (! json.isObject())
+            return "an expression map must be an object {name, description?, groups:[...]}";
+
+        ExpressionMap map;
+        map.name = json.getProperty ("name", {}).toString();
+        map.description = json.getProperty ("description", {}).toString();
+
+        const auto groupList = json.getProperty ("groups", {});
+
+        if (groupList.isVoid())
+            return "the map needs 'groups': [{name, description?, articulations:[...]}] (the first is the root group)";
+
+        if (! groupList.isArray())
+            return "'groups' must be an array";
+
+        int groupNumber = 0;
+
+        for (auto& g : *groupList.getArray())
+        {
+            ++groupNumber;
+            const auto groupLabel = "group " + juce::String (groupNumber);
+
+            if (! g.isObject())
+                return groupLabel + " must be an object {name, description?, articulations:[...]}";
+
+            Group group;
+            group.name = g.getProperty ("name", {}).toString();
+            group.description = g.getProperty ("description", {}).toString();
+
+            const auto articulationList = g.getProperty ("articulations", {});
+
+            if (! articulationList.isVoid() && ! articulationList.isArray())
+                return groupLabel + ": 'articulations' must be an array";
+
+            int articulationNumber = 0;
+
+            if (auto* list = articulationList.getArray())
+                for (auto& a : *list)
+                {
+                    ++articulationNumber;
+                    const auto label = "articulation " + juce::String (articulationNumber) + " of " + groupLabel;
+
+                    if (! a.isObject())
+                        return label + " must be an object {name, symbol?, description?, outputs?, ...}";
+
+                    Articulation articulation;
+                    articulation.name = a.getProperty ("name", {}).toString();
+                    articulation.symbol = a.getProperty ("symbol", {}).toString();
+                    articulation.description = a.getProperty ("description", {}).toString();
+                    articulation.timingOffsetMs = (double) a.getProperty ("timingOffsetMs", 0.0);
+                    articulation.keyLow = (int) a.getProperty ("keyLow", -1);
+                    articulation.keyHigh = (int) a.getProperty ("keyHigh", -1);
+
+                    const auto appliesTo = a.getProperty ("appliesTo", {});
+
+                    if (! appliesTo.isVoid() && ! appliesTo.isArray())
+                        return label + ": 'appliesTo' must be an array of root articulation names";
+
+                    if (auto* roots = appliesTo.getArray())
+                        for (auto& root : *roots)
+                            articulation.appliesTo.add (root.toString());
+
+                    const auto outputList = a.getProperty ("outputs", {});
+
+                    if (! outputList.isVoid() && ! outputList.isArray())
+                        return label + ": 'outputs' must be an array of {type, number, value?, held?, bank?}";
+
+                    int outputNumber = 0;
+
+                    if (auto* outputs = outputList.getArray())
+                        for (auto& o : *outputs)
+                        {
+                            ++outputNumber;
+                            Output output;
+
+                            if (! o.isObject() || ! typeFromString (o.getProperty ("type", {}).toString(), output.type))
+                                return label + ", output " + juce::String (outputNumber)
+                                         + ": 'type' must be one of keyswitch, controller, programChange (got '"
+                                         + o.getProperty ("type", {}).toString() + "')";
+
+                            output.number = (int) o.getProperty ("number", 0);
+                            output.value = (int) o.getProperty ("value", 100);
+                            output.held = (bool) o.getProperty ("held", false);
+                            output.bank = (int) o.getProperty ("bank", -1);
+                            articulation.outputs.push_back (output);
+                        }
+
+                    group.articulations.push_back (std::move (articulation));
+                }
+
+            map.groups.push_back (std::move (group));
+        }
+
+        out = std::move (map);
+        return {};
+    }
 
     //==========================================================================
     // Choosing articulations. The editor's menu and the API share these rules:

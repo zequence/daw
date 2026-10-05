@@ -489,6 +489,10 @@ void CommandDispatcher::registerCommands()
                  o->setProperty ("key", n.key);
                  o->setProperty ("velocity", n.velocity);
                  o->setProperty ("channel", n.channel);
+
+                 if (! n.articulation.isEmpty())
+                     o->setProperty ("articulation", n.articulation.toVar());
+
                  notes.add (juce::var (o.get()));
              }
 
@@ -534,6 +538,10 @@ void CommandDispatcher::registerCommands()
             out.push_back ({ (juce::int64) n["start"], (juce::int64) n["length"],
                              (int) n.getProperty ("channel", 1), (int) n["key"],
                              (int) n.getProperty ("velocity", 100) });
+
+            if (n.hasProperty ("articulation"))
+                if (auto error = ExpressionMap::Selection::fromVar (n["articulation"], out.back().articulation); error.isNotEmpty())
+                    return "note articulation: " + error;
         }
 
         return {};
@@ -559,7 +567,7 @@ void CommandDispatcher::registerCommands()
     };
 
     add ("clip.addNotes", "Add notes (and optionally controls) to a track's clip",
-         "trackId:int notes:[{start,length,key,velocity?,channel?}] [controls:[{tick,type,number,value,channel?}]]",
+         "trackId:int notes:[{start,length,key,velocity?,channel?,articulation?}] [controls:[{tick,type,number,value,channel?}]]",
          [this, requireTrack, parseNotes, parseControls] (const juce::var& params, Respond respond)
          {
              int id = 0;
@@ -643,7 +651,7 @@ void CommandDispatcher::registerCommands()
     };
 
     add ("clip.updateNotes", "Modify notes by index (indices refer to the clip before the edit)",
-         "trackId:int notes:[{index:int, start?,length?,key?,velocity?,channel?}]",
+         "trackId:int notes:[{index:int, start?,length?,key?,velocity?,channel?, articulation?:{root,modifiers:[{group,name}]}|null}]",
          [requireTrack, editClip] (const juce::var& params, Respond respond)
          {
              int id = 0;
@@ -670,6 +678,86 @@ void CommandDispatcher::registerCommands()
                      if (edit.hasProperty ("key"))      note.key = (int) edit["key"];
                      if (edit.hasProperty ("velocity")) note.velocity = (int) edit["velocity"];
                      if (edit.hasProperty ("channel"))  note.channel = (int) edit["channel"];
+
+                     if (edit.hasProperty ("articulation"))   // the whole choice; null clears it
+                         if (auto error = ExpressionMap::Selection::fromVar (edit["articulation"], note.articulation); error.isNotEmpty())
+                             return "note " + juce::String (index) + " articulation: " + error;
+                 }
+
+                 return {};
+             }, respond);
+         });
+
+    add ("clip.setArticulation",
+         "Choose an articulation for notes (by index), with the rules of the track's expression map (the map of the "
+         "instrument channel the track plays): every item toggles; a modifier group is exclusive; modifiers need a root "
+         "and must apply to it; another root switches directly. 'clear' removes every articulation instead. Changing "
+         "the root would drop modifiers that no longer apply: refused unless dropIncompatible is true "
+         "(expressionmap.choose shows what would be dropped). All or nothing: one undo step",
+         "trackId:int indices:[int] (group:string articulation:string | clear:true) [dropIncompatible:bool=false]",
+         [this, requireTrack, editClip] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             const auto clear = (bool) params.getProperty ("clear", false);
+             const auto group = params.getProperty ("group", {}).toString();
+             const auto articulation = params.getProperty ("articulation", {}).toString();
+             const auto dropIncompatible = (bool) params.getProperty ("dropIncompatible", false);
+             std::optional<ExpressionMap> map;
+
+             if (! clear)
+             {
+                 if (group.isEmpty() || articulation.isEmpty())
+                     return respond (fail ("give 'group' and 'articulation' to choose one, or clear:true to remove them"));
+
+                 map = engine.getTrackExpressionMap (id);
+
+                 if (! map.has_value())
+                     return respond (fail ("track " + juce::String (id) + " has no expression map: assign one to the "
+                                           "instrument channel it plays (instrument.setChannelMap)"));
+             }
+
+             editClip (id, [&] (auto& notes, auto&) -> juce::String
+             {
+                 auto* indices = params["indices"].getArray();
+
+                 if (indices == nullptr || indices->isEmpty())
+                     return "'indices' must be a non-empty array of note indices";
+
+                 for (auto& value : *indices)
+                 {
+                     const int index = (int) value;
+
+                     if (index < 0 || index >= (int) notes.size())
+                         return "note index " + juce::String (index) + " out of range (0.."
+                                + juce::String ((int) notes.size() - 1) + ")";
+
+                     auto& note = notes[(size_t) index];
+
+                     if (clear)
+                     {
+                         note.articulation = {};
+                         continue;
+                     }
+
+                     const auto choice = map->choose (note.articulation, group, articulation);
+
+                     if (! choice.ok())
+                         return "note " + juce::String (index) + ": " + choice.error;
+
+                     if (! choice.dropped.empty() && ! dropIncompatible)
+                     {
+                         juce::StringArray names;
+
+                         for (auto& [droppedGroup, droppedName] : choice.dropped)
+                             names.add ("'" + droppedName + "' (" + droppedGroup + ")");
+
+                         return "note " + juce::String (index) + ": this would drop " + names.joinIntoString (", ")
+                                + ", which no longer apply; repeat with dropIncompatible=true to accept";
+                     }
+
+                     note.articulation = choice.selection;
                  }
 
                  return {};
@@ -1007,6 +1095,9 @@ void CommandDispatcher::registerCommands()
                      c->setProperty ("name", channel.name);
                      c->setProperty ("synced", channel.synced);
 
+                     if (channel.expressionMap.isNotEmpty())
+                         c->setProperty ("expressionMap", channel.expressionMap);
+
                      if (channel.veproPluginId.isNotEmpty())
                          c->setProperty ("veproPlugin", channel.veproPluginId);
 
@@ -1086,6 +1177,218 @@ void CommandDispatcher::registerCommands()
                                                     params.getProperty ("name", {}).toString(),
                                                     (int) params.getProperty ("port", 1)))
                  return respond (fail ("that channel is synced from the VE Pro server and its name is immutable"));
+
+             respond (ok());
+         });
+
+    //==========================================================================
+    // Expression maps (MILESTONES.md "Articulation / expression maps")
+    const auto existingMaps = [this]
+    {
+        juce::StringArray names;
+
+        for (auto& map : engine.getExpressionMaps())
+            names.add (map.name);
+
+        return names.isEmpty() ? juce::String ("none exist yet") : "existing: " + names.joinIntoString (", ");
+    };
+
+    const auto describeSelection = [] (const ExpressionMap::Selection& selection)
+    {
+        return selection.toVar();
+    };
+
+    add ("expressionmap.list", "The project's expression maps, and which instrument channels use each", "",
+         [this] (const juce::var&, Respond respond)
+         {
+             juce::Array<juce::var> list;
+
+             for (auto& map : engine.getExpressionMaps())
+             {
+                 int articulations = 0;
+
+                 for (auto& group : map.groups)
+                     articulations += (int) group.articulations.size();
+
+                 auto o = object();
+                 o->setProperty ("name", map.name);
+                 o->setProperty ("description", map.description);
+                 o->setProperty ("groups", (int) map.groups.size());
+                 o->setProperty ("articulations", articulations);
+                 o->setProperty ("valid", map.isValid());
+
+                 juce::Array<juce::var> usedBy;
+
+                 for (auto& [instrumentId, instrumentName] : engine.getInstruments())
+                     for (auto& channel : engine.getInstrumentMidiChannels (instrumentId))
+                         if (ExpressionMap::sameName (channel.expressionMap, map.name))
+                         {
+                             auto u = object();
+                             u->setProperty ("instrumentId", instrumentId);
+                             u->setProperty ("instrument", instrumentName);
+                             u->setProperty ("port", channel.midiPort);
+                             u->setProperty ("channel", channel.midiChannel);
+                             u->setProperty ("name", channel.name);
+                             usedBy.add (juce::var (u.get()));
+                         }
+
+                 o->setProperty ("usedBy", usedBy);
+                 list.add (juce::var (o.get()));
+             }
+
+             respond (ok (list));
+         });
+
+    add ("expressionmap.get", "One expression map in full: groups (the first is the root group), articulations, outputs",
+         "name:string",
+         [this, existingMaps] (const juce::var& params, Respond respond)
+         {
+             const auto name = params.getProperty ("name", {}).toString();
+
+             if (const auto map = engine.getExpressionMap (name))
+                 return respond (ok (map->toVar()));
+
+             respond (fail ("no expression map '" + name + "' (" + existingMaps() + ")"));
+         });
+
+    add ("expressionmap.set",
+         "Create an expression map, or replace the one with that name (names ignore case). Refused, with the reasons, "
+         "if it isn't valid. Group 0 is the root group; a modifier's appliesTo lists the root articulations it works with "
+         "(empty = all). Outputs are sent in order: keyswitch (number = key, value = velocity, held?), controller "
+         "(number = CC, value), programChange (number = program, bank?)",
+         "map:{name, description?, groups:[{name, description?, articulations:[{name, symbol?, description?, "
+         "timingOffsetMs?, keyLow?, keyHigh?, appliesTo?:[root names], outputs?:[{type, number, value?, held?, bank?}]}]}]}",
+         [this] (const juce::var& params, Respond respond)
+         {
+             ExpressionMap map;
+
+             if (auto error = ExpressionMap::fromVar (params["map"], map); error.isNotEmpty())
+                 return respond (fail (error));
+
+             const auto existed = engine.getExpressionMap (map.name).has_value();
+
+             if (auto error = engine.setExpressionMap (map); error.isNotEmpty())
+                 return respond (fail (error));
+
+             auto result = object();
+             result->setProperty ("name", map.name.trim());
+             result->setProperty ("created", ! existed);
+             respond (ok (juce::var (result.get())));
+         });
+
+    add ("expressionmap.remove",
+         "Delete an expression map. Instrument channels that used it keep its name (shown as a missing map)",
+         "name:string",
+         [this] (const juce::var& params, Respond respond)
+         {
+             if (auto error = engine.removeExpressionMap (params.getProperty ("name", {}).toString()); error.isNotEmpty())
+                 return respond (fail (error));
+
+             respond (ok());
+         });
+
+    add ("expressionmap.rename", "Rename an expression map; the instrument channels using it follow", "name:string newName:string",
+         [this] (const juce::var& params, Respond respond)
+         {
+             if (auto error = engine.renameExpressionMap (params.getProperty ("name", {}).toString(),
+                                                          params.getProperty ("newName", {}).toString());
+                 error.isNotEmpty())
+                 return respond (fail (error));
+
+             respond (ok());
+         });
+
+    add ("expressionmap.validate",
+         "Check a map, given by name or inline: structure, unique names, applies-to lists and value ranges. "
+         "Replies {valid, problems:[...]}. How outputs combine is deliberately not checked",
+         "name:string | map:{...}",
+         [this, existingMaps] (const juce::var& params, Respond respond)
+         {
+             ExpressionMap map;
+
+             if (params.hasProperty ("map"))
+             {
+                 if (auto error = ExpressionMap::fromVar (params["map"], map); error.isNotEmpty())
+                     return respond (fail (error));
+             }
+             else if (const auto stored = engine.getExpressionMap (params.getProperty ("name", {}).toString()))
+             {
+                 map = *stored;
+             }
+             else
+             {
+                 return respond (fail ("give 'name' of one of the project's maps (" + existingMaps() + ") or an inline 'map'"));
+             }
+
+             const auto problems = map.validate();
+             juce::Array<juce::var> list;
+
+             for (auto& problem : problems)
+                 list.add (problem);
+
+             auto result = object();
+             result->setProperty ("valid", problems.isEmpty());
+             result->setProperty ("problems", list);
+             respond (ok (juce::var (result.get())));
+         });
+
+    add ("expressionmap.choose",
+         "Apply the choosing rules to an articulation selection WITHOUT changing anything - what the editor's menu does: "
+         "every item toggles, modifier groups are exclusive (once one is chosen the group's others are unavailable until it is "
+         "unselected), the root group is not (another root switches directly), modifiers need a root and must apply to it. "
+         "Replies {ok, selection, dropped:[{group,name}], error?}: 'dropped' are modifiers the change would remove "
+         "(they no longer apply to the new root)",
+         "name:string [selection:{root,modifiers:[{group,name}]}] group:string articulation:string",
+         [this, existingMaps, describeSelection] (const juce::var& params, Respond respond)
+         {
+             const auto name = params.getProperty ("name", {}).toString();
+             const auto map = engine.getExpressionMap (name);
+
+             if (! map.has_value())
+                 return respond (fail ("no expression map '" + name + "' (" + existingMaps() + ")"));
+
+             ExpressionMap::Selection current;
+
+             if (auto error = ExpressionMap::Selection::fromVar (params["selection"], current); error.isNotEmpty())
+                 return respond (fail (error));
+
+             const auto choice = map->choose (current, params.getProperty ("group", {}).toString(),
+                                              params.getProperty ("articulation", {}).toString());
+
+             auto result = object();
+             result->setProperty ("ok", choice.ok());
+             result->setProperty ("selection", describeSelection (choice.selection));
+
+             juce::Array<juce::var> dropped;
+
+             for (auto& [group, articulationName] : choice.dropped)
+             {
+                 auto d = object();
+                 d->setProperty ("group", group);
+                 d->setProperty ("name", articulationName);
+                 dropped.add (juce::var (d.get()));
+             }
+
+             result->setProperty ("dropped", dropped);
+
+             if (! choice.ok())
+                 result->setProperty ("error", choice.error);
+
+             respond (ok (juce::var (result.get())));
+         });
+
+    add ("instrument.setChannelMap",
+         "Give one of an instrument's MIDI channels an expression map (by name; \"\" = none). Works on synced channels too. "
+         "Every track playing that channel uses the map",
+         "instrumentId:int channel:int(1-16) map:string [port:int=1]",
+         [this] (const juce::var& params, Respond respond)
+         {
+             if (auto error = engine.setInstrumentChannelMap ((int) params.getProperty ("instrumentId", 0),
+                                                              (int) params.getProperty ("port", 1),
+                                                              (int) params.getProperty ("channel", 1),
+                                                              params.getProperty ("map", {}).toString());
+                 error.isNotEmpty())
+                 return respond (fail (error));
 
              respond (ok());
          });
