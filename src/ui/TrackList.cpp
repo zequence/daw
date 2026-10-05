@@ -29,9 +29,6 @@ public:
         theme::setButtonRole (armButton, "arm");
         armButton.onClick = [this] { if (owner.onArm) owner.onArm (trackId); };
 
-        editorButton.setTooltip ("Open the MIDI editor for this track");
-        editorButton.onClick = [this] { if (owner.onOpenEditor) owner.onOpenEditor (trackId); };
-
         soloButton.setTooltip ("Solo (MIDI)");
         soloButton.setClickingTogglesState (true);
         theme::setButtonRole (soloButton, "solo");
@@ -52,7 +49,7 @@ public:
             engine.setTrackRecordReplace (trackId, ! engine.isTrackRecordReplace (trackId));
         };
 
-        for (auto* c : std::initializer_list<juce::Component*> { &armButton, &editorButton, &soloButton,
+        for (auto* c : std::initializer_list<juce::Component*> { &armButton, &soloButton,
                                                                  &muteButton, &instrumentButton, &recordModeButton })
         {
             c->setWantsKeyboardFocus (false);
@@ -132,7 +129,7 @@ public:
 
         auto buttons = area.removeFromTop (22);
 
-        for (auto* b : std::initializer_list<juce::TextButton*> { &armButton, &editorButton, &soloButton,
+        for (auto* b : std::initializer_list<juce::TextButton*> { &armButton, &soloButton,
                                                                   &muteButton, &instrumentButton })
         {
             b->setBounds (buttons.removeFromLeft (26));
@@ -149,7 +146,7 @@ private:
     const int depth;
 
     juce::Label nameLabel;
-    juce::TextButton armButton { "R" }, editorButton { "E" }, soloButton { "S" },
+    juce::TextButton armButton { "R" }, soloButton { "S" },
                      muteButton { "M" }, instrumentButton { "I" }, recordModeButton { "Add" };
     bool selected = false;
 

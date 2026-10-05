@@ -75,6 +75,7 @@ private:
     void updateViewVisibility();
     void updatePlaceholders();
     void togglePerfPanel();
+    void toggleEditor();
     void startPluginScan (juce::StringArray args);
 
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
@@ -87,7 +88,8 @@ private:
 
     // Topbar
     juce::TextButton menuButton { "Menu" }, midiDomainButton { "Midi" }, audioDomainButton { "Audio" },
-                     instrumentsButton { "Instruments" }, historyButton { "History" };
+                     instrumentsButton { "Instruments" }, historyButton { "History" },
+                     editButton { "Edit" };   // the MIDI editor for the selected track (E)
     // The transport unit: a visually grouped panel with the colorized transport
     // buttons, the position readout (bars.beats + time) and the tempo.
     juce::TextButton rtzButton { "|<" }, playButton { "Play" }, recordButton { "Rec" }, loopButton { "Loop" },

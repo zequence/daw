@@ -98,6 +98,9 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         showContent (ContentView::instruments);
     };
 
+    editButton.setTooltip ("Edit: the MIDI editor for the selected track (E). Click again to go back");
+    editButton.onClick = [this] { toggleEditor(); };
+
     historyButton.onClick = [this]
     {
         if (contentView == ContentView::history)
@@ -182,7 +185,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     timeLabel.setFont (juce::FontOptions (14.0f));
     timeLabel.setInterceptsMouseClicks (false, false);
 
-    for (auto* b : { &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &perfButton })
+    for (auto* b : { &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &editButton, &perfButton })
         theme::setButtonRole (*b, "topbar");
 
     perfButton.setTooltip ("Performance monitor (F12)");
@@ -227,11 +230,6 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
             engine.setArmedTracks (selection, selection.count (selectedTrack) ? selectedTrack : *selection.begin());
     };
     trackList.onArm = [this] (auto id) { selectTrack (id, true); };
-    trackList.onOpenEditor = [this] (auto id)
-    {
-        selectTrack (id, false);
-        showContent (ContentView::midiEditor);
-    };
     trackList.onOpenInstrument = [this] (auto id)
     {
         selectTrack (id, false);
@@ -345,7 +343,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     statusLabel.setFont (juce::FontOptions (12.0f));
 
     for (auto* c : std::initializer_list<juce::Component*> {
-             &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
+             &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &editButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
              &collapseButton, &trackList, &channelList, &sidebarResizer,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
@@ -354,7 +352,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         addAndMakeVisible (c);
 
     for (auto* b : std::initializer_list<juce::Component*> { &menuButton, &midiDomainButton, &audioDomainButton,
-                                                             &instrumentsButton, &historyButton, &rtzButton,
+                                                             &instrumentsButton, &historyButton, &editButton, &rtzButton,
                                                              &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &perfButton,
                                                              &collapseButton })
         b->setWantsKeyboardFocus (false);
@@ -1146,6 +1144,7 @@ void MainComponent::updateViewVisibility()
     expressionMapView.setVisible (contentView == ContentView::expressionMaps);
     historyView.setVisible (contentView == ContentView::history);
     historyButton.setToggleState (contentView == ContentView::history, juce::dontSendNotification);
+    editButton.setToggleState (contentView == ContentView::midiEditor, juce::dontSendNotification);
 
     trackList.setVisible (! sidebarCollapsed && domain == Domain::midi);
     channelList.setVisible (! sidebarCollapsed && domain == Domain::audio);
@@ -1316,6 +1315,14 @@ void MainComponent::timerCallback()
 }
 
 //==============================================================================
+void MainComponent::toggleEditor()
+{
+    if (contentView == ContentView::midiEditor)
+        showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
+    else if (selectedTrack != 0)
+        showContent (ContentView::midiEditor);
+}
+
 bool MainComponent::keyPressed (const juce::KeyPress& key)
 {
     if (key == juce::KeyPress::escapeKey)
@@ -1355,6 +1362,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     // An articulation's key command (in the current track's expression map)
     if (triggerArticulation ([&key] (const ExpressionMap& map) { return map.findByKeyCommand (key.getTextDescription()); }))
         return true;
+
+    if (key == juce::KeyPress ('e') || key == juce::KeyPress ('E'))
+    {
+        toggleEditor();
+        return true;
+    }
 
     if (key == juce::KeyPress::F12Key)
     {
@@ -1428,6 +1441,8 @@ void MainComponent::resized()
     instrumentsButton.setBounds (toolbar.removeFromLeft (94));
     toolbar.removeFromLeft (4);
     historyButton.setBounds (toolbar.removeFromLeft (62));
+    toolbar.removeFromLeft (4);
+    editButton.setBounds (toolbar.removeFromLeft (46));
     toolbar.removeFromLeft (14);
 
     perfButton.setBounds (getWidth() - 8 - 50, toolbar.getY(), 50, toolbar.getHeight());
