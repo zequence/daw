@@ -63,27 +63,57 @@ private:
         const auto seq = sequence.load();
         const auto isSuppressed = suppressed.load();
 
-        if (b.killAtStart || killAllRequest.exchange (false) || (isSuppressed && ! activeNotes.empty()))
-            emitAllNotesOff (midi, 0);
+        // Notes begun early for the NEXT lap (the loop look-ahead) survive a loop wrap, and only that;
+        // a stop, a locate or a kill-all ends them like any other note.
+        const auto stopsEverything = killAllRequest.exchange (false) || (isSuppressed && ! activeNotes.empty())
+                                       || (b.killAtStart && ! b.wrappedAtStart);
+
+        if (stopsEverything)
+            emitAllNotesOff (midi, 0, false);
+        else if (b.killAtStart)
+            emitAllNotesOff (midi, 0, true);
 
         if (! b.playing || b.numSegments == 0 || isSuppressed)
             return;
 
+        // The loop was switched off (or moved) before the look-ahead notes got their lap: that lap will
+        // not happen, so the notes belong to nothing and end now
+        if (! b.hasAhead && ! b.wrappedAtStart)
+        {
+            for (auto it = activeNotes.begin(); it != activeNotes.end();)
+            {
+                if (it->ahead)
+                {
+                    midi.addEvent (juce::MidiMessage::noteOff (it->channel, it->key), 0);
+                    it = activeNotes.erase (it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+        }
+
         if (b.chaseAtStart && seq != nullptr)
-            chase (midi, *seq, b.segments[0].startTick, b.segments[0].offset);
+            chase (midi, *seq, b.segments[0].gateTick, b.segments[0].offset);
 
         for (int i = 0; i < b.numSegments; ++i)
         {
             if (i > 0)   // crossing the loop point
             {
-                emitAllNotesOff (midi, b.segments[i].offset);
+                emitAllNotesOff (midi, b.segments[i].offset, true);
 
                 if (seq != nullptr)
-                    chase (midi, *seq, b.segments[i].startTick, b.segments[i].offset);
+                    chase (midi, *seq, b.segments[i].gateTick, b.segments[i].offset);
             }
 
             if (seq != nullptr)
                 renderSegment (midi, *seq, b, i);
+
+            // The tail of the lap also plays the next lap's early events (after the segment's own
+            // notes, so the ordering within a sample stays: offs, controls, ons)
+            if (i == 0 && b.hasAhead && seq != nullptr)
+                renderAhead (midi, *seq, b);
         }
     }
 
@@ -106,14 +136,28 @@ public:
     void setStateInformation (const void*, int) override     {}
 
 private:
-    struct ActiveNote { int channel, key; juce::int64 endTick; };
+    // 'ahead': begun in the loop look-ahead for the next lap; endTick is in that lap's time
+    struct ActiveNote { int channel, key; juce::int64 endTick; bool ahead = false; };
 
-    void emitAllNotesOff (juce::MidiBuffer& midi, int offset)
+    // keepAhead: notes begun early for the next lap carry over a loop wrap (and become ordinary notes)
+    void emitAllNotesOff (juce::MidiBuffer& midi, int offset, bool keepAhead)
     {
-        for (const auto& note : activeNotes)
-            midi.addEvent (juce::MidiMessage::noteOff (note.channel, note.key), offset);
+        std::vector<ActiveNote> carried;
 
-        activeNotes.clear();
+        for (const auto& note : activeNotes)
+        {
+            if (keepAhead && note.ahead)
+            {
+                carried.push_back (note);
+                carried.back().ahead = false;
+            }
+            else
+            {
+                midi.addEvent (juce::MidiMessage::noteOff (note.channel, note.key), offset);
+            }
+        }
+
+        activeNotes = std::move (carried);
 
         for (int ch = 1; ch <= 16; ++ch)
         {
@@ -131,6 +175,12 @@ private:
 
         for (auto it = activeNotes.begin(); it != activeNotes.end();)
         {
+            if (it->ahead)   // ends in the next lap's time: renderAhead owns it until the wrap
+            {
+                ++it;
+                continue;
+            }
+
             if (it->endTick < seg.endTick)   // due in this segment (or overdue after an edit)
             {
                 midi.addEvent (juce::MidiMessage::noteOff (it->channel, it->key),
@@ -158,7 +208,8 @@ private:
                                          [] (const MidiSequence::Control& c, juce::int64 t) { return c.tick < t; });
              it != controls.end() && it->tick < seg.endTick; ++it)
         {
-            emitControl (midi, *it, b.offsetFor (it->tick, segmentIndex));
+            if (plays (it->written(), it->tick, seg.gateTick, b.regionEndTick))
+                emitControl (midi, *it, b.offsetFor (it->tick, segmentIndex));
         }
 
         const auto& notes = seq.getNotes();
@@ -167,6 +218,9 @@ private:
                                          [] (const MidiSequence::Note& n, juce::int64 t) { return n.startTick < t; });
              it != notes.end() && it->startTick < seg.endTick; ++it)
         {
+            if (! plays (it->written(), it->startTick, seg.gateTick, b.regionEndTick))
+                continue;
+
             midi.addEvent (juce::MidiMessage::noteOn (it->channel, it->key, (juce::uint8) it->velocity),
                            b.offsetFor (it->startTick, segmentIndex));
             activeNotes.push_back ({ it->channel, it->key, it->startTick + it->lengthTicks });
@@ -174,6 +228,73 @@ private:
 
         // Notes short enough to start and end inside this same segment.
         emitDueNoteOffs (midi, b, segmentIndex);
+    }
+
+    // Does an event belong to the part being played? It was written before the region ends (the loop
+    // end), and if it is scheduled before the gate (the pre-roll, or the time just before a lap) it was
+    // written at or after the gate - an ordinary event that lies before the start stays silent.
+    static bool plays (juce::int64 written, juce::int64 scheduled, juce::int64 gate, juce::int64 regionEnd) noexcept
+    {
+        return written < regionEnd && ! (scheduled < gate && written < gate);
+    }
+
+    // The loop look-ahead: the tail of a lap plays the next lap's early events (scheduled just before the
+    // loop start, written inside the loop), at the same samples one loop length earlier.
+    void renderAhead (juce::MidiBuffer& midi, const MidiSequence& seq, const Transport::Block& b)
+    {
+        const auto& ahead = b.ahead;
+
+        // Offs for look-ahead notes begun in earlier blocks
+        for (auto it = activeNotes.begin(); it != activeNotes.end();)
+        {
+            if (it->ahead && it->endTick < ahead.endTick)
+            {
+                midi.addEvent (juce::MidiMessage::noteOff (it->channel, it->key),
+                               b.offsetFor (juce::jmax (it->endTick, ahead.startTick), ahead));
+                it = activeNotes.erase (it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
+
+        const auto& controls = seq.getControls();
+
+        for (auto it = std::lower_bound (controls.begin(), controls.end(), ahead.startTick,
+                                         [] (const MidiSequence::Control& c, juce::int64 t) { return c.tick < t; });
+             it != controls.end() && it->tick < ahead.endTick; ++it)
+            if (plays (it->written(), it->tick, ahead.gateTick, b.regionEndTick))
+                emitControl (midi, *it, b.offsetFor (it->tick, ahead));
+
+        const auto& notes = seq.getNotes();
+
+        for (auto it = std::lower_bound (notes.begin(), notes.end(), ahead.startTick,
+                                         [] (const MidiSequence::Note& n, juce::int64 t) { return n.startTick < t; });
+             it != notes.end() && it->startTick < ahead.endTick; ++it)
+        {
+            if (! plays (it->written(), it->startTick, ahead.gateTick, b.regionEndTick))
+                continue;
+
+            midi.addEvent (juce::MidiMessage::noteOn (it->channel, it->key, (juce::uint8) it->velocity),
+                           b.offsetFor (it->startTick, ahead));
+            activeNotes.push_back ({ it->channel, it->key, it->startTick + it->lengthTicks, true });
+        }
+
+        // A short look-ahead note can be over before the lap ends
+        for (auto it = activeNotes.begin(); it != activeNotes.end();)
+        {
+            if (it->ahead && it->endTick < ahead.endTick)
+            {
+                midi.addEvent (juce::MidiMessage::noteOff (it->channel, it->key),
+                               b.offsetFor (juce::jmax (it->endTick, ahead.startTick), ahead));
+                it = activeNotes.erase (it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
     }
 
     void emitControl (juce::MidiBuffer& midi, const MidiSequence::Control& c, int offset)
@@ -204,10 +325,15 @@ private:
         std::memset (bendState, -1, sizeof (bendState));
         std::memset (programState, -1, sizeof (programState));
 
+        // The state just before 'chaseTick': events both scheduled and written before it (an event written
+        // later but scheduled earlier belongs to the pre-roll and is played, not chased)
         for (const auto& c : seq.getControls())
         {
             if (c.tick >= chaseTick)
                 break;
+
+            if (c.written() >= chaseTick)
+                continue;
 
             using Type = MidiSequence::ControlType;
             switch (c.type)

@@ -53,14 +53,20 @@ const TempoMap::MeterChange& TempoMap::getMeterAt (juce::int64 tick) const noexc
 //==============================================================================
 double TempoMap::ticksToSeconds (juce::int64 tick) const noexcept
 {
-    tick = juce::jmax ((juce::int64) 0, tick);
+    // Before the start of the piece (a pre-roll, or an event shifted earlier than bar 1) time
+    // continues backwards at the first tempo
+    if (tick < 0)
+        return (double) tick * secondsPerTick (tempos.front().bpm);
+
     const auto& seg = tempoSegmentFor (tick);
     return seg.startSeconds + (double) (tick - seg.tick) * secondsPerTick (seg.bpm);
 }
 
 juce::int64 TempoMap::secondsToTicks (double seconds) const noexcept
 {
-    seconds = juce::jmax (0.0, seconds);
+    if (seconds < 0.0)
+        return juce::int64 (std::llround (seconds / secondsPerTick (tempos.front().bpm)));
+
     const auto& seg = tempoSegmentForSeconds (seconds);
     return seg.tick + juce::int64 (std::llround ((seconds - seg.startSeconds) / secondsPerTick (seg.bpm)));
 }

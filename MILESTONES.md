@@ -191,9 +191,8 @@ it is heard on the beat.
   ahead of the playhead cannot be heard in time). The swap must still be safe for
   notes already sounding: their note-offs are sent as before, never lost, so
   nothing hangs.
-  - **Spike first**: before committing, prove the pre-roll in `Transport` +
-    `MidiSourceProcessor` with a hard-coded negative offset, since everything
-    else in this section depends on it.
+  - **The spike is done (2026-10-05)** and the idea works - see "What the pre-roll
+    spike found" below.
 - Notes shifted by different amounts can overlap or reorder (a shifted legato
   overlapping the previous note). That is usually the point, but the playback
   sequence must keep each note's on/off pair together.
@@ -290,6 +289,66 @@ switch events are tagged so locating mid-song re-sends the last one (a
 keyswitch is not a CC, the existing chase would not know it). Live playing
 uses the editor's current articulation (later).
 
+### What the pre-roll spike found (2026-10-05)
+
+Built and tested in `Transport`, `MidiSourceProcessor`, `TempoMap` and
+`MidiSequence` (tests/PreRollTests.cpp, sample-exact at 48 kHz). Nothing
+changes while the pre-roll is 0 (the default); no engine or UI wiring yet.
+
+**It works.** `Transport::setPreRollMs()` makes playback begin that long before
+the position it shows; the readout stays at the start until it is reached, and an
+event scheduled 70 ms early sounds exactly 3360 samples before the transport's
+tick 0. Stop during a pre-roll leaves no stuck notes and the position at the start.
+
+**What the design needs, learnt on the way:**
+
+- **Every event of the playback sequence must remember where it was WRITTEN, not
+  only when it is scheduled** (`sourceTick` on `Note` and `Control`;
+  `written()`). The pre-roll window holds two kinds of events that timing alone
+  cannot tell apart: early-shifted events of the part being played (must sound) and
+  ordinary events written before the start (must stay silent). The rule: an event
+  scheduled before the *gate* (the start of playback, or a lap's start) plays only
+  if it was written at or after the gate; and an event written at or after the
+  loop end never plays. Switch events inherit their note's written time.
+- **Time before tick 0 exists.** `TempoMap` now continues backwards at the first
+  tempo (it clamped before); `MidiSequence::create(..., allowNegativeTimes)` lets
+  a *playback* sequence hold negative times. Bars, beats and the written
+  sequence still never go below 0.
+- **A locate while playing is a restart with a pre-roll** (so events due before
+  the new position still sound), with the readout moving to the new position at
+  once. The cost is a silent gap of the pre-roll length at every locate.
+- **Loops need a look-ahead.** In the last pre-roll's worth of a lap, the block
+  carries an extra "ahead" segment: the same samples, one loop length earlier,
+  whose events (scheduled just before the loop start, written inside the loop)
+  sound at the end of the previous lap. Those notes are *carried* over the wrap
+  instead of being cut; their end is tracked in the next lap's time. If the loop
+  is switched off (or the position moves) before the wrap, the carried notes
+  belong to a lap that will not happen and end at once. No duplicates at the wrap.
+- **The controller chase** must count only events both scheduled and written
+  before the chase tick, otherwise an early-shifted controller is both chased and
+  played.
+- **Verified:** pre-roll from tick 0 and from the middle; gating (a note 10 ms
+  before the start stays silent, one written 10 ms after sounds in the pre-roll,
+  a late-shifted one plays normally); controller chase; locate while playing;
+  stop during the pre-roll; loop look-ahead over three laps (one early note-on
+  per lap, exact samples, none stuck); events written past the loop end; stop and
+  loop-off while a look-ahead note sounds.
+
+**Not covered yet (still open):**
+- **Wiring:** nothing sets the pre-roll or builds the playback sequence yet. The
+  pre-roll should be the largest negative offset among the tracks' maps,
+  updated when maps change.
+- **Positive offsets across the loop wrap** (a late note written near the loop
+  end, scheduled after it) are not carried into the next lap.
+- **Tempo changes inside the pre-roll window** convert correctly (it is wall-clock
+  time), but the window is measured in samples from the start position, so a
+  tempo change right before the start moves the tick where the pre-roll begins.
+- **The recorder and anything else that reads the position** (metronome, record
+  start) must learn about the pre-roll: `Block::inPreRoll`.
+- **Bouncing/rendering** must include the pre-roll.
+- **Loop shorter than the pre-roll:** the look-ahead window is clamped to the loop.
+- **A pre-roll while the transport is rolling and the loop region is edited.**
+
 ### Dynamics, velocity layers and CC sequences
 
 Dynamics (CC1/CC11 curves, velocity layers) stay separate from articulations
@@ -331,9 +390,9 @@ selection. The UI is a client of the same commands.
    whose articulation is missing; the editor's new colors (keyswitch mark, error
    red) are hard-coded and belong in the theme; maps can only be created through
    the API until the map editor (phase 4).
-3. Playback: first the pre-roll spike (transport counting from -N, playback
-   sequence with negative times, loop wrap); then the generated playback sequence
-   (switch events and timing offsets), regenerated on change, and the chase of
+3. Playback: the pre-roll spike is done (see "What the pre-roll spike found"); now the wiring: the playback
+   sequence generated from the written one, with the pre-roll set from the maps' largest negative
+   offset (switch events and timing offsets), regenerated on change, and the chase of
    the last switch on locate.
 4. The two configuration views (own milestone below) and the map editor UI.
 5. Library, presets (Spitfire UACC, a generic keyswitch map), Cubase

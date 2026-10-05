@@ -1,5 +1,6 @@
 #pragma once
 
+#include <limits>
 #include "ExpressionMap.h"
 #include "TempoMap.h"
 
@@ -10,6 +11,8 @@ class MidiSequence
 public:
     using Ptr = std::shared_ptr<const MidiSequence>;
 
+    static constexpr juce::int64 noSource = std::numeric_limits<juce::int64>::min();
+
     struct Note
     {
         juce::int64 startTick = 0;
@@ -18,6 +21,14 @@ public:
         int key = 60;           // 0..127
         int velocity = 100;     // 1..127
         ExpressionMap::Selection articulation;   // empty = none (see ExpressionMap.h)
+
+        // Playback sequences only (MILESTONES.md "Timing offset"): where the event was WRITTEN,
+        // while startTick is when it is SCHEDULED (shifted by an articulation's timing offset).
+        // Decides whether it belongs to the part being played when the transport pre-rolls or
+        // the loop wraps. noSource = not shifted: written == scheduled.
+        juce::int64 sourceTick = noSource;
+
+        juce::int64 written() const noexcept    { return sourceTick == noSource ? startTick : sourceTick; }
     };
 
     enum class ControlType { controller, pitchBend, programChange };
@@ -29,15 +40,23 @@ public:
         int channel = 1;
         int number = 0;         // controller number; unused for bend/program
         int value = 0;          // 0..127, or 0..16383 for pitch bend
+
+        juce::int64 sourceTick = noSource;   // as for Note: where it was written (switch events inherit their note's)
+
+        juce::int64 written() const noexcept    { return sourceTick == noSource ? tick : sourceTick; }
     };
 
-    static Ptr create (std::vector<Note> notes, std::vector<Control> controls)
+    // allowNegativeTimes: a PLAYBACK sequence may hold events before tick 0 (shifted earlier than
+    // the start of the piece); the written sequence never does.
+    static Ptr create (std::vector<Note> notes, std::vector<Control> controls, bool allowNegativeTimes = false)
     {
         auto seq = std::shared_ptr<MidiSequence> (new MidiSequence());
 
         for (auto& n : notes)
         {
-            n.startTick = juce::jmax ((juce::int64) 0, n.startTick);
+            if (! allowNegativeTimes)
+                n.startTick = juce::jmax ((juce::int64) 0, n.startTick);
+
             n.lengthTicks = juce::jmax ((juce::int64) 1, n.lengthTicks);   // zero-length notes break retrigger ordering
             n.channel = juce::jlimit (1, 16, n.channel);
             n.key = juce::jlimit (0, 127, n.key);
@@ -46,7 +65,9 @@ public:
 
         for (auto& c : controls)
         {
-            c.tick = juce::jmax ((juce::int64) 0, c.tick);
+            if (! allowNegativeTimes)
+                c.tick = juce::jmax ((juce::int64) 0, c.tick);
+
             c.channel = juce::jlimit (1, 16, c.channel);
             c.number = juce::jlimit (0, 127, c.number);
             c.value = juce::jlimit (0, c.type == ControlType::pitchBend ? 16383 : 127, c.value);

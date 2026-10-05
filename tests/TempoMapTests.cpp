@@ -129,12 +129,22 @@ public:
             expectEquals (bare->getTempoAt (0), 60.0);
         }
 
-        beginTest ("negative and out-of-range input is clamped");
+        beginTest ("time before the start continues backwards at the first tempo; bars, beats and bad input still clamp");
         {
-            auto map = TempoMap::create();
+            auto map = TempoMap::create();   // 120 bpm: a quarter note is 0.5 s
 
-            expectEquals (map->ticksToSeconds (-500), 0.0);
-            expectEquals (map->secondsToTicks (-2.0), (juce::int64) 0);
+            // A pre-roll, or an event shifted earlier than bar 1, lives before tick 0
+            expectWithinAbsoluteError (map->ticksToSeconds (-Q), -0.5, 1e-9);
+            expectEquals (map->secondsToTicks (-2.0), -4 * Q);
+            expectEquals (map->samplesToTicks (-3360, 48000.0), (juce::int64) -134400);   // 70 ms at 40 ticks per sample
+            expectEquals (map->ticksToSamples (-134400, 48000.0), (juce::int64) -3360);
+
+            // ...and it stays continuous across tick 0 and a tempo change later on
+            auto changed = map->withTempoChange (4 * Q, 60.0);
+            expectWithinAbsoluteError (changed->ticksToSeconds (-Q), -0.5, 1e-9);   // the FIRST tempo, not a later one
+            for (const juce::int64 tick : std::initializer_list<juce::int64> { -3 * Q, -Q, -1000, 0, Q })
+                expectEquals (changed->secondsToTicks (changed->ticksToSeconds (tick)), tick);
+
             expectEquals (map->getBarStart (-1), (juce::int64) 0);
             expectEquals (map->ticksToBarsBeats (-1).bar, 1);
             expectEquals (map->samplesToTicks (480, 0.0), (juce::int64) 0);   // no device yet
