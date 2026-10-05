@@ -110,7 +110,7 @@ private:
     juce::int64 lastPlayheadTick = -1;
     int lastAxisRevision = -1, lastEngineRevision = -1;
     int keyHeight = 12;
-    int topKey = 84;                       // highest visible key (C6)
+    int topKey = 84;                       // highest visible key (C5)
 
     // Interaction state
     Drag drag = Drag::none;

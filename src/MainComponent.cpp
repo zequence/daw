@@ -1,5 +1,7 @@
 #include "MainComponent.h"
 #include "UserData.h"
+#include "model/NoteNames.h"
+#include "ui/EditorSettings.h"
 #include "ui/ColorPalette.h"
 #include "model/DemoSequence.h"
 #include "api/CommandDispatcher.h"
@@ -31,6 +33,8 @@ namespace
 MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, McpProcess& mcp)
     : engine (e), commandDispatcher (dispatcher), mcpProcess (mcp)
 {
+    noteNames::middleCOctave() = editorSettings::middleCOctave (engine.getSettingsFile());   // Settings > Editor
+
     // Keep the window state sane when projects change through the API.
     dispatcher.onBeforeProjectChange = [safe = juce::Component::SafePointer<MainComponent> (this)]
     {

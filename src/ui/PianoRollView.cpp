@@ -2,6 +2,7 @@
 #include "ThemedLookAndFeel.h"
 #include "EditorSettings.h"
 #include "../model/ArticulationMenu.h"
+#include "../model/NoteNames.h"
 #include "../api/CommandDispatcher.h"
 
 namespace
@@ -1478,7 +1479,7 @@ void PianoRollView::paint (juce::Graphics& g)
         {
             g.setColour (juce::Colours::grey);
             g.setFont (juce::FontOptions (10.0f));
-            g.drawText ("C" + juce::String (key / 12 - 1), keys.getX() + 2, y, keys.getWidth() - 8, keyHeight,
+            g.drawText (noteNames::name (key), keys.getX() + 2, y, keys.getWidth() - 8, keyHeight,
                         juce::Justification::centredRight);
         }
     }

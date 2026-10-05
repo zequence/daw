@@ -3,6 +3,7 @@
 #include "../AudioEngine.h"
 #include "../api/CommandDispatcher.h"
 #include "ThemedLookAndFeel.h"
+#include "../model/NoteNames.h"
 
 // Content view: create and edit expression maps (MILESTONES.md "Articulation / expression maps").
 //
@@ -1063,11 +1064,7 @@ private:
             return;
         }
 
-        const auto noteName = [] (int key)
-        {
-            static const char* names[] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
-            return juce::String (names[key % 12]) + juce::String (key / 12 - 1);
-        };
+        const auto noteName = [] (int key) { return noteNames::name (key); };
 
         if (focus == Focus::slot && currentSlot() != nullptr)
             buildSlotDetails (noteName);

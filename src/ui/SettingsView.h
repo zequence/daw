@@ -5,6 +5,7 @@
 #include "../integrations/VeproServer.h"
 #include "ColorPalette.h"
 #include "EditorSettings.h"
+#include "../model/NoteNames.h"
 #include "ThemeEditor.h"
 
 // Full-window settings page (replaces the whole UI; close with X or ESC).
@@ -105,6 +106,26 @@ public:
             engine.getSettingsFile().saveIfNeeded();
             engine.refreshAllPlayback();   // notes with no articulation now play as the first root, or no longer
         };
+
+        middleCLabel.setText ("Middle C (MIDI note 60) is called", juce::dontSendNotification);
+        middleCLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
+        page.addAndMakeVisible (middleCLabel);
+
+        for (int octave = 3; octave <= 5; ++octave)
+            middleCBox.addItem ("C" + juce::String (octave) + (octave == 3 ? "  (VSL, Cubase)" : juce::String()), octave);
+
+        middleCBox.setSelectedId (editorSettings::middleCOctave (settings), juce::dontSendNotification);
+        middleCBox.setWantsKeyboardFocus (false);
+        middleCBox.onChange = [this]
+        {
+            engine.getSettingsFile().setValue (editorSettings::middleCOctaveKey, middleCBox.getSelectedId());
+            engine.getSettingsFile().saveIfNeeded();
+            noteNames::middleCOctave() = middleCBox.getSelectedId();
+
+            if (auto* top = getTopLevelComponent())
+                top->repaint();   // the piano keys show the new names
+        };
+        page.addAndMakeVisible (middleCBox);
 
         // --- Agents (MCP) ---
         mcpToggle.setToggleState (settings.getBoolValue (mcpEnabledKey, false), juce::dontSendNotification);
@@ -257,7 +278,8 @@ private:
 
         autoRecordToggle.setVisible (category == tracks);
 
-        for (auto* c : std::initializer_list<juce::Component*> { &editorMidiHeading, &dropLabel, &dropBox, &defaultRootToggle })
+        for (auto* c : std::initializer_list<juce::Component*> { &editorMidiHeading, &dropLabel, &dropBox, &defaultRootToggle,
+                                                                 &middleCLabel, &middleCBox })
             c->setVisible (category == editor);
 
         for (auto* c : std::initializer_list<juce::Component*> { &mcpToggle, &mcpStatus, &mcpRegisterHint })
@@ -301,6 +323,9 @@ private:
                 dropBox.setBounds (4, y, 200, 24);
                 y += 36;
                 defaultRootToggle.setBounds (4, y, juce::jmin (width - 8, 640), 24);
+                y += 36;
+                middleCLabel.setBounds (4, y, 230, 24);
+                middleCBox.setBounds (238, y, 170, 24);
                 y += 32;
                 break;
 
@@ -425,7 +450,8 @@ private:
     juce::ToggleButton onTopToggle { "Plugin windows stay on top" };
     juce::ToggleButton autoRecordToggle { "Arm track on select (auto-record)" };
     juce::Label editorMidiHeading, dropLabel;
-    juce::ComboBox dropBox;
+    juce::ComboBox dropBox, middleCBox;
+    juce::Label middleCLabel;
     juce::ToggleButton defaultRootToggle { "Use the first root articulation as the default (notes with no articulation behave as if it were chosen)" };
     juce::ToggleButton mcpToggle { "Run the MCP server for AI agents (starts with the app)" };
     juce::Label mcpStatus;
