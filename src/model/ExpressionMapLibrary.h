@@ -64,6 +64,7 @@ namespace expressionMapLibrary
         }
 
         starter.groups.push_back (root);
+        starter.convertToSlots();   // one sound slot per articulation
         return { starter };
     }
 

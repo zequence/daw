@@ -11,6 +11,11 @@
 // description, key names), a group, or an articulation (name, symbol, description, timing offset,
 // key range, which roots a modifier applies to, and its outputs, sent in series).
 //
+// Sound slots (MILESTONES.md "Sound slots"): a fourth column lists the map's slots - every valid
+// combination of articulations with its own outputs, key range and timing offset - with a filter.
+// In a map with slots the articulations only have names, symbols, descriptions and defaults; a map
+// whose articulations carry outputs can be turned into slots from the map's details.
+//
 // Every change goes through the same commands as scripts and agents use (expressionmap.set for
 // content, the rename commands for names so the notes that use a name follow), so it is undoable
 // in the global history. The editor keeps a working copy; an edit that would make the map invalid
@@ -35,6 +40,28 @@ public:
         setUpList (mapList, mapModel, "Maps");
         setUpList (groupList, groupModel, "Groups (the first is the root group)");
         setUpList (articulationList, articulationModel, "Articulations");
+        setUpList (slotList, slotModel, "Sound slots");
+
+        slotModel.count = [this] { return (int) visibleSlots.size(); };
+        slotModel.text = [this] (int row)
+        {
+            const auto& slot = working->slots[(size_t) visibleSlots[(size_t) row]];
+            return ExpressionMap::labelOf (slot.selection) + "   " + summary (slot.outputs);
+        };
+        slotModel.selected = [this] (int row)
+        {
+            if (row < 0 || programmatic || ! working.has_value() || row >= (int) visibleSlots.size())
+                return;
+
+            selectedSlot = visibleSlots[(size_t) row];
+            focus = Focus::slot;
+            rebuildDetailsSoon();
+        };
+
+        slotFilter.setTextToShowWhenEmpty ("Filter: Ponticello, Rep. ...", juce::Colours::grey);
+        slotFilter.setFont (juce::FontOptions (13.0f));
+        slotFilter.onTextChange = [this] { refreshSlots(); };
+        addAndMakeVisible (slotFilter);
 
         mapModel.count = [this] { return (int) mapNames.size(); };
         mapModel.text = [this] (int row) { return mapNames[(size_t) row]; };
@@ -72,7 +99,8 @@ public:
         };
 
         for (auto* b : { &newMap, &duplicateMap, &deleteMap, &addGroup, &removeGroup, &groupUp, &groupDown,
-                         &addArticulation, &removeArticulation, &articulationUp, &articulationDown })
+                         &addArticulation, &removeArticulation, &articulationUp, &articulationDown,
+                         &addSlot, &duplicateSlot, &removeSlot })
         {
             b->setWantsKeyboardFocus (false);
             addAndMakeVisible (b);
@@ -94,6 +122,11 @@ public:
         removeArticulation.onClick = [this] { editStructure ([this] (ExpressionMap& m) { return removeArticulationFrom (m); }); };
         articulationUp.onClick = [this] { editStructure ([this] (ExpressionMap& m) { return moveArticulation (m, -1); }); };
         articulationDown.onClick = [this] { editStructure ([this] (ExpressionMap& m) { return moveArticulation (m, +1); }); };
+        addSlot.onClick = [this] { editStructure ([this] (ExpressionMap& m) { return addSlotTo (m, false); }); };
+        duplicateSlot.onClick = [this] { editStructure ([this] (ExpressionMap& m) { return addSlotTo (m, true); }); };
+        removeSlot.onClick = [this] { editStructure ([this] (ExpressionMap& m) { return removeSlotFrom (m); }); };
+        addSlot.setTooltip ("A new slot for the first combination that has none yet; set its combination in the details");
+        duplicateSlot.setTooltip ("A copy of the selected slot (its outputs too); change its combination in the details");
 
         detailsViewport.setViewedComponent (&details, false);
         detailsViewport.setScrollBarsShown (true, false);
@@ -171,6 +204,14 @@ public:
         middle.removeFromTop (8);
         layoutList (middle, articulationList, { &addArticulation, &removeArticulation, &articulationUp, &articulationDown });
 
+        auto slotsArea = area.removeFromLeft (juce::jmin (330, area.getWidth() / 2));
+        area.removeFromLeft (10);
+        listHeadings[&slotList]->setBounds (slotsArea.removeFromTop (18));
+        slotFilter.setBounds (slotsArea.removeFromTop (26).reduced (0, 1));
+        slotsArea.removeFromTop (4);
+        layoutList (slotsArea, slotList, { &addSlot, &duplicateSlot, &removeSlot });
+        listHeadings[&slotList]->setVisible (true);
+
         detailsViewport.setBounds (area);
         layoutDetails();
     }
@@ -181,7 +222,7 @@ public:
     }
 
 private:
-    enum class Focus { map, group, articulation };
+    enum class Focus { map, group, articulation, slot };
     using Output = ExpressionMap::Output;
 
     //==========================================================================
@@ -234,7 +275,8 @@ private:
 
     void layoutList (juce::Rectangle<int> area, juce::ListBox& list, std::initializer_list<juce::Button*> buttons)
     {
-        listHeadings[&list]->setBounds (area.removeFromTop (18));
+        if (&list != &slotList)   // the slot list's heading sits above its filter (resized)
+            listHeadings[&list]->setBounds (area.removeFromTop (18));
         auto row = area.removeFromBottom (26);
         const auto width = row.getWidth() / (int) buttons.size();
 
@@ -276,6 +318,49 @@ private:
                  ? &group->articulations[(size_t) selectedArticulation] : nullptr;
     }
 
+    ExpressionMap::Slot* currentSlot()
+    {
+        return working.has_value() && selectedSlot >= 0 && selectedSlot < (int) working->slots.size()
+                 ? &working->slots[(size_t) selectedSlot] : nullptr;
+    }
+
+    // The slots the filter lets through (every word must appear in the slot's label)
+    void refreshSlots()
+    {
+        visibleSlots.clear();
+
+        if (working.has_value())
+        {
+            const auto words = juce::StringArray::fromTokens (slotFilter.getText(), true);
+
+            for (size_t i = 0; i < working->slots.size(); ++i)
+            {
+                const auto label = ExpressionMap::labelOf (working->slots[i].selection);
+
+                if (std::all_of (words.begin(), words.end(), [&label] (const juce::String& w) { return label.containsIgnoreCase (w); }))
+                    visibleSlots.push_back ((int) i);
+            }
+        }
+
+        slotList.updateContent();
+        const auto it = std::find (visibleSlots.begin(), visibleSlots.end(), selectedSlot);
+        selectQuietly (slotList, it == visibleSlots.end() ? -1 : (int) (it - visibleSlots.begin()));
+        slotList.repaint();
+    }
+
+    // "PC 112, 0 · KS C1"
+    static juce::String summary (const std::vector<Output>& outputs)
+    {
+        juce::StringArray parts;
+
+        for (auto& o : outputs)
+            parts.add (o.type == Output::Type::programChange ? "PC " + juce::String (o.number)
+                       : o.type == Output::Type::controller ? "CC" + juce::String (o.number) + "=" + juce::String (o.value)
+                                                            : "KS " + juce::String (o.number));
+
+        return parts.joinIntoString (", ");
+    }
+
     void selectMap (const juce::String& name, bool updateList)
     {
         if (name == currentMap && working.has_value())
@@ -289,6 +374,7 @@ private:
         currentMap = stored->name;
         selectedGroup = 0;
         selectedArticulation = -1;
+        selectedSlot = -1;
         focus = Focus::map;
         loadWorking (*stored);
 
@@ -308,9 +394,11 @@ private:
         syncedXml = {};
         selectedGroup = 0;
         selectedArticulation = -1;
+        selectedSlot = -1;
         problems.clear();
         groupList.updateContent();
         articulationList.updateContent();
+        refreshSlots();
         rebuildDetailsSoon();
         updateStatus();
     }
@@ -329,6 +417,14 @@ private:
 
         if (selectedArticulation < 0 && focus == Focus::articulation)
             focus = Focus::group;
+
+        if (selectedSlot >= (int) working->slots.size())
+            selectedSlot = -1;
+
+        if (selectedSlot < 0 && focus == Focus::slot)
+            focus = Focus::map;
+
+        refreshSlots();
 
         groupList.updateContent();
         selectQuietly (groupList, selectedGroup);
@@ -362,6 +458,7 @@ private:
 
         groupList.updateContent();
         articulationList.updateContent();
+        refreshSlots();
         updateStatus();
     }
 
@@ -411,6 +508,7 @@ private:
         selectQuietly (groupList, selectedGroup);
         articulationList.updateContent();
         selectQuietly (articulationList, selectedArticulation);
+        refreshSlots();
 
         rebuildDetailsSoon();
     }
@@ -486,6 +584,18 @@ private:
 
         const auto name = group.articulations[(size_t) selectedArticulation].name;
 
+        const auto usedBy = std::count_if (map.slots.begin(), map.slots.end(), [&] (const ExpressionMap::Slot& slot)
+        {
+            if (selectedGroup == 0)
+                return ExpressionMap::sameName (slot.selection.root, name);
+
+            return std::any_of (slot.selection.modifiers.begin(), slot.selection.modifiers.end(), [&] (const auto& m)
+                                { return ExpressionMap::sameName (m.first, group.name) && ExpressionMap::sameName (m.second, name); });
+        });
+
+        if (usedBy > 0)
+            return "'" + name + "' is in " + juce::String ((int) usedBy) + " sound slots; remove those first (filter the slots by its name)";
+
         // A root that a modifier applies to exclusively: removing it would silently widen that
         // modifier to every root (an empty list means all), so ask for that to be changed first
         if (selectedGroup == 0)
@@ -522,6 +632,75 @@ private:
 
         std::swap (group.articulations[(size_t) selectedArticulation], group.articulations[(size_t) target]);
         selectedArticulation = target;
+        return {};
+    }
+
+    // A new slot: a copy of the selected one, or the first combination (a root, then a root with one
+    // modifier) that has no slot yet. Its combination is then set in the details.
+    juce::String addSlotTo (ExpressionMap& map, bool copySelected)
+    {
+        if (map.groups.empty() || map.groups.front().articulations.empty())
+            return "the map needs a root articulation first";
+
+        ExpressionMap::Slot slot;
+
+        if (copySelected)
+        {
+            if (selectedSlot < 0 || selectedSlot >= (int) map.slots.size())
+                return "select the slot to duplicate";
+
+            slot = map.slots[(size_t) selectedSlot];
+        }
+
+        std::vector<ExpressionMap::Selection> candidates;
+
+        for (auto& root : map.groups.front().articulations)
+        {
+            ExpressionMap::Selection alone;
+            alone.root = root.name;
+            candidates.push_back (alone);
+        }
+
+        for (auto& root : map.groups.front().articulations)
+            for (size_t g = 1; g < map.groups.size(); ++g)
+                for (auto& modifier : map.groups[g].articulations)
+                {
+                    ExpressionMap::Selection with;
+                    with.root = root.name;
+                    with.modifiers.emplace_back (map.groups[g].name, modifier.name);
+                    candidates.push_back (with);
+                }
+
+        const auto free = std::find_if (candidates.begin(), candidates.end(),
+                                        [&map] (const ExpressionMap::Selection& c) { return map.findSlot (c) == nullptr; });
+
+        if (free == candidates.end())
+            return "every root, and every root with one modifier, already has a slot: duplicate one and change its combination";
+
+        slot.selection = *free;
+
+        if (! map.hasSlots() && map.convertToSlots().isEmpty())   // the first slot: the map moves over to slots
+            if (map.findSlot (slot.selection) != nullptr)
+            {
+                selectedSlot = (int) (map.findSlot (slot.selection) - map.slots.data());
+                focus = Focus::slot;
+                return {};
+            }
+
+        map.slots.push_back (slot);
+        selectedSlot = (int) map.slots.size() - 1;
+        focus = Focus::slot;
+        return {};
+    }
+
+    juce::String removeSlotFrom (ExpressionMap& map)
+    {
+        if (selectedSlot < 0 || selectedSlot >= (int) map.slots.size())
+            return "select the slot to remove";
+
+        map.slots.erase (map.slots.begin() + selectedSlot);
+        selectedSlot = juce::jmin (selectedSlot, (int) map.slots.size() - 1);
+        focus = selectedSlot >= 0 ? Focus::slot : Focus::map;
         return {};
     }
 
@@ -890,7 +1069,9 @@ private:
             return juce::String (names[key % 12]) + juce::String (key / 12 - 1);
         };
 
-        if (focus == Focus::articulation && currentArticulation() != nullptr)
+        if (focus == Focus::slot && currentSlot() != nullptr)
+            buildSlotDetails (noteName);
+        else if (focus == Focus::articulation && currentArticulation() != nullptr)
             buildArticulationDetails (noteName);
         else if (focus == Focus::group && currentGroupMutable() != nullptr)
             buildGroupDetails();
@@ -915,6 +1096,23 @@ private:
         }, 52, true);
 
         addHint ("Instrument channels refer to a map by name; renaming it here renames it there too.");
+
+        addHeading ("Sound slots");
+
+        if (working->hasSlots())
+        {
+            addHint (juce::String ((int) working->slots.size()) + " sound slots: every valid combination of articulations, with what it "
+                     "sends. The articulation menu offers only combinations that have a slot; an articulation's defaults fill in the rest.", 44);
+        }
+        else
+        {
+            addHint ("This map adds up outputs set on its articulations. Sound slots give every combination its own outputs, key range "
+                     "and timing instead, and the menu then offers only the combinations that exist.", 44);
+            auto* convert = own<juce::TextButton> ("Make sound slots from the articulations");
+            convert->setTooltip ("One slot per combination the applies-to lists allow, sending what it sends now");
+            convert->onClick = [this] { editStructure ([] (ExpressionMap& m) { return m.convertToSlots(); }); };
+            rows.push_back ({ nullptr, convert, 26, 290 });
+        }
 
         addHeading ("Key names");
         addHint ("Name keys the way a library labels its keyboard (\"C0: Legato\"). The editor writes the name on the piano key and shows the "
@@ -1035,6 +1233,12 @@ private:
             return true;
         }, 52, true);
 
+        if (working->hasSlots())
+        {
+            buildDefaults (*articulation);
+            return;
+        }
+
         // Timing offset: when the note is triggered; the switch still goes out just before it
         {
             auto* editor = addText ("Timing offset (ms)", juce::String (articulation->timingOffsetMs, 1), [this] (const juce::String& text)
@@ -1122,18 +1326,28 @@ private:
         addHeading ("Output (sent in this order)");
         addHint ("What reaches the instrument when this articulation becomes active. Nothing stops two articulations from using the same key or CC.", 30);
 
-        for (size_t i = 0; i < articulation->outputs.size(); ++i)
-            buildOutputRow (i, noteName);
+        buildOutputs ([this]() -> std::vector<Output>* { auto* a = currentArticulation(); return a != nullptr ? &a->outputs : nullptr; },
+                      noteName);
+    }
+
+    // The output rows of a list (an articulation's or a slot's) and an Add button
+    using OutputsOf = std::function<std::vector<Output>*()>;
+
+    void buildOutputs (OutputsOf target, const std::function<juce::String (int)>& noteName)
+    {
+        for (size_t i = 0; i < target()->size(); ++i)
+            buildOutputRow (i, noteName, target);
 
         auto* add = own<juce::TextButton> ("Add an output");
-        add->onClick = [this]
+        add->onClick = [this, target]
         {
-            if (auto* a = currentArticulation())
+            if (auto* outputs = target())
             {
                 Output output;
-                output.type = Output::Type::keyswitch;
-                output.number = 24;
-                a->outputs.push_back (output);
+                output.type = working->hasSlots() ? Output::Type::programChange : Output::Type::keyswitch;
+                output.number = working->hasSlots() ? 0 : 24;
+                output.value = working->hasSlots() ? 0 : 100;
+                outputs->push_back (output);
                 commit();
                 rebuildDetailsSoon();
             }
@@ -1141,10 +1355,154 @@ private:
         rows.push_back ({ nullptr, add, 26, 140 });
     }
 
-    void buildOutputRow (size_t index, const std::function<juce::String (int)>& noteName)
+    // Defaults (maps with slots): per other modifier group, what is chosen along with this articulation
+    void buildDefaults (const ExpressionMap::Articulation& articulation)
     {
-        auto* articulation = currentArticulation();
-        const auto output = articulation->outputs[index];
+        addHeading ("Defaults");
+        addHint ("Chosen along with this articulation when their group has nothing chosen yet (Rep. -> Tempo 120; a colour -> Long). "
+                 "Choosing it then always gives a whole sound slot.", 44);
+
+        for (size_t g = 1; g < working->groups.size(); ++g)
+        {
+            if ((int) g == selectedGroup)
+                continue;
+
+            const auto groupName = working->groups[g].name;
+            auto* box = own<juce::ComboBox>();
+            box->addItem (juce::String::fromUTF8 ("â"), 1);
+            int selected = 1, id = 2;
+
+            for (auto& candidate : working->groups[g].articulations)
+            {
+                box->addItem (candidate.name, id);
+
+                for (auto& [dg, dn] : articulation.defaults)
+                    if (ExpressionMap::sameName (dg, groupName) && ExpressionMap::sameName (dn, candidate.name))
+                        selected = id;
+
+                ++id;
+            }
+
+            box->setSelectedId (selected, juce::dontSendNotification);
+            box->onChange = [this, box, groupName]
+            {
+                if (auto* a = currentArticulation())
+                {
+                    std::erase_if (a->defaults, [&] (const auto& d) { return ExpressionMap::sameName (d.first, groupName); });
+
+                    if (box->getSelectedId() > 1)
+                        a->defaults.emplace_back (groupName, box->getText());
+
+                    commit();
+                }
+            };
+            rows.push_back ({ makeLabel (groupName), box, 26, 220 });
+        }
+    }
+
+    // A sound slot: its combination (one choice per group), timing offset, key range and outputs
+    void buildSlotDetails (const std::function<juce::String (int)>& noteName)
+    {
+        auto* slot = currentSlot();
+        addHeading ("Sound slot");
+        addHint ("One combination of articulations and what it sends. The articulation menu offers only combinations that have a slot.", 30);
+
+        for (size_t g = 0; g < working->groups.size(); ++g)
+        {
+            const auto& group = working->groups[g];
+            auto* box = own<juce::ComboBox>();
+            int selected = 0, id = 2;
+
+            if (g > 0)
+            {
+                box->addItem (juce::String::fromUTF8 ("â"), 1);
+                selected = 1;
+            }
+
+            for (auto& articulation : group.articulations)
+            {
+                box->addItem (articulation.name, id);
+
+                if (g == 0 ? ExpressionMap::sameName (slot->selection.root, articulation.name)
+                           : std::any_of (slot->selection.modifiers.begin(), slot->selection.modifiers.end(), [&] (const auto& m)
+                                          { return ExpressionMap::sameName (m.first, group.name) && ExpressionMap::sameName (m.second, articulation.name); }))
+                    selected = id;
+
+                ++id;
+            }
+
+            box->setSelectedId (selected, juce::dontSendNotification);
+            box->onChange = [this, box, g]
+            {
+                auto* s = currentSlot();
+
+                if (s == nullptr || g >= working->groups.size())
+                    return;
+
+                const auto groupName = working->groups[g].name;
+
+                if (g == 0)
+                {
+                    s->selection.root = box->getText();
+                }
+                else
+                {
+                    std::erase_if (s->selection.modifiers, [&] (const auto& m) { return ExpressionMap::sameName (m.first, groupName); });
+
+                    if (box->getSelectedId() > 1)
+                        s->selection.modifiers.emplace_back (groupName, box->getText());
+
+                    s->selection = working->canonical (s->selection);
+                }
+
+                commit();
+                rebuildDetailsSoon();
+            };
+            rows.push_back ({ makeLabel (group.name + (g == 0 ? " (root)" : "")), box, 26, 220 });
+        }
+
+        {
+            auto* editor = addText ("Timing offset (ms)", juce::String (slot->timingOffsetMs, 1), [this] (const juce::String& text)
+            {
+                if (auto* s = currentSlot())
+                {
+                    s->timingOffsetMs = juce::jlimit (-5000.0, 5000.0, text.getDoubleValue());
+                    commit();
+                }
+
+                return true;
+            });
+            editor->setInputRestrictions (8, "-.0123456789");
+        }
+
+        addNumber ("Playable keys from", slot->keyLow >= 0 ? std::optional<int> (slot->keyLow) : std::nullopt, 0, 127, true,
+                   [this] (std::optional<int> value)
+                   {
+                       if (auto* s = currentSlot())
+                       {
+                           s->keyLow = value.value_or (-1);
+                           if (! value.has_value()) s->keyHigh = -1;
+                           commit();
+                       }
+                   }, "any");
+        addNumber ("   to", slot->keyHigh >= 0 ? std::optional<int> (slot->keyHigh) : std::nullopt, 0, 127, true,
+                   [this] (std::optional<int> value)
+                   {
+                       if (auto* s = currentSlot())
+                       {
+                           s->keyHigh = value.value_or (-1);
+                           if (! value.has_value()) s->keyLow = -1;
+                           commit();
+                       }
+                   }, "any");
+
+        addHeading ("Output (sent in this order)");
+        buildOutputs ([this]() -> std::vector<Output>* { auto* s = currentSlot(); return s != nullptr ? &s->outputs : nullptr; }, noteName);
+    }
+
+    void buildOutputRow (size_t index, const std::function<juce::String (int)>& noteName, OutputsOf target)
+    {
+        const auto output = (*target())[index];
 
         auto* type = own<juce::ComboBox>();
         type->addItem ("Keyswitch", 1);
@@ -1152,11 +1510,11 @@ private:
         type->addItem ("Program change", 3);
         type->setSelectedId (output.type == Output::Type::keyswitch ? 1 : output.type == Output::Type::controller ? 2 : 3,
                              juce::dontSendNotification);
-        type->onChange = [this, index, type]
+        type->onChange = [this, index, type, target]
         {
-            if (auto* a = currentArticulation(); a != nullptr && index < a->outputs.size())
+            if (auto* outputs = target(); outputs != nullptr && index < outputs->size())
             {
-                auto& o = a->outputs[index];
+                auto& o = (*outputs)[index];
                 o.type = type->getSelectedId() == 1 ? Output::Type::keyswitch
                        : type->getSelectedId() == 2 ? Output::Type::controller : Output::Type::programChange;
                 o.value = o.type == Output::Type::controller ? 0 : 100;
@@ -1168,11 +1526,11 @@ private:
         };
         rows.push_back ({ makeLabel ("Output " + juce::String ((int) index + 1)), type, 26, 170 });
 
-        const auto setOutput = [this, index] (const std::function<void (Output&)>& change)
+        const auto setOutput = [this, index, target] (const std::function<void (Output&)>& change)
         {
-            if (auto* a = currentArticulation(); a != nullptr && index < a->outputs.size())
+            if (auto* outputs = target(); outputs != nullptr && index < outputs->size())
             {
-                change (a->outputs[index]);
+                change ((*outputs)[index]);
                 commit();
             }
         };
@@ -1204,11 +1562,11 @@ private:
         }
 
         auto* remove = own<juce::TextButton> ("Remove output " + juce::String ((int) index + 1));
-        remove->onClick = [this, index]
+        remove->onClick = [this, index, target]
         {
-            if (auto* a = currentArticulation(); a != nullptr && index < a->outputs.size())
+            if (auto* outputs = target(); outputs != nullptr && index < outputs->size())
             {
-                a->outputs.erase (a->outputs.begin() + (std::ptrdiff_t) index);
+                outputs->erase (outputs->begin() + (std::ptrdiff_t) index);
                 commit();
                 rebuildDetailsSoon();
             }
@@ -1245,20 +1603,23 @@ private:
     juce::String currentMap, syncedXml;
     std::optional<ExpressionMap> working;
     juce::StringArray problems;
-    int selectedGroup = 0, selectedArticulation = -1;
+    int selectedGroup = 0, selectedArticulation = -1, selectedSlot = -1;
+    std::vector<int> visibleSlots;   // indices into working->slots that pass the filter
     Focus focus = Focus::map;
     bool programmatic = false;
 
     juce::TextButton backButton { juce::String::fromUTF8 ("← Back") }, libraryButton { "Library..." };
     std::shared_ptr<juce::FileChooser> fileChooser;
     juce::Label titleLabel, status;
-    ListModel mapModel, groupModel, articulationModel;
-    juce::ListBox mapList, groupList, articulationList;
+    ListModel mapModel, groupModel, articulationModel, slotModel;
+    juce::ListBox mapList, groupList, articulationList, slotList;
+    juce::TextEditor slotFilter;
     std::vector<std::unique_ptr<juce::Label>> headings;
     std::map<juce::ListBox*, juce::Label*> listHeadings;
     juce::TextButton newMap { "New" }, duplicateMap { "Duplicate" }, deleteMap { "Delete" },
                      addGroup { "Add" }, removeGroup { "Remove" }, groupUp { "Up" }, groupDown { "Down" },
-                     addArticulation { "Add" }, removeArticulation { "Remove" }, articulationUp { "Up" }, articulationDown { "Down" };
+                     addArticulation { "Add" }, removeArticulation { "Remove" }, articulationUp { "Up" }, articulationDown { "Down" },
+                     addSlot { "Add" }, duplicateSlot { "Duplicate" }, removeSlot { "Remove" };
 
     juce::Viewport detailsViewport;
     juce::Component details;

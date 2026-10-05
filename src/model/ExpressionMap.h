@@ -472,6 +472,88 @@ struct ExpressionMap
         return result;
     }
 
+    // Turns a map whose articulations carry the outputs (added up: the root's, then the
+    // modifiers') into a map of sound slots: one slot per combination its applies-to
+    // lists allow, sending what that combination sent, with the summed timing offset
+    // and the intersected key range. The articulations keep only their names.
+    // Returns an error sentence (empty = done; the map is unchanged on an error).
+    juce::String convertToSlots (size_t limit = 4096)
+    {
+        if (hasSlots())
+            return "map '" + name + "' already has sound slots";
+
+        if (groups.empty())
+            return "map '" + name + "' has no groups";
+
+        std::vector<Slot> result;
+
+        for (auto& root : groups.front().articulations)
+        {
+            Selection start;
+            start.root = root.name;
+            std::vector<Selection> combinations { start };
+
+            for (size_t g = 1; g < groups.size(); ++g)
+            {
+                std::vector<Selection> next;
+
+                for (auto& combination : combinations)
+                {
+                    next.push_back (combination);   // nothing from this group
+
+                    for (auto& modifier : groups[g].articulations)
+                        if (appliesToRoot (modifier, root.name))
+                        {
+                            auto with = combination;
+                            with.modifiers.emplace_back (groups[g].name, modifier.name);
+                            next.push_back (with);
+                        }
+                }
+
+                combinations = std::move (next);
+
+                if (result.size() + combinations.size() > limit)
+                    return "map '" + name + "' would need more than " + juce::String ((int) limit) + " sound slots";
+            }
+
+            for (auto& combination : combinations)
+            {
+                Slot slot;
+                slot.selection = combination;
+                std::vector<const Articulation*> chain { &root };
+
+                for (auto& [groupName, articulationName] : combination.modifiers)
+                    chain.push_back (findArticulation (groupName, articulationName));
+
+                for (auto* articulation : chain)
+                {
+                    slot.outputs.insert (slot.outputs.end(), articulation->outputs.begin(), articulation->outputs.end());
+                    slot.timingOffsetMs += articulation->timingOffsetMs;
+                }
+
+                if (int low = 0, high = 0; playableRange (combination, low, high) && low <= high)
+                {
+                    slot.keyLow = low;
+                    slot.keyHigh = high;
+                }
+
+                result.push_back (std::move (slot));
+            }
+        }
+
+        for (auto& group : groups)
+            for (auto& articulation : group.articulations)
+            {
+                articulation.outputs.clear();
+                articulation.appliesTo.clear();
+                articulation.timingOffsetMs = 0.0;
+                articulation.keyLow = articulation.keyHigh = -1;
+            }
+
+        slots = std::move (result);
+        return {};
+    }
+
     // Is this root used by any slot?
     bool rootHasSlots (const juce::String& rootName) const
     {

@@ -199,10 +199,15 @@ offset and the editor's key range is the slot's; commands `expressionmap.slots /
 setSlot / removeSlot / offered`; vsl-manager `tools/daw_maps.py` writes slot maps
 (the merged Duality 1st Violins: 177 slots, groups Color / Main / Legato / Release /
 Tempo), checked against the app's model by a test with the generated file.
-**Still to do:** the slot list in the map editor (today it edits the old
-per-articulation outputs, which validation refuses in a slot map); defaults in the
-editor; the keyswitch template as slots; then the old model (outputs and applies-to
-on articulations) goes.
+The map editor (delivered the same day): a "Sound slots" column with a filter
+(every word must match: "Ponticello Rep."), Add / Duplicate / Remove; a slot's
+details set its combination (one choice per group), timing offset, key range and
+outputs; in a slot map an articulation shows its defaults instead of outputs; a map
+built the old way turns into slots from its details ("Make sound slots from the
+articulations", `ExpressionMap::convertToSlots`: one slot per combination its
+applies-to lists allow). The keyswitch template is a map of slots.
+**Still to do:** try the editor and the menu in the app with the Duality map
+against VE Pro; then the old model (outputs and applies-to on articulations) goes.
 
 ### Timing offset (working name)
 
