@@ -159,6 +159,14 @@ it is heard on the beat.
   - **Locating while playing** is a restart with the pre-roll, or a short gap -
     to decide.
   - Rendering/bouncing includes the pre-roll.
+- **Live edits only affect the future.** When notes, articulations or an offset
+  are edited while playing, the regenerated playback sequence replaces the old
+  one, but playback can only play what is still ahead of it: an event whose
+  (shifted) time has already passed is not played retroactively, it is simply
+  missed this lap and right on the next one (adding a -70 ms legato to a note 30 ms
+  ahead of the playhead cannot be heard in time). The swap must still be safe for
+  notes already sounding: their note-offs are sent as before, never lost, so
+  nothing hangs.
   - **Spike first**: before committing, prove the pre-roll in `Transport` +
     `MidiSourceProcessor` with a hard-coded negative offset, since everything
     else in this section depends on it.
@@ -288,8 +296,6 @@ selection. The UI is a client of the same commands.
   decided; its transport, loop and locate details are in "Timing offset".)
 - Notes whose articulation doesn't exist in the instrument's map (track moved,
   map changed): keep and show as unresolved (as drafted), or clear them?
-- Which events does the playback sequence need to keep in sync when the user
-  records or edits live while playing (record mode over a looping region)?
 
 ### Key ranges must follow articulation changes
 
