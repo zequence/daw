@@ -9,6 +9,7 @@
 #include "ui/InstrumentsView.h"
 #include "ui/InstrumentEditorView.h"
 #include "ui/SettingsView.h"
+#include "ui/ExpressionMapEditorView.h"
 #include "ui/ThemedLookAndFeel.h"
 #include "ui/PlaceholderView.h"
 #include "ui/PianoRollView.h"
@@ -40,7 +41,7 @@ public:
     void confirmQuit();
 
 private:
-    enum class ContentView { midiRegions, midiEditor, audioRegions, instruments, instrumentEditor, history };
+    enum class ContentView { midiRegions, midiEditor, audioRegions, instruments, instrumentEditor, expressionMaps, history };
     enum class Domain { midi, audio };
 
     //==============================================================================
@@ -133,6 +134,7 @@ private:
     PianoRollView pianoRollView { engine, commandDispatcher, timeAxis };
     InstrumentsView instrumentsView { engine };
     InstrumentEditorView instrumentEditorView { engine };
+    ExpressionMapEditorView expressionMapView { engine, commandDispatcher };
     HistoryView historyView { commandDispatcher };
     SettingsView settingsView { engine };
 

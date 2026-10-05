@@ -85,7 +85,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     instrumentsButton.onClick = [this]
     {
-        if (contentView == ContentView::instruments || contentView == ContentView::instrumentEditor)
+        if (contentView == ContentView::instruments || contentView == ContentView::instrumentEditor || contentView == ContentView::expressionMaps)
         {
             setDomain (domain);
             return;
@@ -269,6 +269,12 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     };
 
     instrumentEditorView.onBack = [this] { showContent (ContentView::instruments); };
+    instrumentEditorView.onEditMap = [this] (const juce::String& mapName)
+    {
+        expressionMapView.select (mapName);
+        showContent (ContentView::expressionMaps);
+    };
+    expressionMapView.onBack = [this] { showContent (ContentView::instrumentEditor); };
     instrumentEditorView.onOpenPluginGui = [this] (auto id) { openPluginWindow (id); };
 
     settingsView.onClose = [this] { closeSettings(); };
@@ -311,7 +317,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
              &rtzButton, &playButton, &recordButton, &loopButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
              &collapseButton, &trackList, &channelList, &sidebarResizer,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
-             &instrumentsView, &instrumentEditorView, &historyView, &settingsView,
+             &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView, &settingsView,
              &statusLabel, &keyboard })
         addAndMakeVisible (c);
 
@@ -969,6 +975,7 @@ void MainComponent::updateViewVisibility()
     audioRegionsView.setVisible (contentView == ContentView::audioRegions);
     instrumentsView.setVisible (contentView == ContentView::instruments);
     instrumentEditorView.setVisible (contentView == ContentView::instrumentEditor);
+    expressionMapView.setVisible (contentView == ContentView::expressionMaps);
     historyView.setVisible (contentView == ContentView::history);
     historyButton.setToggleState (contentView == ContentView::history, juce::dontSendNotification);
 
@@ -978,7 +985,8 @@ void MainComponent::updateViewVisibility()
     midiDomainButton.setToggleState (domain == Domain::midi, juce::dontSendNotification);
     audioDomainButton.setToggleState (domain == Domain::audio, juce::dontSendNotification);
     instrumentsButton.setToggleState (contentView == ContentView::instruments
-                                        || contentView == ContentView::instrumentEditor, juce::dontSendNotification);
+                                        || contentView == ContentView::instrumentEditor
+                                        || contentView == ContentView::expressionMaps, juce::dontSendNotification);
 
     settingsView.setVisible (settingsOpen);
 
@@ -1120,6 +1128,9 @@ void MainComponent::timerCallback()
     if (instrumentEditorView.isShowing())
         instrumentEditorView.refresh();
 
+    if (expressionMapView.isShowing())
+        expressionMapView.refresh();
+
     if (audioRegionsView.isShowing())
         updatePlaceholders();
 
@@ -1164,6 +1175,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         if (contentView == ContentView::instrumentEditor)
         {
             showContent (ContentView::instruments);
+            return true;
+        }
+
+        if (contentView == ContentView::expressionMaps)
+        {
+            showContent (ContentView::instrumentEditor);
             return true;
         }
 
@@ -1322,7 +1339,7 @@ void MainComponent::resized()
     timelineBar.setBounds (area.removeFromTop (timelineHeight));
 
     for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView, &audioRegionsView,
-                                                                &instrumentsView, &instrumentEditorView, &historyView })
+                                                                &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView })
         view->setBounds (area);
 
     // Settings replaces the whole UI; the busy overlay covers everything

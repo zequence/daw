@@ -20,6 +20,11 @@ public:
         guiButton.onClick = [this] { if (onOpenPluginGui) onOpenPluginGui (instrumentId); };
         addAndMakeVisible (guiButton);
 
+        mapsButton.setWantsKeyboardFocus (false);
+        mapsButton.setTooltip ("Create and edit the project's expression maps");
+        mapsButton.onClick = [this] { if (onEditMap) onEditMap ({}); };
+        addAndMakeVisible (mapsButton);
+
         viewport.setViewedComponent (&rowContainer, false);
         viewport.setScrollBarsShown (true, false);
         addAndMakeVisible (viewport);
@@ -34,6 +39,7 @@ public:
 
     std::function<void()> onBack;
     std::function<void (AudioEngine::InstrumentId)> onOpenPluginGui;
+    std::function<void (const juce::String&)> onEditMap;   // open the expression map editor (on that map, or the first)
 
     void setInstrument (AudioEngine::InstrumentId id)
     {
@@ -58,6 +64,8 @@ public:
         backButton.setBounds (header.removeFromLeft (70));
         header.removeFromLeft (10);
         guiButton.setBounds (header.removeFromRight (60));
+        header.removeFromRight (8);
+        mapsButton.setBounds (header.removeFromRight (130));
         titleLabel.setBounds (header);
 
         area.removeFromTop (8);
@@ -138,7 +146,7 @@ private:
     AudioEngine& engine;
     AudioEngine::InstrumentId instrumentId = 0;
 
-    juce::TextButton backButton { juce::String::fromUTF8 ("← Back") }, guiButton { "GUI" };
+    juce::TextButton backButton { juce::String::fromUTF8 ("← Back") }, guiButton { "GUI" }, mapsButton { "Expression maps..." };
     juce::Label titleLabel;
     juce::Viewport viewport;
     juce::Component rowContainer;
