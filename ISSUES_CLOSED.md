@@ -268,6 +268,11 @@ resolution notes. Newest additions go at the top of each chapter.
 
 ## Midi editor
 
+- [x] Articulations: do not show any modifiers until having selected a prerequisite
+      (a modifier is offered only when a sound slot has it together with
+      exactly the choices already made in the groups before it: Tempo appears
+      after Rep., the legato types after Long; with only a colour chosen, only
+      Main is offered. ExpressionMap::offers.)
 - [x] Add small text descriptions to editor top panel items where needed.
       (every editor toolbar item now has a hover tooltip - visible since the
       app gained a TooltipWindow; undo/redo got theirs with key commands)

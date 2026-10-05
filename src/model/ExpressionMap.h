@@ -443,6 +443,29 @@ struct ExpressionMap
         std::vector<const Articulation*> articulations;
     };
 
+    // Is this articulation of group g offered for the choice? Only when a slot has it together
+    // with exactly the choices made in the groups before g: what it needs there (its
+    // prerequisites: Tempo needs Main "Rep.") must already be chosen, not merely possible.
+    bool offers (const Selection& selection, size_t g, const juce::String& articulationName) const
+    {
+        if (g == 0 || g >= groups.size() || selection.root.trim().isEmpty())
+            return false;
+
+        auto candidate = before (selection, g);
+        const auto earlierChoices = candidate.modifiers.size();
+        candidate.modifiers.emplace_back (groups[g].name, articulationName);
+
+        return std::any_of (slots.begin(), slots.end(), [&] (const Slot& slot)
+        {
+            if (! contains (slot.selection, candidate))
+                return false;
+
+            const auto earlierInSlot = std::count_if (slot.selection.modifiers.begin(), slot.selection.modifiers.end(),
+                                                      [&] (const auto& m) { return groupIndex (m.first) < g; });
+            return (size_t) earlierInSlot == earlierChoices;
+        });
+    }
+
     std::vector<Offered> offeredModifiers (const Selection& selection) const
     {
         std::vector<Offered> result;
@@ -454,16 +477,10 @@ struct ExpressionMap
         {
             Offered offered;
             offered.group = &groups[g];
-            const auto prefix = before (selection, g);
 
             for (auto& articulation : groups[g].articulations)
-            {
-                auto candidate = prefix;
-                candidate.modifiers.emplace_back (groups[g].name, articulation.name);
-
-                if (leadsToSlot (candidate))
+                if (offers (selection, g, articulation.name))
                     offered.articulations.push_back (&articulation);
-            }
 
             if (! offered.articulations.empty())
                 result.push_back (std::move (offered));

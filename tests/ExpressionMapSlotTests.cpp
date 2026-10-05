@@ -118,6 +118,17 @@ public:
             const auto rep = sel ("Regular", { { "Main", "Rep." }, { "Tempo", "120" } });
             expectEquals (offeredNames (map, rep, "Tempo").joinIntoString (","), juce::String ("120,130"));
             expect (map.offeredModifiers ({}).empty(), "nothing without a root");
+
+            // Prerequisites: with only the colour chosen, only Main is offered (Legato needs Long,
+            // Tempo needs Rep. - chosen, not merely possible)
+            const auto colourOnly = sel ("Regular");
+            expectEquals (offeredNames (map, colourOnly, "Main").joinIntoString (","), juce::String ("Long,Rep.,Staccato"));
+            expect (offeredNames (map, colourOnly, "Legato").isEmpty() && offeredNames (map, colourOnly, "Tempo").isEmpty()
+                     && offeredNames (map, colourOnly, "Release").isEmpty());
+
+            // Rep. with Legato: the tempos are still offered (a slot has Rep. + Legato + 120)
+            expectEquals (offeredNames (map, sel ("Regular", { { "Main", "Rep." }, { "Legato", "Legato" }, { "Tempo", "120" } }), "Tempo")
+                              .joinIntoString (","), juce::String ("120"));
         }
 
         beginTest ("choosing a Main keeps the later choices a slot still has, and fills in defaults");

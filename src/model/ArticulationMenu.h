@@ -184,9 +184,7 @@ namespace articulations
                     if (! map.hasSlots())
                         return ExpressionMap::appliesToRoot (modifier, s.root);
 
-                    auto candidate = map.before (s, g);
-                    candidate.modifiers.emplace_back (map.groups[g].name, modifier.name);
-                    return map.leadsToSlot (candidate);
+                    return map.offers (s, g, modifier.name);
                 }))
                     continue;
 
