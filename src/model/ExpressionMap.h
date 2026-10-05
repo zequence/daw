@@ -36,7 +36,10 @@ struct ExpressionMap
         juce::String name;           // identifier, unique (ignoring case) within its group
         juce::String symbol;         // short glyph or text for notes and menus
         juce::String description;
-        Output output;
+        // Sent in this order, one after another, when the articulation becomes
+        // active (e.g. a keyswitch, then a CC, then a program change). May be
+        // empty: an articulation that needs nothing sent.
+        std::vector<Output> outputs;
         double timingOffsetMs = 0.0; // when the note is triggered: < 0 earlier, > 0 later (0 = as written)
         int keyLow = -1, keyHigh = -1;   // optional playable key range (-1 = unspecified)
 
@@ -145,7 +148,10 @@ struct ExpressionMap
                         problems.add (groupLabel + " has two articulations named '" + articulation.name
                                       + "' (names ignore case); articulation names must be unique within a group");
 
-                validateOutput (articulation.output, label, problems);
+                for (size_t o = 0; o < articulation.outputs.size(); ++o)
+                    validateOutput (articulation.outputs[o],
+                                    articulation.outputs.size() > 1 ? label + " (output " + juce::String ((int) o + 1) + ")" : label,
+                                    problems);
 
                 if (articulation.keyLow != -1 || articulation.keyHigh != -1)
                     if (articulation.keyLow < 0 || articulation.keyHigh > 127 || articulation.keyLow > articulation.keyHigh)
@@ -225,7 +231,7 @@ private:
         return {};
     }
 
-    // Two outputs that are active at the same time clash when they would
+    // Two outputs of articulations that are active at the same time clash when they would
     // overwrite each other: the same CC number, the same keyswitch key, or any
     // two program changes (a channel holds one program).
     static bool clash (const Output& a, const Output& b)
@@ -245,12 +251,17 @@ private:
     {
         const auto& root = groups.front();
 
-        const auto report = [&] (const Group& ga, const Articulation& a, const Group& gb, const Articulation& b)
+        // Every output of one against every output of the other
+        const auto reportClashes = [&] (const Group& ga, const Articulation& a, const Group& gb, const Articulation& b)
         {
-            problems.add ("'" + a.name + "' (group '" + ga.name + "') and '" + b.name + "' (group '" + gb.name
-                          + "') can be active together and both send " + describe (a.output)
-                          + "; the second would overwrite the first. Give one of them a different "
-                          + (a.output.type == Output::Type::programChange ? "output" : "number") + ", or limit which roots it applies to");
+            for (auto& oa : a.outputs)
+                for (auto& ob : b.outputs)
+                    if (clash (oa, ob))
+                        problems.add ("'" + a.name + "' (group '" + ga.name + "') and '" + b.name + "' (group '" + gb.name
+                                      + "') can be active together and both send " + describe (oa)
+                                      + "; the second would overwrite the first. Give one of them a different "
+                                      + (oa.type == Output::Type::programChange ? "output" : "number")
+                                      + ", or limit which roots it applies to");
         };
 
         for (size_t g = 1; g < groups.size(); ++g)
@@ -259,14 +270,14 @@ private:
             {
                 // root + modifier
                 for (auto& rootArticulation : root.articulations)
-                    if (appliesToRoot (modifier, rootArticulation.name) && clash (rootArticulation.output, modifier.output))
-                        report (root, rootArticulation, groups[g], modifier);
+                    if (appliesToRoot (modifier, rootArticulation.name))
+                        reportClashes (root, rootArticulation, groups[g], modifier);
 
                 // modifier + modifier of a later group, with a root both work with
                 for (size_t h = g + 1; h < groups.size(); ++h)
                     for (auto& other : groups[h].articulations)
-                        if (clash (modifier.output, other.output) && shareARoot (modifier, other))
-                            report (groups[g], modifier, groups[h], other);
+                        if (shareARoot (modifier, other))
+                            reportClashes (groups[g], modifier, groups[h], other);
             }
         }
     }

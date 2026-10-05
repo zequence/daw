@@ -91,19 +91,24 @@ program change reach the instrument at the right time.
 
 ### Output (how an articulation reaches the instrument)
 
-An articulation's output is one of:
+An articulation has a list of outputs, sent **in series** (in the listed order,
+one after the other) when it becomes active. Each output is one of:
 - a **keyswitch** note (key, velocity, held or tapped),
 - a **CC** (number, value) - e.g. Spitfire UACC on CC32,
 - a **program change** (with optional bank).
 
-The active combination's output is the root's, then its modifiers'.
+So one articulation can send, say, a keyswitch, then a CC, then a program change.
+The list may be empty (an articulation that needs nothing sent). Repeating a CC
+inside one articulation is the author's explicit sequence, not a conflict.
+
+The active combination's outputs are the root's, then its modifiers'.
 
 **Conflicts are errors, not "last one wins".** Articulations in the same group
 may share a CC or keyswitch freely (only one of them is active at a time; UACC
 uses CC32 with a different value for each). But two articulations that can be
 active TOGETHER - a root and a modifier that applies to it, or modifiers from two
 different groups - must not target the same CC number, keyswitch key or program
-change. That is a bug in the map and is reported with an error message naming
+change - in ANY of their outputs. That is a bug in the map and is reported with an error message naming
 both articulations:
 - when the map is edited (the command refuses it, the editor shows it - helpful
   failure, DESIGN.md), and `expressionmap.validate` lists every conflict;

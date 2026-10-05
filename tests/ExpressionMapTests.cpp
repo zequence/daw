@@ -10,9 +10,7 @@ namespace
     {
         Map::Articulation a;
         a.name = name;
-        a.output.type = type;
-        a.output.number = number;
-        a.output.value = value;
+        a.outputs.push_back ({ type, number, value, false, -1 });
         return a;
     }
 
@@ -127,18 +125,18 @@ public:
         beginTest ("values: outputs, key range and timing offset are range-checked");
         {
             auto map = spitfireLike();
-            map.groups[0].articulations[0].output.number = 200;
+            map.groups[0].articulations[0].outputs[0].number = 200;
             expect (anyContains (map.validate(), "CC number 200"));
 
             map = spitfireLike();
-            map.groups[2].articulations[0].output.number = -1;
-            map.groups[2].articulations[0].output.value = 0;
+            map.groups[2].articulations[0].outputs[0].number = -1;
+            map.groups[2].articulations[0].outputs[0].value = 0;
             const auto problems = map.validate();
             expect (anyContains (problems, "keyswitch key -1"));
             expect (anyContains (problems, "keyswitch velocity 0"));
 
             map = spitfireLike();
-            map.groups[0].articulations[0].output = { Out::Type::programChange, 5, 0, false, 99999 };
+            map.groups[0].articulations[0].outputs = { { Out::Type::programChange, 5, 0, false, 99999 } };
             expect (anyContains (map.validate(), "bank 99999"));
 
             map = spitfireLike();
@@ -159,7 +157,7 @@ public:
         beginTest ("conflict: a root and a modifier that works with it both send the same CC");
         {
             auto map = spitfireLike();
-            map.groups[1].articulations[0].output = { Out::Type::controller, 32, 99, false, -1 };   // Short on CC32 like the roots
+            map.groups[1].articulations[0].outputs = { { Out::Type::controller, 32, 99, false, -1 } };   // Short on CC32 like the roots
             const auto problems = map.validate();
             expect (anyContains (problems, "'Staccato' (group 'Articulation') and 'Short' (group 'Release')"));
             expect (anyContains (problems, "both send CC 32"));
@@ -169,42 +167,86 @@ public:
         {
             auto map = spitfireLike();
             // Short only applies to Staccato; Legato may share its CC with it
-            map.groups[1].articulations[0].output = { Out::Type::controller, 20, 1, false, -1 };
-            map.groups[0].articulations[0].output = { Out::Type::controller, 21, 1, false, -1 };   // Staccato on 21
-            map.groups[0].articulations[1].output = { Out::Type::controller, 20, 1, false, -1 };   // Legato on 20
+            map.groups[1].articulations[0].outputs = { { Out::Type::controller, 20, 1, false, -1 } };
+            map.groups[0].articulations[0].outputs = { { Out::Type::controller, 21, 1, false, -1 } };   // Staccato on 21
+            map.groups[0].articulations[1].outputs = { { Out::Type::controller, 20, 1, false, -1 } };   // Legato on 20
             expect (map.isValid(), map.validate().joinIntoString ("; "));
         }
 
         beginTest ("conflict: modifiers of two groups share a CC or a keyswitch and a root");
         {
             auto map = spitfireLike();
-            map.groups[2].articulations[0].output = { Out::Type::controller, 33, 5, false, -1 };   // Mute on CC33 like Release
+            map.groups[2].articulations[0].outputs = { { Out::Type::controller, 33, 5, false, -1 } };   // Mute on CC33 like Release
             expect (anyContains (map.validate(), "'Short' (group 'Release') and 'Con sord' (group 'Mute')"));
 
             // Different roots only: Short works with Staccato, the second modifier only with Legato
             auto disjoint = spitfireLike();
-            disjoint.groups[2].articulations[0].output = { Out::Type::controller, 33, 5, false, -1 };
+            disjoint.groups[2].articulations[0].outputs = { { Out::Type::controller, 33, 5, false, -1 } };
             disjoint.groups[2].articulations[0].appliesTo = { "Legato" };
             disjoint.groups[1].articulations[1].appliesTo = { "Tremolo" };   // Long: Tremolo only
             expect (disjoint.isValid(), disjoint.validate().joinIntoString ("; "));
 
             // Two keyswitches on the same key
             auto keys = spitfireLike();
-            keys.groups[1].articulations[0].output = { Out::Type::keyswitch, 24, 100, false, -1 };
+            keys.groups[1].articulations[0].outputs = { { Out::Type::keyswitch, 24, 100, false, -1 } };
             expect (anyContains (keys.validate(), "keyswitch key 24"));
 
             // Two keyswitches on different keys are fine (root + modifier keyswitches)
-            keys.groups[1].articulations[0].output.number = 25;
-            keys.groups[1].articulations[1].output = { Out::Type::keyswitch, 26, 100, false, -1 };
+            keys.groups[1].articulations[0].outputs[0].number = 25;
+            keys.groups[1].articulations[1].outputs = { { Out::Type::keyswitch, 26, 100, false, -1 } };
             expect (keys.isValid(), keys.validate().joinIntoString ("; "));
         }
 
         beginTest ("conflict: any two program changes that are active together clash");
         {
             auto map = spitfireLike();
-            map.groups[0].articulations[0].output = { Out::Type::programChange, 1, 0, false, -1 };
-            map.groups[1].articulations[0].output = { Out::Type::programChange, 2, 0, false, -1 };   // different program, still one channel
+            map.groups[0].articulations[0].outputs = { { Out::Type::programChange, 1, 0, false, -1 } };
+            map.groups[1].articulations[0].outputs = { { Out::Type::programChange, 2, 0, false, -1 } };   // different program, still one channel
             expect (anyContains (map.validate(), "both send a program change"));
+        }
+
+        beginTest ("an articulation sends several outputs in series; none at all is fine too");
+        {
+            auto map = spitfireLike();
+            // Legato: keyswitch, then a CC, then a program change (with a bank)
+            map.groups[0].articulations[1].outputs = { { Out::Type::keyswitch, 12, 100, false, -1 },
+                                                       { Out::Type::controller, 7, 90, false, -1 },
+                                                       { Out::Type::programChange, 4, 0, false, 2 } };
+            expect (map.isValid(), map.validate().joinIntoString ("; "));
+            expectEquals ((int) map.groups[0].articulations[1].outputs.size(), 3);
+
+            // An articulation that needs nothing sent
+            map.groups[0].articulations[2].outputs.clear();
+            expect (map.isValid(), map.validate().joinIntoString ("; "));
+
+            // Repeating a CC inside ONE articulation is the author's explicit sequence, not a conflict
+            map.groups[0].articulations[0].outputs = { { Out::Type::controller, 16, 0, false, -1 },
+                                                       { Out::Type::controller, 16, 64, false, -1 } };
+            expect (map.isValid(), map.validate().joinIntoString ("; "));
+        }
+
+        beginTest ("every output takes part in conflicts and range checks, and messages say which one");
+        {
+            // The clash is between the SECOND output of the root and the modifier's CC
+            auto map = spitfireLike();
+            map.groups[0].articulations[0].outputs = { { Out::Type::keyswitch, 12, 100, false, -1 },
+                                                       { Out::Type::controller, 33, 5, false, -1 } };
+            expect (anyContains (map.validate(), "'Staccato' (group 'Articulation') and 'Short' (group 'Release')"));
+            expect (anyContains (map.validate(), "both send CC 33"));
+
+            // Staccato is the only root Short works with, so Legato's CC33 is fine
+            map = spitfireLike();
+            map.groups[0].articulations[1].outputs = { { Out::Type::keyswitch, 13, 100, false, -1 },
+                                                       { Out::Type::controller, 33, 5, false, -1 } };
+            expect (anyContains (map.validate(), "'Legato' (group 'Articulation') and 'Long'"));   // Long works with Legato
+            expect (! anyContains (map.validate(), "and 'Short'"));
+
+            // A bad value in the third output names the output
+            map = spitfireLike();
+            map.groups[0].articulations[0].outputs = { { Out::Type::keyswitch, 12, 100, false, -1 },
+                                                       { Out::Type::controller, 7, 90, false, -1 },
+                                                       { Out::Type::controller, 7, 400, false, -1 } };
+            expect (anyContains (map.validate(), "(output 3): CC value 400"));
         }
 
         beginTest ("same group: sharing a keyswitch, CC or program change is fine");
