@@ -824,7 +824,7 @@ void MainComponent::newProject()
 
         safe->pluginWindows.clear();
         safe->engine.clearProject();
-        safe->currentProjectFile = {};
+        safe->currentProjectFile = juce::File();
         safe->selectedTrack = 0;
         safe->loopButton.setToggleState (false, juce::dontSendNotification);
         safe->bpmLabel.setText (juce::String (safe->engine.getTempoBpm(), 1), juce::dontSendNotification);

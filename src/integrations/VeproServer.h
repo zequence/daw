@@ -15,8 +15,14 @@ namespace vepro
     constexpr auto serverPortKey = "veproServerPort";
     constexpr auto cliPathKey    = "veproCliPath";
 
-    // "auto" = let the CLI discover the server on the network (ZeroConf announce)
+    // "auto" = let the CLI discover the server on the network (ZeroConf announce).
+    // Under Wine the server can't announce itself (no DNS-SD), so Linux defaults to
+    // a server on this machine.
+   #if JUCE_WINDOWS
     inline juce::String defaultServerHost()  { return "auto"; }
+   #else
+    inline juce::String defaultServerHost()  { return "127.0.0.1"; }
+   #endif
     constexpr int defaultServerPort = 7200;
 
     inline bool isAutoHost (const juce::String& host)
@@ -26,22 +32,49 @@ namespace vepro
 
     inline juce::File defaultCliPath()
     {
+       #if JUCE_WINDOWS
         return juce::File ("C:\\ProgramData\\VSL\\Vienna Ensemble Pro\\mcp\\vepro-api-cli.exe");
+       #else
+        // VE Pro runs under Wine; the CLI lives in the Wine prefix ($WINEPREFIX, else ~/.wine)
+        auto prefix = juce::SystemStats::getEnvironmentVariable ("WINEPREFIX", {});
+
+        if (prefix.isEmpty())
+            prefix = juce::File::getSpecialLocation (juce::File::userHomeDirectory).getChildFile (".wine").getFullPathName();
+
+        return juce::File (prefix).getChildFile ("drive_c/ProgramData/VSL/Vienna Ensemble Pro/mcp/vepro-api-cli.exe");
+       #endif
     }
 
-    // Runs one CLI command line with a hard timeout, capturing stdout through a
+    // Runs the CLI with 'args' under a hard timeout, capturing stdout through a
     // temp file. A pipe would deadlock: we must not wait for exit before reading,
     // but blocking reads can't honour a timeout when the CLI hangs. The file does
     // both - the CLI writes freely, and a hung process gets killed on deadline.
-    inline juce::String runCliCapture (const juce::String& commandLine, int timeoutMs, juce::String& error)
+    inline juce::String runCliCapture (const juce::File& cli, const juce::StringArray& args, int timeoutMs, juce::String& error)
     {
         juce::TemporaryFile temp ("vepro-cli");
-        const auto wrapped = "cmd.exe /s /c \"" + commandLine + " > \""
-                               + temp.getFile().getFullPathName() + "\"\"";
-
         juce::ChildProcess child;
 
-        if (! child.start (wrapped, 0))
+       #if JUCE_WINDOWS
+        // Build the command line ourselves: JUCE doesn't escape embedded quotes on
+        // Windows, which silently mangles the JSON payload (CRT rules: \" inside "...").
+        auto commandLine = cli.getFullPathName().quoted();
+
+        for (auto& arg : args)
+            commandLine << " " << (arg.containsAnyOf (" \"") ? "\"" + arg.replace ("\\", "\\\\").replace ("\"", "\\\"") + "\""
+                                                              : arg);
+
+        const auto started = child.start ("cmd.exe /s /c \"" + commandLine + " > \""
+                                            + temp.getFile().getFullPathName() + "\"\"", 0);
+       #else
+        // The CLI is a Windows program: run it through Wine. The shell only does the
+        // redirect; arguments go through "$@" untouched (no quoting of the JSON).
+        juce::StringArray argv { "/bin/sh", "-c", "WINEDEBUG=-all exec \"$@\" > \"$0\" 2>/dev/null",
+                                 temp.getFile().getFullPathName(), "wine", cli.getFullPathName() };
+        argv.addArray (args);
+        const auto started = child.start (argv, 0);
+       #endif
+
+        if (! started)
         {
             error = "couldn't start the VE Pro CLI";
             return {};
@@ -67,7 +100,7 @@ namespace vepro
             return false;
         }
 
-        const auto output = runCliCapture (cli.getFullPathName().quoted() + " discover", 15000, error);
+        const auto output = runCliCapture (cli, { "discover" }, 15000, error);
 
         if (error.isNotEmpty())
         {
@@ -100,14 +133,9 @@ namespace vepro
             return {};
         }
 
-        // Build the command line ourselves: JUCE doesn't escape embedded quotes on
-        // Windows, which silently mangles the JSON payload (CRT rules: \" inside "...").
         const auto json = juce::JSON::toString (payload, true);
-        const auto command = cli.getFullPathName().quoted()
-                               + " call --host " + host + " --port " + juce::String (port)
-                               + " --payload-json \"" + json.replace ("\\", "\\\\").replace ("\"", "\\\"") + "\"";
-
-        const auto output = runCliCapture (command, 15000, error);
+        const auto output = runCliCapture (cli, { "call", "--host", host, "--port", juce::String (port),
+                                                  "--payload-json", json }, 15000, error);
 
         if (error.isNotEmpty())
         {

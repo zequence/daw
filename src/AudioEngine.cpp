@@ -123,7 +123,11 @@ juce::File AudioEngine::getDeadMansPedalFile() const
 juce::File AudioEngine::getScannerExecutable()
 {
     return juce::File::getSpecialLocation (juce::File::currentExecutableFile)
+              #if JUCE_WINDOWS
                .getSiblingFile ("OrchestralDAWScanner.exe");
+              #else
+               .getSiblingFile ("OrchestralDAWScanner");
+              #endif
 }
 
 juce::Array<juce::PluginDescription> AudioEngine::getInstrumentTypes() const
