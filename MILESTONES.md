@@ -550,3 +550,42 @@ only; manual renames always win.
 
 Generator/logic nodes patched together, running live (DESIGN.md pillar 2).
 Groundwork exists: the engine is a node graph and time is pulled per block.
+
+## Linux port (planned 2026-10-06)
+
+Status: branch `linux-build` builds and runs on Linux (build.sh / run.sh).
+Plugin scanning, VE Pro Server sync, multiport MIDI (DAW -> JUCE patch ->
+yabridge -> VE Pro plugin -> server) and audio through PipeWire work. VE Pro and
+the VSL players run under Wine in the shared prefix of the parent ilok-linux
+setup; Windows plugins load through yabridge.
+
+- **Performance: Synchron players under Wine.** The main unknown. Benchmark:
+  load N Synchron players at a fixed buffer size, raise N until dropouts; record
+  CPU, dropouts and buffer size. Compare Wine defaults vs `WINEESYNC=1` (needs a
+  high open-files limit), before/after real-time tuning, and against Windows on
+  the same machine if possible. Then decide on ntsync (newer Wine plus Linux
+  6.14+; currently 6.8) or a low-latency kernel. Sample streaming: libraries on
+  fast NVMe; consider a casefold ext4 folder (Wine's case-insensitive lookups are
+  slow on large libraries).
+- **Real-time tuning check.** Read-only report script: real-time priority and
+  memlock limits, CPU governor (want `performance`), PipeWire quantum / sample
+  rate, kernel preemption model, open-files limit for esync.
+- **MIDI reliability.** Multiport through yabridge confirmed (port 2 reaches the
+  right player). Still to measure: timing jitter and dropped events under load
+  (same benchmark setup), hardware MIDI input through ALSA/PipeWire.
+- **Sync reuses the project's own VE Pro plugin.** When a server instance is
+  already connected to a VE Pro plugin in this project (e.g. added by hand),
+  sync reports it as "connected to another plugin", leaves it untouched and
+  creates an unconnected duplicate. It should reuse that plugin and route the
+  tracks to it.
+- **Optional LTO.** Release builds use `juce_recommended_lto_flags`; GCC
+  link-time optimisation makes every Release link slow. Off by default in
+  build.sh, `--lto` for final builds.
+- **VE Pro Server announces itself on the network (Avahi).** Under Wine the
+  server can't announce itself (Wine lacks `DnsServiceRegister`), so other
+  machines don't discover it and Linux defaults the host to 127.0.0.1. Plan: the
+  VE Pro launcher runs `avahi-publish -s` for `_vepro._tcp` on port 7200 while
+  the server runs (check whether plugins also need 6473); needs `avahi-utils`.
+  Done when a VE Pro plugin or VSL CLI on another machine finds the server
+  without an address. Wine-side tools on this machine would still need
+  127.0.0.1:7200.
