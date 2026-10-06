@@ -1245,8 +1245,8 @@ void PianoRollView::updateCursorAt (juce::Point<int> position)
 
     if (onRightEdge)
         setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
-    else if (gridArea().contains (position) && drawMode)
-        setMouseCursor (penCursor());
+    else if ((gridArea().contains (position) && drawMode) || laneArea().contains (position))
+        setMouseCursor (penCursor());   // the velocity / CC lane is always drawn in
     else
         setMouseCursor (juce::MouseCursor::NormalCursor);
 }
