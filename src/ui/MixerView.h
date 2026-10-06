@@ -379,7 +379,7 @@ private:
             g.fillRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
 
             if (texture.getWidth() != getWidth() || texture.getHeight() != getHeight())
-                texture = makeTexture (getWidth(), getHeight());
+                texture = makeTexture (getWidth(), getHeight(), 1234 + (juce::int64) channelId * 7919 + auxNumber * 104729 + (int) kind * 31);
 
             g.drawImageAt (texture, 0, 0);
 
@@ -391,24 +391,52 @@ private:
         }
 
         // Brushed metal: fine vertical grain, a lit left edge, a shaded right edge and four screws
-        static juce::Image makeTexture (int w, int h)
+        // Each strip gets its own seed, so no two strips are brushed alike.
+        static juce::Image makeTexture (int w, int h, juce::int64 seed)
         {
             juce::Image image (juce::Image::ARGB, juce::jmax (1, w), juce::jmax (1, h), true);
+            juce::Random random (seed);
+
+            // Slow, uneven patches of contrast across the strip: a few soft waves with random phases
+            struct Wave { float fx, fy, phase, amount; };
+            std::array<Wave, 4> waves;
+
+            for (auto& wave : waves)
+                wave = { random.nextFloat() * 0.03f, 0.002f + random.nextFloat() * 0.01f,
+                         random.nextFloat() * juce::MathConstants<float>::twoPi, 0.2f + random.nextFloat() * 0.3f };
+
+            {
+                juce::Image::BitmapData pixels (image, juce::Image::BitmapData::writeOnly);
+
+                for (int x = 1; x < w - 1; ++x)
+                {
+                    // A grain line is broken into streaks of random length, each a little lighter or darker
+                    auto streak = 0.0f;
+                    auto streakEnd = 0;
+                    const auto lineBias = random.nextFloat() * 2.0f - 1.0f;
+
+                    for (int y = 0; y < h; ++y)
+                    {
+                        if (y >= streakEnd)
+                        {
+                            streak = 0.6f * lineBias + 0.4f * (random.nextFloat() * 2.0f - 1.0f);
+                            streakEnd = y + 15 + random.nextInt (220);
+                        }
+
+                        auto contrast = 1.0f;
+
+                        for (const auto& wave : waves)
+                            contrast += wave.amount * std::sin (wave.fx * (float) x + wave.fy * (float) y + wave.phase);
+
+                        const auto noise = random.nextFloat() * 2.0f - 1.0f;
+                        const auto v = juce::jlimit (-1.0f, 1.0f, (streak * 0.85f + noise * 0.12f) * juce::jmax (0.2f, contrast));
+                        const auto alpha = std::abs (v) * 0.085f;
+                        pixels.setPixelColour (x, y, (v > 0.0f ? juce::Colours::white : juce::Colours::black).withAlpha (alpha));
+                    }
+                }
+            }
+
             juce::Graphics g (image);
-            juce::Random random (1234);
-
-            for (int x = 1; x < w - 1; ++x)
-            {
-                const auto light = random.nextFloat();
-                g.setColour ((light > 0.5f ? juce::Colours::white : juce::Colours::black).withAlpha (0.02f + 0.05f * std::abs (light - 0.5f)));
-                g.fillRect (x, 0, 1, h);
-            }
-
-            for (int i = 0; i < h / 3; ++i)   // speckles
-            {
-                g.setColour ((random.nextBool() ? juce::Colours::white : juce::Colours::black).withAlpha (0.06f));
-                g.fillRect (random.nextInt (juce::jmax (1, w)), random.nextInt (juce::jmax (1, h)), 1, 1);
-            }
 
             g.setColour (juce::Colours::white.withAlpha (0.12f));
             g.fillRect (0, 2, 1, h - 4);
