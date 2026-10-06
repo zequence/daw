@@ -633,20 +633,27 @@ ArrangementView::FolderSpan ArrangementView::folderSpanAt (juce::Point<int> posi
     return {};
 }
 
-// Inside a region's box: the stretch before its first note and after its last one, darker
-void ArrangementView::dimEmptyEnds (juce::Graphics& g, juce::Rectangle<int> box, juce::int64 firstNote, juce::int64 lastEnd) const
+// A region's empty beginning (before its first note) and end (after its last one) fade into the lane:
+// no hard edge there - unless a note starts right at the start, or ends right at the end
+void ArrangementView::fadeEmptyEnds (juce::Graphics& g, juce::Rectangle<int> box, juce::int64 firstNote, juce::int64 lastEnd,
+                                     juce::Colour lane) const
 {
     if (firstNote == std::numeric_limits<juce::int64>::max())
         return;
 
-    g.setColour (juce::Colours::black.withAlpha (0.35f));
-    const auto inner = box.reduced (1);
+    const auto area = box.expanded (1).toFloat();   // over the border too
 
-    if (const auto x = juce::jmin (inner.getRight(), tickToX (firstNote)); x > inner.getX())
-        g.fillRect (inner.withRight (x));
+    if (const auto x = (float) juce::jmin (box.getRight(), tickToX (firstNote)); x > area.getX() + 2.0f)
+    {
+        g.setGradientFill (juce::ColourGradient (lane, area.getX(), 0.0f, lane.withAlpha (0.0f), x, 0.0f, false));
+        g.fillRect (area.withRight (x));
+    }
 
-    if (const auto x = juce::jmax (inner.getX(), tickToX (lastEnd)); x < inner.getRight())
-        g.fillRect (inner.withLeft (x));
+    if (const auto x = (float) juce::jmax (box.getX(), tickToX (lastEnd)); x < area.getRight() - 2.0f)
+    {
+        g.setGradientFill (juce::ColourGradient (lane.withAlpha (0.0f), x, 0.0f, lane, area.getRight(), 0.0f, false));
+        g.fillRect (area.withLeft (x));
+    }
 }
 
 void ArrangementView::mouseDoubleClick (const juce::MouseEvent& event)
@@ -858,7 +865,7 @@ void ArrangementView::paint (juce::Graphics& g)
         const auto shift = dragging.valid() && didDrag ? trackShift (items)
                                                        : std::map<AudioEngine::TrackId, AudioEngine::TrackId>();
 
-        int y = -vscroll.y;
+        int y = -vscroll.y, laneParity = -1;   // as the lane backgrounds count (tracks only)
 
         for (auto& item : items)
         {
@@ -892,7 +899,7 @@ void ArrangementView::paint (juce::Graphics& g)
                     g.setColour (look.border);
                     g.drawRoundedRectangle (rect.toFloat(), theme::corner, 1.2f);
 
-                    // The empty beginning and end of the folder's stretch: dimmed (as in the tracks' regions)
+                    // The empty beginning and end of the folder's stretch fade out (as in the tracks' regions)
                     {
                         auto first = std::numeric_limits<juce::int64>::max(), last = (juce::int64) 0;
 
@@ -905,7 +912,7 @@ void ArrangementView::paint (juce::Graphics& g)
                                         last = juce::jmax (last, note.startTick + note.lengthTicks);
                                     }
 
-                        dimEmptyEnds (g, rect, first + noteShift, last + noteShift);
+                        fadeEmptyEnds (g, rect, first + noteShift, last + noteShift, theme::colour (theme::Token::arrangeLaneFolder));
                     }
 
                     // The combined notes of the folder's tracks (a mini preview, as in the tracks' regions)
@@ -929,6 +936,9 @@ void ArrangementView::paint (juce::Graphics& g)
                             }
                 }
             }
+
+            if (item.member != 0)
+                ++laneParity;   // every track counts, shown or scrolled away
 
             if (item.member == 0 || y + height <= 0 || y >= getHeight())
             {
@@ -973,7 +983,10 @@ void ArrangementView::paint (juce::Graphics& g)
                 g.setColour (style.fill);
                 g.fillRoundedRectangle (rect.toFloat(), theme::corner);
 
-                // The empty beginning (from the bar line to the first note) and end (after the last note): dimmed
+                g.setColour (style.border);
+                g.drawRoundedRectangle (rect.toFloat(), theme::corner, 1.8f);
+
+                // The empty beginning (from the bar line to the first note) and end fade into the lane
                 if (sequence != nullptr && block.noteCount > 0)
                 {
                     auto first = std::numeric_limits<juce::int64>::max(), last = (juce::int64) 0;
@@ -986,11 +999,9 @@ void ArrangementView::paint (juce::Graphics& g)
                         }
 
                     const auto shiftBy = ref.startTick - block.startTick;   // a dragged block's preview offset
-                    dimEmptyEnds (g, rect, first + shiftBy, last + shiftBy);
+                    fadeEmptyEnds (g, rect, first + shiftBy, last + shiftBy,
+                                   theme::colour (laneParity % 2 == 0 ? theme::Token::arrangeLaneEven : theme::Token::arrangeLaneOdd));
                 }
-
-                g.setColour (style.border);
-                g.drawRoundedRectangle (rect.toFloat(), theme::corner, 1.8f);
 
                 // Mini note preview
                 if (sequence != nullptr && block.noteCount > 0)
