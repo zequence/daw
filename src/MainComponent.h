@@ -108,6 +108,39 @@ private:
     juce::Rectangle<int> transportPanel;   // painted behind the unit
     int topbarSeparators[2] = { 0, 0 };    // lines between the topbar's groups
     int sidePaneEdge = -1;                 // the side pane's left edge (a line is painted there)
+    int sidePaneWidth = 0;                 // 0 = the default (about a third of the window); saved in the settings
+
+    // Dragging the side pane's left edge resizes it
+    struct SidePaneResizer final : juce::Component
+    {
+        explicit SidePaneResizer (MainComponent& ownerToUse) : owner (ownerToUse)
+        {
+            setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+        }
+
+        void mouseDown (const juce::MouseEvent&) override { startWidth = owner.currentSidePaneWidth(); }
+
+        void mouseDrag (const juce::MouseEvent& event) override
+        {
+            owner.sidePaneWidth = juce::jlimit (280, juce::jmax (300, owner.getWidth() / 2), startWidth - event.getDistanceFromDragStartX());
+            owner.resized();
+        }
+
+        void mouseUp (const juce::MouseEvent&) override
+        {
+            owner.engine.getSettingsFile().setValue ("sidePaneWidth", owner.sidePaneWidth);
+            owner.engine.getSettingsFile().saveIfNeeded();
+        }
+
+        MainComponent& owner;
+        int startWidth = 0;
+    } sidePaneResizer { *this };
+
+    int currentSidePaneWidth() const
+    {
+        return sidePaneWidth > 0 ? juce::jlimit (280, juce::jmax (300, getWidth() / 2), sidePaneWidth)
+                                 : juce::jlimit (340, 620, getWidth() * 32 / 100);
+    }
 
     // Sidebar. The track list and the arrangement share one vertical scroll
     // (same Y axis); declared before both.

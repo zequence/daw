@@ -33,6 +33,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 {
     noteNames::middleCOctave() = editorSettings::middleCOctave (engine.getSettingsFile());   // Settings > Editor
     keys::Bindings::get().load (engine.getSettingsFile());                                   // Settings > Key commands
+    sidePaneWidth = engine.getSettingsFile().getIntValue ("sidePaneWidth", 0);              // the right pane's width
     lanes::Settings::get().load (engine.getSettingsFile());                                  // Settings > Controller lanes
 
     // Keep the window state sane when projects change through the API.
@@ -342,7 +343,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     for (auto* c : std::initializer_list<juce::Component*> {
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
-             &sidebarHeader, &trackList, &channelList, &sidebarResizer,
+             &sidebarHeader, &trackList, &channelList, &sidebarResizer, &sidePaneResizer,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
              &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView, &settingsView,
              &statusLabel })
@@ -1685,15 +1686,18 @@ void MainComponent::resized()
     // The side pane (Instruments / History) on the right, beside everything else
     if (sidePane != SidePane::none)
     {
-        const auto paneWidth = juce::jlimit (340, 620, getWidth() * 32 / 100);
-        auto pane = area.removeFromRight (paneWidth);
+        auto pane = area.removeFromRight (currentSidePaneWidth());
         sidePaneEdge = pane.getX();
-        instrumentsView.setBounds (pane.withTrimmedLeft (1));
-        historyView.setBounds (pane.withTrimmedLeft (1));
+        sidePaneResizer.setBounds (pane.removeFromLeft (5));   // drag to resize
+        sidePaneResizer.setVisible (true);
+        sidePaneResizer.toFront (false);
+        instrumentsView.setBounds (pane);
+        historyView.setBounds (pane);
     }
     else
     {
         sidePaneEdge = -1;
+        sidePaneResizer.setVisible (false);
     }
 
     if (perfPanel.isVisible())
