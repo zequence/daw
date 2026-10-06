@@ -84,33 +84,10 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     audioDomainButton.onClick = [this] { setDomain (Domain::audio); };
     // The Instruments and History buttons toggle: clicking again returns to the
     // domain's arrange view (ISSUES.md "Top bar").
-    instrumentsButton.setTooltip ("The instrument rack (click again or Esc to return to arrange)");
-    historyButton.setTooltip ("Global history: click an entry to time-travel (click again or Esc to return)");
-
-    instrumentsButton.onClick = [this]
-    {
-        if (contentView == ContentView::instruments || contentView == ContentView::instrumentEditor || contentView == ContentView::expressionMaps)
-        {
-            setDomain (domain);
-            return;
-        }
-
-        instrumentsView.focusTrack (selectedTrack);
-        showContent (ContentView::instruments);
-    };
-
-    editButton.setTooltip ("Edit (E): the MIDI editor for the selected track, with the select pointer. Click again to go back");
-    editButton.onClick = [this] { toggleEditor (false); };
-    drawButton.setTooltip ("Draw (D): the MIDI editor for the selected track, with the pen. Click again to go back");
-    drawButton.onClick = [this] { toggleEditor (true); };
-
-    historyButton.onClick = [this]
-    {
-        if (contentView == ContentView::history)
-            setDomain (domain);
-        else
-            showContent (ContentView::history);
-    };
+    instrumentsButton.setTooltip ("The instrument rack, in a pane on the right (click again or Esc to close)");
+    historyButton.setTooltip ("Global history, in a pane on the right: click an entry to time-travel (click again or Esc to close)");
+    instrumentsButton.onClick = [this] { toggleSidePane (SidePane::instruments); };
+    historyButton.onClick = [this] { toggleSidePane (SidePane::history); };
 
     rtzButton.setTooltip ("Return to start (Home)");
     theme::setButtonRole (rtzButton, "rtz");
@@ -188,7 +165,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     timeLabel.setFont (juce::FontOptions (14.0f));
     timeLabel.setInterceptsMouseClicks (false, false);
 
-    for (auto* b : { &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &editButton, &drawButton, &perfButton })
+    for (auto* b : { &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &perfButton })
         theme::setButtonRole (*b, "topbar");
 
     perfButton.setTooltip ("Performance monitor (F12)");
@@ -242,6 +219,9 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     for (auto* close : { &pianoRollView.closeButton, &instrumentsView.closeButton, &instrumentEditorView.closeButton,
                          &expressionMapView.closeButton, &historyView.closeButton })
         close->onClick = [this] { showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions); };
+
+    instrumentsView.closeButton.onClick = [this] { toggleSidePane (SidePane::instruments); };
+    historyView.closeButton.onClick = [this] { toggleSidePane (SidePane::history); };
 
     arrangementView.onSelectTrack = [this] (auto id)
     {
@@ -314,7 +294,12 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         showContent (ContentView::instrumentEditor);
     };
 
-    instrumentEditorView.onBack = [this] { showContent (ContentView::instruments); };
+    instrumentEditorView.onBack = [this]   // back where it was opened from, the rack still in its pane
+    {
+        sidePane = SidePane::instruments;
+        showContent (mainView);
+        resized();
+    };
     instrumentEditorView.onEditMap = [this] (const juce::String& mapName)
     {
         expressionMapView.select (mapName);
@@ -355,7 +340,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     statusLabel.setFont (juce::FontOptions (12.0f));
 
     for (auto* c : std::initializer_list<juce::Component*> {
-             &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &editButton, &drawButton,
+             &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
              &sidebarHeader, &trackList, &channelList, &sidebarResizer,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
@@ -364,7 +349,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         addAndMakeVisible (c);
 
     for (auto* b : std::initializer_list<juce::Component*> { &menuButton, &midiDomainButton, &audioDomainButton,
-                                                             &instrumentsButton, &historyButton, &editButton, &drawButton, &rtzButton,
+                                                             &instrumentsButton, &historyButton, &rtzButton,
                                                              &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &perfButton })
         b->setWantsKeyboardFocus (false);
 
@@ -622,7 +607,7 @@ void MainComponent::selectTrack (AudioEngine::TrackId id, bool forceArm)
 
     lap ("arm");
 
-    if (contentView == ContentView::instruments)
+    if (sidePane == SidePane::instruments)
         instrumentsView.focusTrack (id);
 
     if (contentView == ContentView::midiEditor)
@@ -922,6 +907,9 @@ void MainComponent::showContent (ContentView view)
 {
     contentView = view;
 
+    if (view == ContentView::midiRegions || view == ContentView::midiEditor || view == ContentView::audioRegions)
+        mainView = view;
+
     if (view == ContentView::midiEditor)
         pianoRollView.setTrack (selectedTrack);
 
@@ -1162,13 +1150,11 @@ void MainComponent::updateViewVisibility()
     arrangementView.setVisible (contentView == ContentView::midiRegions);
     pianoRollView.setVisible (contentView == ContentView::midiEditor);
     audioRegionsView.setVisible (contentView == ContentView::audioRegions);
-    instrumentsView.setVisible (contentView == ContentView::instruments);
+    instrumentsView.setVisible (sidePane == SidePane::instruments);
     instrumentEditorView.setVisible (contentView == ContentView::instrumentEditor);
     expressionMapView.setVisible (contentView == ContentView::expressionMaps);
-    historyView.setVisible (contentView == ContentView::history);
-    historyButton.setToggleState (contentView == ContentView::history, juce::dontSendNotification);
-    editButton.setToggleState (contentView == ContentView::midiEditor && ! pianoRollView.isDrawMode(), juce::dontSendNotification);
-    drawButton.setToggleState (contentView == ContentView::midiEditor && pianoRollView.isDrawMode(), juce::dontSendNotification);
+    historyView.setVisible (sidePane == SidePane::history);
+    historyButton.setToggleState (sidePane == SidePane::history, juce::dontSendNotification);
 
     trackList.setVisible (domain == Domain::midi);
     channelList.setVisible (domain == Domain::audio);
@@ -1178,7 +1164,7 @@ void MainComponent::updateViewVisibility()
 
     midiDomainButton.setToggleState (domain == Domain::midi, juce::dontSendNotification);
     audioDomainButton.setToggleState (domain == Domain::audio, juce::dontSendNotification);
-    instrumentsButton.setToggleState (contentView == ContentView::instruments
+    instrumentsButton.setToggleState (sidePane == SidePane::instruments
                                         || contentView == ContentView::instrumentEditor
                                         || contentView == ContentView::expressionMaps, juce::dontSendNotification);
 
@@ -1383,6 +1369,18 @@ void MainComponent::openTrackPluginWindow (AudioEngine::TrackId id)
 
 // Edit and Draw both open the editor, each with its own pointer. The lit one
 // closes it again; the other switches the pointer.
+// The Instruments / History pane: the button opens it (or switches it), again closes it
+void MainComponent::toggleSidePane (SidePane pane)
+{
+    sidePane = sidePane == pane ? SidePane::none : pane;
+
+    if (sidePane == SidePane::instruments)
+        instrumentsView.focusTrack (selectedTrack);
+
+    updateViewVisibility();
+    resized();
+}
+
 void MainComponent::toggleEditor (bool draw)
 {
     if (contentView == ContentView::midiEditor && pianoRollView.isDrawMode() == draw)
@@ -1481,7 +1479,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
 
         if (contentView == ContentView::instrumentEditor)
         {
-            showContent (ContentView::instruments);
+            instrumentEditorView.onBack();
             return true;
         }
 
@@ -1491,12 +1489,18 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
             return true;
         }
 
+        // The side pane closes first
+        if (sidePane != SidePane::none)
+        {
+            toggleSidePane (sidePane);
+            return true;
+        }
+
         // The MIDI editor: Esc first deselects the notes, then closes
         if (contentView == ContentView::midiEditor && pianoRollView.deselectNotes())
             return true;
 
-        if (contentView == ContentView::midiEditor || contentView == ContentView::instruments
-             || contentView == ContentView::history)
+        if (contentView == ContentView::midiEditor)
         {
             showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
             return true;
@@ -1599,6 +1603,12 @@ void MainComponent::paint (juce::Graphics& g)
 
     g.setColour (juce::Colour (0xff17191c));
     g.fillRect (getLocalBounds().removeFromBottom (statusHeight));
+
+    if (sidePaneEdge >= 0)   // the side pane's edge
+    {
+        g.setColour (juce::Colour (0xff43464d));
+        g.fillRect (sidePaneEdge, topbarHeight, 1, getHeight() - topbarHeight - statusHeight);
+    }
 }
 
 void MainComponent::resized()
@@ -1616,17 +1626,13 @@ void MainComponent::resized()
     toolbar.removeFromLeft (4);
     audioDomainButton.setBounds (toolbar.removeFromLeft (56));
     toolbar.removeFromLeft (4);
-    instrumentsButton.setBounds (toolbar.removeFromLeft (94));
-    toolbar.removeFromLeft (4);
-    historyButton.setBounds (toolbar.removeFromLeft (62));
-    toolbar.removeFromLeft (4);
-    editButton.setBounds (toolbar.removeFromLeft (46));
-    toolbar.removeFromLeft (4);
-    drawButton.setBounds (toolbar.removeFromLeft (50));
     toolbar.removeFromLeft (14);
 
+    // Right side: Instruments and History (the side pane), the divider, Perf
     perfButton.setBounds (getWidth() - 8 - 50, toolbar.getY(), 50, toolbar.getHeight());
     topbarSeparators[1] = perfButton.getX() - 8;
+    historyButton.setBounds (topbarSeparators[1] - 8 - 62, toolbar.getY(), 62, toolbar.getHeight());
+    instrumentsButton.setBounds (historyButton.getX() - 4 - 94, toolbar.getY(), 94, toolbar.getHeight());
 
     // The transport unit: buttons + position readout + tempo, PERFECTLY centered
     // in the window. If it would collide, it shifts right of the view buttons and
@@ -1670,6 +1676,20 @@ void MainComponent::resized()
     // Bottom
     statusLabel.setBounds (area.removeFromBottom (statusHeight).reduced (8, 1));
 
+    // The side pane (Instruments / History) on the right, beside everything else
+    if (sidePane != SidePane::none)
+    {
+        const auto paneWidth = juce::jlimit (340, 620, getWidth() * 32 / 100);
+        auto pane = area.removeFromRight (paneWidth);
+        sidePaneEdge = pane.getX();
+        instrumentsView.setBounds (pane.withTrimmedLeft (1));
+        historyView.setBounds (pane.withTrimmedLeft (1));
+    }
+    else
+    {
+        sidePaneEdge = -1;
+    }
+
     if (perfPanel.isVisible())
         perfPanel.setBounds (area.removeFromBottom (160));
 
@@ -1698,7 +1718,7 @@ void MainComponent::resized()
     timelineBar.setBounds (area.removeFromTop (timelineHeight));
 
     for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView, &audioRegionsView,
-                                                                &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView })
+                                                                &instrumentEditorView, &expressionMapView })
         view->setBounds (area);
 
     // Settings replaces the whole UI; the busy overlay covers everything

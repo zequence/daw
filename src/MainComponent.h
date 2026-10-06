@@ -42,7 +42,13 @@ public:
     void confirmQuit();
 
 private:
-    enum class ContentView { midiRegions, midiEditor, audioRegions, instruments, instrumentEditor, expressionMaps, history };
+    enum class ContentView { midiRegions, midiEditor, audioRegions, instrumentEditor, expressionMaps };   // Instruments and History: the side pane
+
+    // Instruments and History open as a pane on the right, beside the arrangement or the editor
+    enum class SidePane { none, instruments, history };
+    SidePane sidePane = SidePane::none;
+    void toggleSidePane (SidePane);
+    ContentView mainView = ContentView::midiRegions;   // where the instrument / map editors go back to
     enum class Domain { midi, audio };
 
     //==============================================================================
@@ -93,8 +99,7 @@ private:
 
     // Topbar
     juce::TextButton menuButton { "Menu" }, midiDomainButton { "Midi" }, audioDomainButton { "Audio" },
-                     instrumentsButton { "Instruments" }, historyButton { "History" },
-                     editButton { "Edit" }, drawButton { "Draw" };   // the MIDI editor for the selected track (E / D)
+                     instrumentsButton { "Instruments" }, historyButton { "History" };   // right side: the side pane
     // The transport unit: a visually grouped panel with the colorized transport
     // buttons, the position readout (bars.beats + time) and the tempo.
     juce::TextButton rtzButton { "|<" }, playButton { "Play" }, recordButton { "Rec" }, loopButton { "Loop" },
@@ -102,6 +107,7 @@ private:
     juce::Label bpmLabel, positionLabel, timeLabel;
     juce::Rectangle<int> transportPanel;   // painted behind the unit
     int topbarSeparators[2] = { 0, 0 };    // lines between the topbar's groups
+    int sidePaneEdge = -1;                 // the side pane's left edge (a line is painted there)
 
     // Sidebar. The track list and the arrangement share one vertical scroll
     // (same Y axis); declared before both.
