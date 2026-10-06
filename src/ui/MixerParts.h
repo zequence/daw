@@ -257,8 +257,27 @@ struct Meter final : juce::Component
         }
 
         clipped = clipped || newPeak >= 1.0f;
-        repaint();
+
+        // Repaint only when what shows changes (to the pixel): a silent meter costs nothing
+        const auto h = (float) getHeight();
+        const Shown now { juce::roundToInt (toFraction (peak) * h), juce::roundToInt (toFraction (rms) * h),
+                          juce::roundToInt (toFraction (holdLevel) * h), clipped };
+
+        if (now != shown)
+        {
+            shown = now;
+            repaint();
+        }
     }
+
+    struct Shown
+    {
+        int peak = -1, rms = -1, hold = -1;
+        bool clipped = false;
+        bool operator!= (const Shown& o) const   { return peak != o.peak || rms != o.rms || hold != o.hold || clipped != o.clipped; }
+    };
+
+    Shown shown;
 
     static float toFraction (float level)
     {

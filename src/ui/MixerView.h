@@ -83,18 +83,28 @@ public:
     }
 
     // Studio lights: a soft, wide sheen falling diagonally over the whole console
+    // (drawn once per size into an image - the meters repaint often, and the image is cheaper to lay on)
     void paintOverChildren (juce::Graphics& g) override
     {
-        const auto w = (float) getWidth(), h = (float) getHeight();
-        juce::ColourGradient sheen (juce::Colours::white.withAlpha (0.0f), 0.0f, 0.0f,
-                                    juce::Colours::white.withAlpha (0.0f), w, h, false);
-        sheen.addColour (0.30, juce::Colours::white.withAlpha (0.05f));
-        sheen.addColour (0.42, juce::Colours::white.withAlpha (0.09f));
-        sheen.addColour (0.55, juce::Colours::white.withAlpha (0.03f));
-        sheen.addColour (0.80, juce::Colours::black.withAlpha (0.06f));
-        g.setGradientFill (sheen);
-        g.fillAll();
+        if (sheenImage.getWidth() != getWidth() || sheenImage.getHeight() != getHeight())
+        {
+            sheenImage = juce::Image (juce::Image::ARGB, juce::jmax (1, getWidth()), juce::jmax (1, getHeight()), true);
+            juce::Graphics ig (sheenImage);
+            const auto w = (float) getWidth(), h = (float) getHeight();
+            juce::ColourGradient sheen (juce::Colours::white.withAlpha (0.0f), 0.0f, 0.0f,
+                                        juce::Colours::white.withAlpha (0.0f), w, h, false);
+            sheen.addColour (0.30, juce::Colours::white.withAlpha (0.05f));
+            sheen.addColour (0.42, juce::Colours::white.withAlpha (0.09f));
+            sheen.addColour (0.55, juce::Colours::white.withAlpha (0.03f));
+            sheen.addColour (0.80, juce::Colours::black.withAlpha (0.06f));
+            ig.setGradientFill (sheen);
+            ig.fillAll();
+        }
+
+        g.drawImageAt (sheenImage, 0, 0);
     }
+
+    juce::Image sheenImage;
 
 private:
     enum class Kind { channel, aux, master };
@@ -395,24 +405,73 @@ private:
 
         void paint (juce::Graphics& g) override
         {
+            // The background is drawn once into an image, again only when the size or highlight changes
             const auto isHighlighted = kind == Kind::channel && channelId == owner.highlighted;
+
+            if (background.getWidth() != getWidth() || background.getHeight() != getHeight() || isHighlighted != backgroundHighlighted)
+            {
+                backgroundHighlighted = isHighlighted;
+                background = makeBackground (isHighlighted);
+            }
+
+            g.drawImageAt (background, 0, 0);
+        }
+
+        juce::Image makeBackground (bool isHighlighted) const
+        {
+            const auto w = juce::jmax (1, getWidth()), h = juce::jmax (1, getHeight());
+            juce::Image image (juce::Image::ARGB, w, h, true);
+            juce::Graphics g (image);
+            juce::Path panel;
+            panel.addRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
             g.setColour (isHighlighted ? owner.style().panel.brighter (0.25f) : owner.style().panel);
-            g.fillRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
+            g.fillPath (panel);
 
-            if (texture.getWidth() != getWidth() || texture.getHeight() != getHeight())
-                texture = makeTexture (getWidth(), getHeight(), 1234 + (juce::int64) channelId * 7919 + auxNumber * 104729 + (int) kind * 31);
+            {
+                juce::Graphics::ScopedSaveState state (g);
+                g.reduceClipRegion (panel);
+                g.drawImageAt (grain (w, h, 1234 + (juce::int64) channelId * 7919 + auxNumber * 104729 + (int) kind * 31), 0, 0);
+            }
 
-            g.drawImageAt (texture, 0, 0);
+            g.setColour (juce::Colours::white.withAlpha (0.12f));
+            g.fillRect (0, 2, 1, h - 4);
+            g.setColour (juce::Colours::black.withAlpha (0.35f));
+            g.fillRect (w - 1, 2, 1, h - 4);
+
+            for (auto p : { juce::Point<float> (5.0f, 5.0f), { (float) w - 5.0f, 5.0f }, { 5.0f, (float) h - 5.0f }, { (float) w - 5.0f, (float) h - 5.0f } })
+            {
+                const auto screw = juce::Rectangle<float> (5.0f, 5.0f).withCentre (p);
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0xffb8bcc2), screw.getX(), screw.getY(),
+                                                         juce::Colour (0xff4a4e54), screw.getRight(), screw.getBottom(), false));
+                g.fillEllipse (screw);
+                g.setColour (juce::Colours::black.withAlpha (0.6f));
+                g.drawEllipse (screw, 0.6f);
+                g.drawLine (p.x - 1.8f, p.y + 1.0f, p.x + 1.8f, p.y - 1.0f, 0.9f);
+            }
 
             if (kind != Kind::channel)   // Aux and master: a coloured band under the name
             {
                 g.setColour (kind == Kind::master ? juce::Colour (0xffc23b33) : owner.style().auxCap);
                 g.fillRect (getLocalBounds().reduced (4, 0).withTop (27).withHeight (2));
             }
+
+            return image;
         }
 
-        // Brushed metal: fine vertical grain, a lit left edge, a shaded right edge and four screws
-        // Each strip gets its own seed, so no two strips are brushed alike.
+        // A strip's grain, made once per seed (kept while the app runs; strips rebuilt or resized reuse
+        // it), tall enough for any strip so far - in steps of 512 px
+        static juce::Image grain (int w, int h, juce::int64 seed)
+        {
+            static std::map<std::pair<juce::int64, int>, juce::Image> made;
+            auto& image = made[{ seed, w }];
+
+            if (image.getHeight() < h)
+                image = makeTexture (w, (h + 511) / 512 * 512, seed);
+
+            return image;
+        }
+
+        // Brushed metal: fine vertical grain. Each strip gets its own seed, so no two are brushed alike.
         static juce::Image makeTexture (int w, int h, juce::int64 seed)
         {
             juce::Image image (juce::Image::ARGB, juce::jmax (1, w), juce::jmax (1, h), true);
@@ -457,28 +516,11 @@ private:
                 }
             }
 
-            juce::Graphics g (image);
-
-            g.setColour (juce::Colours::white.withAlpha (0.12f));
-            g.fillRect (0, 2, 1, h - 4);
-            g.setColour (juce::Colours::black.withAlpha (0.35f));
-            g.fillRect (w - 1, 2, 1, h - 4);
-
-            for (auto p : { juce::Point<float> (5.0f, 5.0f), { (float) w - 5.0f, 5.0f }, { 5.0f, (float) h - 5.0f }, { (float) w - 5.0f, (float) h - 5.0f } })
-            {
-                const auto screw = juce::Rectangle<float> (5.0f, 5.0f).withCentre (p);
-                g.setGradientFill (juce::ColourGradient (juce::Colour (0xffb8bcc2), screw.getX(), screw.getY(),
-                                                         juce::Colour (0xff4a4e54), screw.getRight(), screw.getBottom(), false));
-                g.fillEllipse (screw);
-                g.setColour (juce::Colours::black.withAlpha (0.6f));
-                g.drawEllipse (screw, 0.6f);
-                g.drawLine (p.x - 1.8f, p.y + 1.0f, p.x + 1.8f, p.y - 1.0f, 0.9f);
-            }
-
             return image;
         }
 
-        juce::Image texture;
+        juce::Image background;
+        bool backgroundHighlighted = false;
 
         void resized() override
         {
