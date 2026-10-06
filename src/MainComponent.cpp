@@ -198,13 +198,6 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     timelineBar.onOpenSettings = [this] { openSettings(); };
 
     // --- Sidebar ---
-    // The panel's header: the domain's name in black on its colour (updateViewVisibility)
-    sidebarHeader.setFont (juce::FontOptions (15.0f, juce::Font::bold));
-    sidebarHeader.setJustificationType (juce::Justification::centredLeft);
-    sidebarHeader.setColour (juce::Label::backgroundColourId, juce::Colour (0xff1f6f86));
-    sidebarHeader.setColour (juce::Label::textColourId, juce::Colours::black);
-    sidebarHeader.setBorderSize ({ 0, 10, 0, 6 });
-    sidebarHeader.setText ("Midi", juce::dontSendNotification);
 
     trackList.onAddTrack = [this] { addTrack(); };
     trackList.onAddTrackInFolder = [this] (auto folderId)
@@ -1149,9 +1142,8 @@ void MainComponent::updateViewVisibility()
     trackList.setVisible (domain == Domain::midi);
     channelList.setVisible (domain == Domain::audio);
     // Midi: dark blue/cyan; Audio: dried blood. Black text on both
-    sidebarHeader.setText (domain == Domain::midi ? "Midi" : "Audio", juce::dontSendNotification);
-    sidebarHeader.setColour (juce::Label::backgroundColourId,
-                             juce::Colour (domain == Domain::midi ? 0xff1f6f86 : 0xff7a1f1a));
+    sidebarHeader.set (domain == Domain::midi ? "MIDI TRACKS" : "AUDIO CHANNELS",
+                       juce::Colour (domain == Domain::midi ? 0xff3aa6c4 : 0xffc0504a));
 
     midiDomainButton.setToggleState (domain == Domain::midi, juce::dontSendNotification);
     audioDomainButton.setToggleState (domain == Domain::audio, juce::dontSendNotification);

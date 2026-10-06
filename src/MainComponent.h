@@ -102,7 +102,29 @@ private:
     // Sidebar. The track list and the arrangement share one vertical scroll
     // (same Y axis); declared before both.
     sidebar::VerticalScroll trackScroll;
-    juce::Label sidebarHeader;   // "Midi" / "Audio" above the lists
+    // Above the lists: what they show (MIDI tracks / audio channels) - small
+    // spaced caps in the domain's colour, over a thin line of the same colour
+    struct SidebarHeader final : juce::Component
+    {
+        void set (const juce::String& newText, juce::Colour newColour)
+        {
+            text = newText;
+            colour = newColour;
+            repaint();
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            auto area = getLocalBounds();
+            g.setColour (colour);
+            g.fillRect (area.removeFromBottom (2).reduced (2, 0));
+            g.setFont (juce::FontOptions (12.0f, juce::Font::bold).withKerningFactor (0.12f));
+            g.drawText (text, area.reduced (10, 0), juce::Justification::centredLeft, true);
+        }
+
+        juce::String text;
+        juce::Colour colour;
+    } sidebarHeader;
     TrackList trackList { engine, trackScroll };
     AudioChannelList channelList { engine };
     int sidebarWidth = 0;            // 0 = not yet computed (defaults to ~15% of the window)
