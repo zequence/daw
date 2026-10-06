@@ -324,6 +324,11 @@ void ArrangementView::mouseUp (const juce::MouseEvent& event)
 
             selectedFolderSpan = span;
             marquee = false;
+
+            // Its first track is the selected one (Ctrl+Z, the keys and the editor follow it)
+            if (const auto tracks = tracksInFolder (span.folder); onSelectTrack && ! tracks.empty())
+                onSelectTrack (tracks.front());
+
             mouseMove (event);
             repaint();
             return;
