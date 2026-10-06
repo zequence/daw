@@ -78,7 +78,7 @@ juce::Rectangle<int> ArrangementView::blockRect (const BlockRef& block, int lane
 {
     const auto x = tickToX (block.startTick);
     const auto right = tickToX (barEndOf (block.endTick));   // drawn to the end of its last bar
-    return { x, laneTop + 4, juce::jmax (8, right - x), sidebar::trackRowHeight - 8 };   // overlapping ones share it (hatched)
+    return { x, laneTop + 4, juce::jmax (8, right - x), sidebar::trackRowHeight() - 8 };   // overlapping ones share it (hatched)
 }
 
 ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)
@@ -685,6 +685,14 @@ void ArrangementView::mouseDoubleClick (const juce::MouseEvent& event)
 
 void ArrangementView::mouseWheelMove (const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
 {
+    if (event.mods.isCtrlDown() && event.mods.isShiftDown())   // track height
+    {
+        if (onTrackHeightZoom)
+            onTrackHeightZoom (wheel.deltaY > 0 ? 1 : -1);
+
+        return;
+    }
+
     if (! axis.handleWheel (event, wheel))
     {
         // Plain wheel scrolls the rows - shared with the sidebar

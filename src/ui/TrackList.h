@@ -20,6 +20,8 @@ public:
     ~TrackList() override;
 
     void refresh();
+    void rowHeightsChanged()   { rebuildRows(); }   // the track height zoom
+    std::function<void (int direction)> onTrackHeightZoom;   // Ctrl+Shift+wheel over the list
     void setSelectedTrack (AudioEngine::TrackId);
     AudioEngine::TrackId getSelectedTrack() const noexcept { return selectedTrack; }
     const std::set<AudioEngine::TrackId>& getMultiSelection() const noexcept { return multiSelection; }
@@ -74,6 +76,14 @@ private:
     sidebar::VerticalScroll& vscroll;
     int lastScrollRevision = -1;
     juce::Viewport viewport;
+
+    // Hears the wheel over the rows (the viewport scrolls them; Ctrl+Shift zooms the track height)
+    struct WheelZoom final : juce::MouseListener
+    {
+        explicit WheelZoom (TrackList& o) : owner (o) {}
+        void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+        TrackList& owner;
+    } wheelZoom;
     RowContainer rowContainer { *this };
 
     std::vector<AudioEngine::SidebarItem> items;          // what the rows are built from

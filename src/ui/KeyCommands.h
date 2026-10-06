@@ -34,6 +34,8 @@ namespace keys
             { "view.performance",     "Global", "Performance monitor",                         { K (K::F12Key) } },
             { "view.history",         "Global", "History pane on / off",                       { K ('h') } },
             { "view.instruments",     "Global", "Instruments pane on / off",                   { K ('i') } },
+            { "view.tracksTaller",    "Global", "Taller tracks (track height zoom)",           { K ('+'), K (K::numberPadAdd) } },
+            { "view.tracksShorter",   "Global", "Shorter tracks (track height zoom)",          { K ('-'), K (K::numberPadSubtract) } },
             { "track.previous",       "Global", "Select the track above",                      { K (K::pageUpKey) } },
             { "track.next",           "Global", "Select the track below",                      { K (K::pageDownKey) } },
             { "track.solo",           "Global", "Solo the selected track",                     { K ('s') } },

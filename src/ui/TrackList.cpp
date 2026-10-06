@@ -267,13 +267,14 @@ public:
 };
 
 //==============================================================================
-TrackList::TrackList (AudioEngine& e, sidebar::VerticalScroll& v) : engine (e), vscroll (v)
+TrackList::TrackList (AudioEngine& e, sidebar::VerticalScroll& v) : engine (e), vscroll (v), wheelZoom { *this }
 {
     // Adding tracks/folders lives in the right-click menus (ISSUES.md: header
     // buttons removed)
     viewport.setViewedComponent (&rowContainer, false);
     viewport.setScrollBarsShown (false, false, true, false);   // no scrollbar; the wheel still scrolls (ISSUES.md)
     addAndMakeVisible (viewport);
+    viewport.addMouseListener (&wheelZoom, true);   // Ctrl+Shift+wheel anywhere in the list: track height
 }
 
 TrackList::~TrackList() = default;
@@ -387,6 +388,12 @@ void TrackList::setSubtreeCollapsed (AudioEngine::FolderId folderId, bool collap
     }
 
     refreshSoon();
+}
+
+void TrackList::WheelZoom::mouseWheelMove (const juce::MouseEvent& event, const juce::MouseWheelDetails& wheel)
+{
+    if (event.mods.isCtrlDown() && event.mods.isShiftDown() && owner.onTrackHeightZoom)   // track height
+        owner.onTrackHeightZoom (wheel.deltaY > 0 ? 1 : -1);
 }
 
 int TrackList::heightOfItem (const AudioEngine::SidebarItem& item)

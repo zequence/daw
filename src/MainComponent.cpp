@@ -34,6 +34,8 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     noteNames::middleCOctave() = editorSettings::middleCOctave (engine.getSettingsFile());   // Settings > Editor
     keys::Bindings::get().load (engine.getSettingsFile());                                   // Settings > Key commands
     sidePaneWidth = engine.getSettingsFile().getIntValue ("sidePaneWidth", 0);              // the right pane's width
+    sidebar::trackRowHeightSetting() = juce::jlimit (sidebar::minTrackRowHeight, sidebar::maxTrackRowHeight,
+                                                     engine.getSettingsFile().getIntValue ("trackHeight", sidebar::minTrackRowHeight));
     lanes::Settings::get().load (engine.getSettingsFile());                                  // Settings > Controller lanes
 
     // Keep the window state sane when projects change through the API.
@@ -241,6 +243,10 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         selectTrack (id, false);
         openEditorOn ({ id });
     };
+
+    // Track height zoom: Ctrl+Shift+wheel over the list or the arrangement
+    arrangementView.onTrackHeightZoom = [this] (int direction) { zoomTrackHeight (direction); };
+    trackList.onTrackHeightZoom = [this] (int direction) { zoomTrackHeight (direction); };
 
     // Double-click on a folder's region: the editor on the folder's tracks
     arrangementView.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
@@ -1382,6 +1388,24 @@ void MainComponent::openTrackPluginWindow (AudioEngine::TrackId id)
 
 // Edit and Draw both open the editor, each with its own pointer. The lit one
 // closes it again; the other switches the pointer.
+// Taller or shorter track rows (the side list and the arrangement lanes together); the one-line
+// height is the smallest
+void MainComponent::zoomTrackHeight (int direction)
+{
+    auto& height = sidebar::trackRowHeightSetting();
+    const auto next = direction > 0 ? juce::roundToInt (height * 1.25) : juce::roundToInt (height / 1.25);
+    const auto limited = juce::jlimit (sidebar::minTrackRowHeight, sidebar::maxTrackRowHeight, next);
+
+    if (limited == height)
+        return;
+
+    height = limited;
+    trackList.rowHeightsChanged();
+    arrangementView.repaint();
+    engine.getSettingsFile().setValue ("trackHeight", height);
+    engine.getSettingsFile().saveIfNeeded();
+}
+
 // The Instruments / History pane: the button opens it (or switches it), again closes it
 void MainComponent::toggleSidePane (SidePane pane)
 {
@@ -1581,6 +1605,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (selectedTrack != 0 && keys::matches ("track.mute", key))
     {
         engine.setTrackMuted (selectedTrack, ! engine.isTrackMuted (selectedTrack));
+        return true;
+    }
+
+    if (keys::matches ("view.tracksTaller", key) || keys::matches ("view.tracksShorter", key))
+    {
+        zoomTrackHeight (keys::matches ("view.tracksTaller", key) ? 1 : -1);
         return true;
     }
 

@@ -28,6 +28,7 @@ public:
 
     std::function<void (AudioEngine::TrackId)> onOpenEditor, onSelectTrack;
     std::function<void (std::vector<AudioEngine::TrackId>)> onOpenEditorOnTracks;   // a folder region: its tracks
+    std::function<void (int direction)> onTrackHeightZoom;                           // Ctrl+Shift+wheel: taller (+1) / shorter
 
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;

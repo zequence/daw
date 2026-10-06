@@ -48,6 +48,7 @@ private:
     enum class SidePane { none, instruments, history };
     SidePane sidePane = SidePane::none;
     void toggleSidePane (SidePane);
+    void zoomTrackHeight (int direction);   // +1 taller, -1 shorter (saved in the settings)
     ContentView mainView = ContentView::midiRegions;   // where the instrument / map editors go back to
     enum class Domain { midi, audio };
 

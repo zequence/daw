@@ -32,6 +32,8 @@ A key that is typed into a text field goes to the field.
 | Performance monitor | F12 | `view.performance` |
 | History pane on / off | H | `view.history` |
 | Instruments pane on / off | I | `view.instruments` |
+| Taller tracks (track height zoom) | +, Numpad + | `view.tracksTaller` |
+| Shorter tracks (track height zoom) | -, Numpad - | `view.tracksShorter` |
 | Select the track above | Page Up | `track.previous` |
 | Select the track below | Page Down | `track.next` |
 | Solo the selected track | S | `track.solo` |
@@ -58,6 +60,7 @@ These are mouse gestures, not key commands, so they can't be changed in Settings
 | Drag a selected region | Moves the selection (Ctrl copies); up/down moves it to other tracks |
 | Drag a selected folder region | Moves everything inside the folder, sideways only |
 | Double-click a region | Opens the MIDI editor (a folder region: on all its tracks) |
+| Ctrl + Shift + wheel | Track height zoom (over the track list or the arrangement) |
 | Click where two regions meet (glue pointer) | Joins them into one region |
 
 **Settings > Editor > Moving regions** chooses how a press on a region works, and Alt
