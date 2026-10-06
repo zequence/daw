@@ -27,6 +27,7 @@ public:
     ~ArrangementView() override;
 
     std::function<void (AudioEngine::TrackId)> onOpenEditor, onSelectTrack;
+    std::function<void (std::vector<AudioEngine::TrackId>)> onOpenEditorOnTracks;   // a folder region: its tracks
 
     void paint (juce::Graphics&) override;
     void mouseDown (const juce::MouseEvent&) override;
@@ -116,6 +117,10 @@ private:
     bool isSelected (const BlockRef& block) const   { return std::find (selection.begin(), selection.end(), block) != selection.end(); }
     std::vector<BlockRef> blocksTouching (juce::Rectangle<int>);
     void moveSelection();
+
+    // Folder lanes show regions spanning the content of every track inside them (subfolders too)
+    std::vector<AudioEngine::TrackId> tracksInFolder (AudioEngine::FolderId) const;
+    std::vector<std::pair<juce::int64, juce::int64>> folderSpans (AudioEngine::FolderId);
 
     // Where a region starts touching or overlapping an earlier one (different region ids keep
     // them apart): hovering its left edge shows the glue pointer, clicking joins them

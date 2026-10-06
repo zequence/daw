@@ -242,6 +242,9 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         openEditorOn ({ id });
     };
 
+    // Double-click on a folder's region: the editor on the folder's tracks
+    arrangementView.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
+
     // The editor's dropdown picked another of its tracks: that one is selected
     pianoRollView.onEditedTrackChanged = [this] (auto id) { selectTrack (id, false); };
 

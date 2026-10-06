@@ -256,6 +256,10 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Arrange view
 
+- [x] Draw regions for folders that span the content inside them.
+  - Resolved: a folder's lane shows one region per stretch of content in its tracks (subfolders too, collapsed or not), in the folder's colour.
+- [x] Double clicking a folder region will load the editor and show the combined midi.
+  - Resolved: the editor opens on all the folder's tracks (the top one edited, the others dimmed; the dropdown and the All toggle switch between them).
 - [x] The entire region inherits the track color. The borders are more
       pronounced and colorful, while the box itself is brighter and less
       colorful.

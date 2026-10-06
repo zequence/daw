@@ -36,11 +36,6 @@ Claude is unsure of an issue they will pose a question.
 
 # Arrange view
 
-- [ ] Draw regions for folders that span the content inside them.
-      (small now that folder rows exist as lanes on the shared Y axis)
-- [ ] Double clicking a folder region will load the editor and show the combined midi.
-      (Milestone-sized: multi-channel editing. Pairs with the editor's
-      channel dropdown below.)
 
 # Midi editor
 

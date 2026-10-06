@@ -457,8 +457,73 @@ void ArrangementView::paintOverChildren (juce::Graphics& g)
     g.drawRect (area, 1.0f);
 }
 
+std::vector<AudioEngine::TrackId> ArrangementView::tracksInFolder (AudioEngine::FolderId folder) const
+{
+    std::vector<AudioEngine::TrackId> tracks;
+    int folderDepth = -1;
+
+    for (auto& item : engine.getSidebarItems (true, false))   // collapsed folders' contents too
+    {
+        if (folderDepth < 0)
+        {
+            if (item.folder == folder)
+                folderDepth = item.depth;
+
+            continue;
+        }
+
+        if (item.depth <= folderDepth)
+            break;
+
+        if (item.member != 0)
+            tracks.push_back ((AudioEngine::TrackId) item.member);
+    }
+
+    return tracks;
+}
+
+// The union of the regions of the folder's tracks: overlapping or touching ones join
+std::vector<std::pair<juce::int64, juce::int64>> ArrangementView::folderSpans (AudioEngine::FolderId folder)
+{
+    std::vector<std::pair<juce::int64, juce::int64>> spans;
+
+    for (auto track : tracksInFolder (folder))
+        for (auto& block : blocksFor (track))
+            spans.push_back ({ block.startTick, block.endTick });
+
+    std::sort (spans.begin(), spans.end());
+    std::vector<std::pair<juce::int64, juce::int64>> merged;
+
+    for (auto& span : spans)
+    {
+        if (! merged.empty() && span.first <= merged.back().second)
+            merged.back().second = juce::jmax (merged.back().second, span.second);
+        else
+            merged.push_back (span);
+    }
+
+    return merged;
+}
+
 void ArrangementView::mouseDoubleClick (const juce::MouseEvent& event)
 {
+    // A folder's region: the editor on the folder's tracks
+    const auto items = itemsNow();
+
+    if (const auto index = itemIndexAt (items, event.y); index >= 0 && items[(size_t) index].folder != 0)
+    {
+        const auto tick = xToTick (event.x);
+
+        for (auto& [start, end] : folderSpans (items[(size_t) index].folder))
+            if (tick >= start && tick < end && onOpenEditorOnTracks)
+            {
+                if (auto tracks = tracksInFolder (items[(size_t) index].folder); ! tracks.empty())
+                    onOpenEditorOnTracks (std::move (tracks));
+
+                return;
+            }
+    }
+
     const auto hit = blockAt (event.getPosition());
 
     if (hit.valid() && onOpenEditor)
@@ -654,6 +719,28 @@ void ArrangementView::paint (juce::Graphics& g)
         for (auto& item : items)
         {
             const auto height = sidebar::heightOf (item);
+
+            if (item.member == 0 && item.folder != 0 && y + height > 0 && y < getHeight())
+            {
+                // A folder lane: one region per stretch of content inside it
+                const auto base = AudioEngine::colourFromHex (engine.getFolderColour (item.folder), juce::Colour (0xff8a8f98));
+                const auto style = theme::regionStyle (base, false);
+
+                for (auto& [start, end] : folderSpans (item.folder))
+                {
+                    const auto x = tickToX (start);
+                    const auto right = tickToX (end);
+
+                    if (right < TimeAxis::gutter || x > getWidth())
+                        continue;
+
+                    const auto rect = juce::Rectangle<int> (x, y + 4, juce::jmax (8, right - x), height - 8).toFloat();
+                    g.setColour (style.fill.withMultipliedAlpha (0.8f));
+                    g.fillRoundedRectangle (rect, theme::corner);
+                    g.setColour (style.border);
+                    g.drawRoundedRectangle (rect, theme::corner, 1.2f);
+                }
+            }
 
             if (item.member == 0 || y + height <= 0 || y >= getHeight())
             {
