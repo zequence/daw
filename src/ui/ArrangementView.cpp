@@ -725,6 +725,7 @@ void ArrangementView::paint (juce::Graphics& g)
                 // A folder lane: one region per stretch of content inside it
                 const auto base = AudioEngine::colourFromHex (engine.getFolderColour (item.folder), juce::Colour (0xff8a8f98));
                 const auto style = theme::regionStyle (base, false);
+                const auto folderTracks = tracksInFolder (item.folder);
 
                 for (auto& [start, end] : folderSpans (item.folder))
                 {
@@ -734,11 +735,31 @@ void ArrangementView::paint (juce::Graphics& g)
                     if (right < TimeAxis::gutter || x > getWidth())
                         continue;
 
-                    const auto rect = juce::Rectangle<int> (x, y + 4, juce::jmax (8, right - x), height - 8).toFloat();
+                    const auto rect = juce::Rectangle<int> (x, y + 3, juce::jmax (8, right - x), height - 6);
                     g.setColour (style.fill.withMultipliedAlpha (0.8f));
-                    g.fillRoundedRectangle (rect, theme::corner);
+                    g.fillRoundedRectangle (rect.toFloat(), theme::corner);
                     g.setColour (style.border);
-                    g.drawRoundedRectangle (rect, theme::corner, 1.2f);
+                    g.drawRoundedRectangle (rect.toFloat(), theme::corner, 1.2f);
+
+                    // The combined notes of the folder's tracks (a mini preview, as in the tracks' regions)
+                    g.setColour (juce::Colours::black.withAlpha (0.45f));
+
+                    for (auto track : folderTracks)
+                        if (auto folderSeq = engine.getTrackSequence (track))
+                            for (auto& note : folderSeq->getNotes())
+                            {
+                                if (note.startTick < start || note.startTick >= end)
+                                    continue;
+
+                                const auto nx = tickToX (note.startTick);
+
+                                if (nx > getWidth())
+                                    break;
+
+                                const auto nw = juce::jmax (1, (int) ((double) note.lengthTicks / axis.ticksPerPixel));
+                                const auto ny = rect.getBottom() - 3 - (note.key - 24) * (rect.getHeight() - 6) / 84;
+                                g.fillRect (nx, juce::jlimit (rect.getY() + 2, rect.getBottom() - 3, ny), nw, 1);
+                            }
                 }
             }
 
