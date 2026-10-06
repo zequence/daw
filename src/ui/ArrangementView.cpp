@@ -919,7 +919,7 @@ void ArrangementView::paint (juce::Graphics& g)
                         if (note.startTick < block.startTick || note.startTick >= block.endTick || note.region != block.region)
                             continue;
 
-                        const auto tickShift = isDragged ? dragDeltaTicks : 0;
+                        const auto tickShift = isDragged || inDraggedFolder ? dragDeltaTicks : 0;   // the notes move with their region
                         const auto nx = tickToX (note.startTick + tickShift);
                         const auto nw = juce::jmax (1, (int) ((double) note.lengthTicks / axis.ticksPerPixel));
                         const auto ny = rect.getBottom() - 4 - (note.key - 24) * (rect.getHeight() - 8) / 84;
