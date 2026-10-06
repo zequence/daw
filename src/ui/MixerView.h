@@ -402,8 +402,8 @@ private:
             std::array<Wave, 4> waves;
 
             for (auto& wave : waves)
-                wave = { random.nextFloat() * 0.03f, 0.002f + random.nextFloat() * 0.01f,
-                         random.nextFloat() * juce::MathConstants<float>::twoPi, 0.2f + random.nextFloat() * 0.3f };
+                wave = { 0.02f + random.nextFloat() * 0.06f, 0.01f + random.nextFloat() * 0.03f,
+                         random.nextFloat() * juce::MathConstants<float>::twoPi, 0.08f + random.nextFloat() * 0.12f };
 
             {
                 juce::Image::BitmapData pixels (image, juce::Image::BitmapData::writeOnly);
@@ -420,7 +420,7 @@ private:
                         if (y >= streakEnd)
                         {
                             streak = 0.6f * lineBias + 0.4f * (random.nextFloat() * 2.0f - 1.0f);
-                            streakEnd = y + 15 + random.nextInt (220);
+                            streakEnd = y + 10 + random.nextInt (90);
                         }
 
                         auto contrast = 1.0f;
@@ -430,7 +430,7 @@ private:
 
                         const auto noise = random.nextFloat() * 2.0f - 1.0f;
                         const auto v = juce::jlimit (-1.0f, 1.0f, (streak * 0.85f + noise * 0.12f) * juce::jmax (0.2f, contrast));
-                        const auto alpha = std::abs (v) * 0.085f;
+                        const auto alpha = std::abs (v) * (v > 0.0f ? 0.055f : 0.035f);   // the dark streaks lighter than the bright ones
                         pixels.setPixelColour (x, y, (v > 0.0f ? juce::Colours::white : juce::Colours::black).withAlpha (alpha));
                     }
                 }
