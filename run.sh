@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Builds (if needed) and starts the app.
-# Usage: ./run.sh [Debug|Release] [--yes]   (default: Debug)
+# Usage: ./run.sh [Debug|Release] [--yes]   (default: Release)
 # VE Pro runs under Wine; WINEPREFIX tells the app where to find VSL's CLI.
 # It defaults to the shared prefix of the ilok-linux repo this app sits in.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
-config=Debug yes=()
+config=Release yes=()
 for a in "$@"; do
   case "$a" in
     Debug|Release) config=$a ;;
