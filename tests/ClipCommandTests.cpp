@@ -1,3 +1,4 @@
+#include "../src/model/PhraseBlocks.h"
 #include "../src/api/CommandDispatcher.h"
 
 namespace
@@ -161,6 +162,31 @@ public:
             expect (engine.undoTrackSequence (trackId));
             expectEquals (notesOf()[0].startTick, (juce::int64) 0);
             expectEquals (notesOf()[1].startTick, 8 * Q);
+        }
+
+        beginTest ("a moved region stays separate where it touches another, until glued");
+        {
+            // Region A in bar 1, region B in bar 5; B moves right after A (bar 2)
+            juce::Array<juce::var> notes { note (0, 4 * Q, 60), note (16 * Q, 2 * Q, 62) };
+            api.run ("clip.set", params ({ { "trackId", tid }, { "notes", notes } }));
+            const auto map = engine.getTransport().getTempoMap();
+
+            juce::Array<juce::var> moves {
+                params ({ { "trackId", tid }, { "start", 16 * Q }, { "end", 18 * Q }, { "destStart", 4 * Q } }) };
+            expect (api.run ("clip.moveRanges", params ({ { "moves", moves } }))["ok"]);
+            expectEquals ((int) computePhraseBlocks (*engine.getTrackSequence (trackId), *map).size(), 2);
+
+            // Other edits keep the cut
+            api.run ("clip.addNotes", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var> { note (32 * Q, Q, 64) } } }));
+            expectEquals ((int) computePhraseBlocks (*engine.getTrackSequence (trackId), *map).size(), 3);
+
+            // Glue at the contact point: one region again; undo separates them again
+            expect (api.run ("clip.glue", params ({ { "trackId", tid }, { "tick", 4 * Q } }))["ok"]);
+            expectEquals ((int) computePhraseBlocks (*engine.getTrackSequence (trackId), *map).size(), 2);
+            expect (! api.run ("clip.glue", params ({ { "trackId", tid }, { "tick", 4 * Q } }))["ok"]);   // no cut there now
+
+            expect (engine.undoTrackSequence (trackId));
+            expectEquals ((int) computePhraseBlocks (*engine.getTrackSequence (trackId), *map).size(), 3);
         }
 
         beginTest ("setControlRange replaces one controller's window only");

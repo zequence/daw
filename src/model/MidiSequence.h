@@ -90,6 +90,23 @@ public:
         return seq;
     }
 
+    // Region cuts (the arrangement's phrase blocks): ticks where a region boundary is kept even
+    // without silence - a region moved next to another stays separate until glued. A sequence
+    // built by create() has its cuts UNSET: storing it on a track keeps the track's cuts.
+    const std::vector<juce::int64>& getCuts() const noexcept { return cuts; }
+    bool areCutsSet() const noexcept                         { return cutsSet; }
+
+    Ptr withCuts (std::vector<juce::int64> newCuts) const
+    {
+        auto seq = std::shared_ptr<MidiSequence> (new MidiSequence (*this));
+        std::sort (newCuts.begin(), newCuts.end());
+        newCuts.erase (std::unique (newCuts.begin(), newCuts.end()), newCuts.end());
+        std::erase_if (newCuts, [] (juce::int64 tick) { return tick <= 0; });
+        seq->cuts = std::move (newCuts);
+        seq->cutsSet = true;
+        return seq;
+    }
+
     const std::vector<Note>& getNotes() const noexcept       { return notes; }
     const std::vector<Control>& getControls() const noexcept { return controls; }
     juce::int64 getLengthTicks() const noexcept              { return lengthTicks; }
@@ -122,6 +139,9 @@ public:
             e->setAttribute ("value", c.value);
         }
 
+        for (auto cut : cuts)
+            xml->createNewChildElement ("CUT")->setAttribute ("tick", juce::String (cut));
+
         return xml;
     }
 
@@ -151,7 +171,12 @@ public:
                                   e->getIntAttribute ("number"),
                                   e->getIntAttribute ("value") });
 
-        return create (std::move (notes), std::move (controls));
+        std::vector<juce::int64> cutTicks;
+
+        for (auto* e : xml.getChildWithTagNameIterator ("CUT"))
+            cutTicks.push_back (e->getStringAttribute ("tick").getLargeIntValue());
+
+        return create (std::move (notes), std::move (controls))->withCuts (std::move (cutTicks));
     }
 
 private:
@@ -160,6 +185,8 @@ private:
     std::vector<Note> notes;
     std::vector<Control> controls;
     juce::int64 lengthTicks = 0;
+    std::vector<juce::int64> cuts;
+    bool cutsSet = false;
 
     JUCE_LEAK_DETECTOR (MidiSequence)
 };

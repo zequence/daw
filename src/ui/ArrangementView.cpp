@@ -121,6 +121,19 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
     dragTargetTrack = 0;
     marquee = false;
 
+    // A click on a contact point glues the two regions
+    if (const auto glue = gluePointAt (position); glue.trackId != 0 && ! event.mods.isPopupMenu())
+    {
+        auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
+        params->setProperty ("trackId", glue.trackId);
+        params->setProperty ("tick", glue.tick);
+        runCommand ("clip.glue", params);
+        selection.clear();
+        setMouseCursor (juce::MouseCursor::NormalCursor);
+        repaint();
+        return;
+    }
+
     const auto hit = blockAt (position);
 
     if (event.mods.isPopupMenu())
@@ -336,9 +349,83 @@ void ArrangementView::moveSelection()
 
 void ArrangementView::mouseMove (const juce::MouseEvent& event)
 {
+    if (gluePointAt (event.getPosition()).trackId != 0)
+    {
+        setMouseCursor (glueCursor());
+        return;
+    }
+
     const auto hit = blockAt (event.getPosition());
     setMouseCursor (hit.valid() && isSelected (hit) ? juce::MouseCursor::DraggingHandCursor
                                                     : juce::MouseCursor::NormalCursor);
+}
+
+ArrangementView::GluePoint ArrangementView::gluePointAt (juce::Point<int> position)
+{
+    const auto items = itemsNow();
+    const auto index = itemIndexAt (items, position.y);
+
+    if (index < 0 || items[(size_t) index].member == 0)
+        return {};
+
+    const auto trackId = items[(size_t) index].member;
+    const auto sequence = engine.getTrackSequence (trackId);
+
+    if (sequence == nullptr || sequence->getCuts().empty())
+        return {};
+
+    const auto& blocks = blocksFor (trackId);
+    const auto map = engine.getTransport().getTempoMap();
+    const auto& cuts = sequence->getCuts();
+
+    for (size_t i = 1; i < blocks.size(); ++i)
+    {
+        const auto& before = blocks[i - 1];
+        const auto& after = blocks[i];
+
+        // Touching: only the cut keeps them apart (less than the two bars of silence that would)
+        const auto touching = after.startTick - before.endTick < 2 * map->getTicksPerBar (before.endTick);
+
+        if (touching && std::find (cuts.begin(), cuts.end(), after.startTick) != cuts.end()
+             && std::abs (position.x - tickToX (after.startTick)) <= 5)
+            return { trackId, after.startTick };
+    }
+
+    return {};
+}
+
+// A glue tube, nozzle down-left; the hotspot is the nozzle's tip
+juce::MouseCursor ArrangementView::glueCursor()
+{
+    static const auto cursor = []() -> juce::MouseCursor
+    {
+        constexpr int size = 24;
+        juce::Image image (juce::Image::ARGB, size, size, true);
+
+        {
+            juce::Graphics g (image);
+            juce::Path tube;
+            tube.addRoundedRectangle (-4.0f, -6.0f, 8.0f, 13.0f, 2.0f);                  // the body
+            tube.addTriangle (-2.5f, 7.0f, 2.5f, 7.0f, 0.0f, 12.5f);                        // the nozzle
+            tube.addRectangle (-4.5f, -8.0f, 9.0f, 2.0f);                                   // the crimped end
+            tube.applyTransform (juce::AffineTransform::rotation (juce::MathConstants<float>::pi * 0.25f)
+                                   .translated (13.0f, 11.0f));
+
+            g.setColour (juce::Colours::black);
+            g.strokePath (tube, juce::PathStrokeType (2.0f, juce::PathStrokeType::curved));
+            g.setColour (juce::Colours::white);
+            g.fillPath (tube);
+
+            g.setColour (juce::Colour (0xff3aa6c4));   // a drop of glue at the tip
+            g.fillEllipse (2.0f, 18.0f, 4.5f, 4.5f);
+            g.setColour (juce::Colours::black);
+            g.drawEllipse (2.0f, 18.0f, 4.5f, 4.5f, 1.0f);
+        }
+
+        return juce::MouseCursor (juce::ScaledImage (image), juce::Point<int> (4, 20));
+    }();
+
+    return cursor;
 }
 
 void ArrangementView::paintOverChildren (juce::Graphics& g)

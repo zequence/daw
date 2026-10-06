@@ -1396,6 +1396,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
             return true;
         }
 
+        if (contentView == ContentView::midiRegions)   // the arrangement: nothing selected
+        {
+            arrangementView.clearSelection();
+            return true;
+        }
+
         return false;
     }
 

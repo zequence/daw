@@ -98,6 +98,23 @@ public:
             expectEquals (nextPlayheadStop (Q + 5, false, nullptr, grid), Q);
         }
 
+        beginTest ("a region cut splits touching notes; the block starts at the cut");
+        {
+            // Notes in bars 1 and 2 (no silence between); a cut at bar 2
+            const auto plain = sequenceOf ({ { 0, 4 * Q, 1, 60, 100 }, { 4 * Q + Q, Q, 1, 62, 100 } });
+            expectEquals ((int) computePhraseBlocks (*plain, *map).size(), 1);
+
+            const auto cut = plain->withCuts ({ 4 * Q });
+            const auto blocks = computePhraseBlocks (*cut, *map);
+            expectEquals ((int) blocks.size(), 2);
+            expectEquals (blocks[1].startTick, 4 * Q);
+            expectEquals (blocks[0].endTick, 4 * Q);
+
+            // Cuts survive the XML round trip (project files)
+            const auto loaded = MidiSequence::fromXml (*cut->toXml());
+            expect (loaded->getCuts() == std::vector<juce::int64> { 4 * Q });
+        }
+
         beginTest ("empty sequence yields no blocks");
         {
             expect (computePhraseBlocks (*sequenceOf ({}), *map).empty());

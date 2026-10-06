@@ -25,7 +25,7 @@ A key that is typed into a text field goes to the field.
 |---|---|---|
 | Start / stop playback | Space | `transport.playStop` |
 | Back to the beginning | Home | `transport.home` |
-| Close the open view / go back | Esc | `view.back` |
+| Close the open view / go back (in the arrangement: select nothing) | Esc | `view.back` |
 | MIDI editor with the select pointer (toggle) | E | `view.edit` |
 | MIDI editor with the pen (toggle) | D | `view.draw` |
 | Performance monitor | F12 | `view.performance` |
@@ -37,7 +37,8 @@ A key that is typed into a text field goes to the field.
 
 Esc steps back one level: the expression map editor goes back to the instrument
 editor, the instrument editor to the instrument list, and other views to the
-arrangement. It also closes Settings.
+arrangement. It also closes Settings. In the arrangement it clears the region
+selection.
 
 ## MIDI editor
 

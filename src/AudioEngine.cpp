@@ -1276,6 +1276,10 @@ void AudioEngine::setTrackSequence (TrackId id, MidiSequence::Ptr sequence)
         track->redoStack.clear();
         track->redoGroups.clear();
 
+        // An edit that doesn't speak about cuts keeps the track's (they go when the clip is cleared)
+        if (sequence != nullptr && ! sequence->areCutsSet() && track->sequence != nullptr && ! track->sequence->getCuts().empty())
+            sequence = sequence->withCuts (track->sequence->getCuts());
+
         juce::Logger::writeToLog ("Track " + juce::String (id)
                                   + (sequence != nullptr ? ": sequence set (" + juce::String ((int) sequence->getNotes().size()) + " notes)"
                                                          : ": sequence cleared"));

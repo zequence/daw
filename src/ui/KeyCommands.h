@@ -28,7 +28,7 @@ namespace keys
         static const std::vector<Command> list {
             { "transport.playStop",   "Global", "Start / stop playback",                       { K (K::spaceKey) } },
             { "transport.home",       "Global", "Back to the beginning",                       { K (K::homeKey) } },
-            { "view.back",            "Global", "Close the open view / go back",               { K (K::escapeKey) } },
+            { "view.back",            "Global", "Close the open view / go back (in the arrangement: select nothing)", { K (K::escapeKey) } },
             { "view.edit",            "Global", "MIDI editor with the select pointer (toggle)", { K ('e') } },
             { "view.draw",            "Global", "MIDI editor with the pen (toggle)",           { K ('d') } },
             { "view.performance",     "Global", "Performance monitor",                         { K (K::F12Key) } },

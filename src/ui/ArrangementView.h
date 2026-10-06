@@ -35,7 +35,9 @@ public:
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     void paintOverChildren (juce::Graphics&) override;   // the selection rectangle
-    void mouseMove (const juce::MouseEvent&) override;   // a hand over selected regions (they move)
+    void mouseMove (const juce::MouseEvent&) override;   // a hand over selected regions (they move), glue at contact points
+
+    void clearSelection()   { selection.clear(); repaint(); }   // Esc
 
 private:
     struct BlockRef
@@ -92,6 +94,12 @@ private:
     bool isSelected (const BlockRef& block) const   { return std::find (selection.begin(), selection.end(), block) != selection.end(); }
     std::vector<BlockRef> blocksTouching (juce::Rectangle<int>);
     void moveSelection();
+
+    // Where two regions touch (kept apart by a region cut that alone separates them):
+    // hovering shows the glue pointer, clicking joins them
+    struct GluePoint { AudioEngine::TrackId trackId = 0; juce::int64 tick = -1; };
+    GluePoint gluePointAt (juce::Point<int>);
+    static juce::MouseCursor glueCursor();
 
     // Up/down moves keep the selection's shape: every block shifts by the same number of
     // tracks as the pressed one (limited so none falls off the list). Empty = no move.

@@ -1002,6 +1002,26 @@ void CommandDispatcher::registerCommands()
          "trackId:int start:int64 end:int64 destStart:int64 [destTrackId:int=trackId] [includeControls:bool=true]",
          rangeCopier (true));
 
+    // Glue: two touching regions become one (their cut goes)
+    add ("clip.glue", "Join the two regions that meet at 'tick' (removes the region cut there)",
+         "trackId:int tick:int64",
+         [this, requireTrack] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             const auto tick = (juce::int64) params.getProperty ("tick", 0);
+             const auto sequence = engine.getTrackSequence (id);
+
+             if (sequence == nullptr || std::find (sequence->getCuts().begin(), sequence->getCuts().end(), tick) == sequence->getCuts().end())
+                 return respond (fail ("no region cut at tick " + juce::String (tick)));
+
+             auto cuts = sequence->getCuts();
+             std::erase (cuts, tick);
+             engine.setTrackSequence (id, sequence->withCuts (std::move (cuts)));
+             respond (ok ({}));
+         });
+
     // Several regions at once (the arrangement's selection): every source range is read from the
     // tracks as they were, then each track is written ONCE - one undo step per track, one history entry
     add ("clip.moveRanges", "Move (or copy) several ranges at once, possibly to other tracks",
@@ -1019,7 +1039,8 @@ void CommandDispatcher::registerCommands()
              const auto ids = engine.getTrackIds();
              const auto known = [&ids] (int id) { return std::find (ids.begin(), ids.end(), (AudioEngine::TrackId) id) != ids.end(); };
 
-             struct Work { std::vector<MidiSequence::Note> notes; std::vector<MidiSequence::Control> controls; };
+             struct Work { std::vector<MidiSequence::Note> notes; std::vector<MidiSequence::Control> controls;
+                           std::vector<juce::int64> cuts; };
              std::map<int, Work> original, result;
 
              const auto load = [this, &original, &result] (int id)
@@ -1033,6 +1054,7 @@ void CommandDispatcher::registerCommands()
                  {
                      work.notes = sequence->getNotes();
                      work.controls = sequence->getControls();
+                     work.cuts = sequence->getCuts();
                  }
 
                  original[id] = work;
@@ -1064,6 +1086,9 @@ void CommandDispatcher::registerCommands()
 
                      if (includeControls)
                          std::erase_if (work.controls, [=] (const auto& c) { return c.tick >= start && c.tick < end; });
+
+                     // Cuts inside the region leave with it (its edges may still bound its neighbours)
+                     std::erase_if (work.cuts, [=] (juce::int64 cut) { return cut > start && cut < end; });
                  }
 
              for (auto& move : *moves)
@@ -1072,6 +1097,11 @@ void CommandDispatcher::registerCommands()
                  const int to = move.getProperty ("destTrackId", from);
                  const juce::int64 start = move.getProperty ("start", 0), end = move.getProperty ("end", 0);
                  const auto offset = (juce::int64) move.getProperty ("destStart", 0) - start;
+
+                 // The moved region stays a region of its own where it lands, even touching another
+                 // (until glued): cuts at its new edges
+                 result[to].cuts.push_back (start + offset);
+                 result[to].cuts.push_back (end + offset);
 
                  for (auto note : original[from].notes)
                      if (note.startTick >= start && note.startTick < end)
@@ -1094,7 +1124,8 @@ void CommandDispatcher::registerCommands()
              for (auto& [id, work] : result)
                  engine.setTrackSequence ((AudioEngine::TrackId) id, work.notes.empty() && work.controls.empty()
                                                                        ? nullptr
-                                                                       : MidiSequence::create (std::move (work.notes), std::move (work.controls)));
+                                                                       : MidiSequence::create (std::move (work.notes), std::move (work.controls))
+                                                                             ->withCuts (std::move (work.cuts)));
 
              auto reply = object();
              reply->setProperty ("tracks", (int) result.size());
