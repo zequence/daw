@@ -125,8 +125,9 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
     marquee = false;
     draggingFolder = {};
 
-    // A folder region: dragged sideways, with everything inside it
-    if (const auto span = folderSpanAt (position); span.folder != 0 && ! event.mods.isPopupMenu())
+    // A selected folder region: dragged sideways, with everything inside it (an unselected one is
+    // selected on release, like a region)
+    if (const auto span = folderSpanAt (position); isSelectedFolderSpan (span) && ! event.mods.isPopupMenu())
     {
         draggingFolder = span;
         draggingFolderTracks = tracksInFolder (span.folder);
@@ -263,6 +264,9 @@ void ArrangementView::mouseUp (const juce::MouseEvent& event)
             params->setProperty ("moves", moves);
             runCommand ("clip.moveRanges", params);
             selection.clear();
+
+            const auto landed = juce::jmax ((juce::int64) 0, draggingFolder.start + dragDeltaTicks);
+            selectedFolderSpan = { draggingFolder.folder, landed, landed + (draggingFolder.end - draggingFolder.start) };
         }
 
         draggingFolder = {};
@@ -272,8 +276,27 @@ void ArrangementView::mouseUp (const juce::MouseEvent& event)
         return;
     }
 
+    if (marquee && ! didDrag)
+    {
+        // A click on a folder region selects it (Ctrl keeps the region selection)
+        if (const auto span = folderSpanAt (dragStart); span.folder != 0)
+        {
+            if (! marqueeAdds)
+                selection.clear();
+
+            selectedFolderSpan = span;
+            marquee = false;
+            mouseMove (event);
+            repaint();
+            return;
+        }
+    }
+
     if (marquee)
     {
+        if (! marqueeAdds)
+            selectedFolderSpan = {};
+
         // A click selects the block under it - where regions overlap, only the top one (or clears);
         // a dragged rectangle selects everything it touches
         std::vector<BlockRef> touched;
@@ -418,7 +441,7 @@ void ArrangementView::mouseMove (const juce::MouseEvent& event)
         return;
     }
 
-    if (folderSpanAt (event.getPosition()).folder != 0)   // a folder region drags sideways
+    if (isSelectedFolderSpan (folderSpanAt (event.getPosition())))   // a selected folder region drags sideways
     {
         setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
         return;
@@ -811,9 +834,11 @@ void ArrangementView::paint (juce::Graphics& g)
                         continue;
 
                     const auto rect = juce::Rectangle<int> (x, y + 3, juce::jmax (8, right - x), height - 6);
-                    g.setColour (style.fill.withMultipliedAlpha (0.8f));
+                    const auto isSelectedSpan = isSelectedFolderSpan ({ item.folder, originalStart, 0 });
+                    const auto look = isSelectedSpan ? theme::regionStyle (base, true) : style;
+                    g.setColour (look.fill.withMultipliedAlpha (0.8f));
                     g.fillRoundedRectangle (rect.toFloat(), theme::corner);
-                    g.setColour (style.border);
+                    g.setColour (look.border);
                     g.drawRoundedRectangle (rect.toFloat(), theme::corner, 1.2f);
 
                     // The combined notes of the folder's tracks (a mini preview, as in the tracks' regions)

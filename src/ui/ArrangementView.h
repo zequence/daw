@@ -38,7 +38,7 @@ public:
     void paintOverChildren (juce::Graphics&) override;   // the selection rectangle
     void mouseMove (const juce::MouseEvent&) override;   // a hand over selected regions (they move), glue at contact points
 
-    void clearSelection()   { selection.clear(); repaint(); }   // Esc
+    void clearSelection()   { selection.clear(); selectedFolderSpan = {}; repaint(); }   // Esc
 
     // The tracks of the selected regions (each once)
     std::set<AudioEngine::TrackId> selectedTracks() const
@@ -127,6 +127,11 @@ private:
     struct FolderSpan { AudioEngine::FolderId folder = 0; juce::int64 start = 0, end = 0; };
     FolderSpan folderSpanAt (juce::Point<int>);
     FolderSpan draggingFolder;
+    FolderSpan selectedFolderSpan;   // a selected folder region (selected like a region: click, then drag)
+    bool isSelectedFolderSpan (const FolderSpan& span) const
+    {
+        return span.folder != 0 && span.folder == selectedFolderSpan.folder && span.start == selectedFolderSpan.start;
+    }
     std::vector<AudioEngine::TrackId> draggingFolderTracks;
 
     // Where a region starts touching or overlapping an earlier one (different region ids keep
