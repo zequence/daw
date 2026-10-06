@@ -45,7 +45,7 @@ namespace theme
     C (channelBg,        "channel.bg",        "Channel",  "Channel background",        -1,                      0xff2b2e33, false) \
     C (channelSelectedBg,"channel.selected.bg","Channel", "Selected channel background",-1,                      0xff4a5363, false) \
     C (channelBorder,    "channel.border",    "Channel",  "Channel border",            -1,                      0x00000000, true)  \
-    C (channelSelectedBorder,"channel.selected.border","Channel","Selected channel border",-1,                    0x00000000, true)  \
+\
     C (channelEdited,    "channel.edited",    "Channel",  "Shown in the MIDI editor (right edge)", -1,           0xff3aa6c4, false) \
     C (folderBg,         "folder.bg",         "Folder",   "Folder background",         -1,                      0xff2e3038, false) \
     C (folderBorder,     "folder.border",     "Folder",   "Folder border",             -1,                      0x00000000, true)  \
@@ -425,11 +425,6 @@ namespace theme
         g.setColour (colour (isFolder ? Token::folderBorder : Token::channelBorder));
         g.drawRoundedRectangle (bounds, corner, 1.0f);
 
-        // Selected: the brighter background says it; a border only if a theme gives it one
-        if (selected && ! isFolder)
-        {
-            g.setColour (colour (Token::channelSelectedBorder));
-            g.drawRoundedRectangle (bounds, corner, 1.0f);
-        }
+        // Selected: the brighter background says it (no outline)
     }
 }
