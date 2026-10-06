@@ -125,6 +125,79 @@ private:
     };
 
     //==========================================================================
+    // The pan knob: drawn here - a round knob, an arc from the centre to the setting, a pointer -
+    // with its value inside: 0 in the centre, -1 / 1 all the way, two decimals between. The
+    // number is dimmed except while the knob is being changed.
+    struct PanKnob final : juce::Slider
+    {
+        PanKnob() : juce::Slider (juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox)
+        {
+            setRotaryParameters (juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
+        }
+
+        static juce::String format (double value)
+        {
+            if (std::abs (value) < 0.005)  return "0";
+            if (value >= 0.995)            return "1";
+            if (value <= -0.995)           return "-1";
+            return juce::String (value, 2);
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            const auto box = getLocalBounds().toFloat().reduced (2.0f);
+            const auto size = juce::jmin (box.getWidth(), box.getHeight());
+            const auto circle = juce::Rectangle<float> (size, size).withCentre (box.getCentre());
+            const auto centre = circle.getCentre();
+            const auto radius = size * 0.5f;
+            const auto params = getRotaryParameters();
+            const auto proportion = (float) valueToProportionOfLength (getValue());
+            const auto angle = params.startAngleRadians + proportion * (params.endAngleRadians - params.startAngleRadians);
+            const auto middle = (params.startAngleRadians + params.endAngleRadians) * 0.5f;
+
+            // The track, and the arc from the centre to the setting
+            juce::Path track, arc;
+            track.addCentredArc (centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f, params.startAngleRadians, params.endAngleRadians, true);
+            g.setColour (juce::Colour (0xff15171a));
+            g.strokePath (track, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+            if (std::abs (angle - middle) > 0.01f)
+            {
+                arc.addCentredArc (centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f, middle, angle, true);
+                g.setColour (theme::colour (theme::Token::buttonAccentOn));
+                g.strokePath (arc, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            }
+
+            // The knob: a dark body with a soft light from above
+            const auto body = circle.reduced (5.0f);
+            g.setGradientFill (juce::ColourGradient (juce::Colour (0xff3a3e46), body.getCentreX(), body.getY(),
+                                                     juce::Colour (0xff23262b), body.getCentreX(), body.getBottom(), false));
+            g.fillEllipse (body);
+            g.setColour (juce::Colours::black.withAlpha (0.6f));
+            g.drawEllipse (body, 1.0f);
+
+            // The pointer: easy to see - from the rim inwards, white with a dark outline (clear of the number)
+            const auto inner = body.getWidth() * 0.5f;
+            const auto tip = centre.getPointOnCircumference (inner + 1.0f, angle);
+            const auto base = centre.getPointOnCircumference (inner - 7.0f, angle);
+            juce::Path pointer;
+            pointer.startNewSubPath (base);
+            pointer.lineTo (tip);
+            g.setColour (juce::Colours::black.withAlpha (0.8f));
+            g.strokePath (pointer, juce::PathStrokeType (4.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.setColour (juce::Colours::white);
+            g.strokePath (pointer, juce::PathStrokeType (2.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+
+            // The value, dimmed unless it's being changed
+            g.setColour (juce::Colours::white.withAlpha (isMouseButtonDown() ? 0.95f : 0.4f));
+            g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
+            g.drawText (format (getValue()), body.toNearestInt(), juce::Justification::centred, false);
+        }
+
+        void mouseUp (const juce::MouseEvent& event) override   { juce::Slider::mouseUp (event); repaint(); }
+    };
+
+    //==========================================================================
     // A grey box with a caption: a part of the strip that isn't built yet
     struct Placeholder final : juce::Component, juce::SettableTooltipClient
     {
@@ -174,8 +247,6 @@ private:
             if (channelId != 0)
                 addAndMakeVisible (sends);
 
-            pan.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
-            pan.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
             pan.setRange (-1.0, 1.0, 0.01);
             pan.setDoubleClickReturnValue (true, 0.0);
             pan.setTooltip ("Pan (double-click: centre)");
@@ -313,7 +384,8 @@ private:
         const AudioEngine::AudioChannelId channelId;   // 0 = the master
         juce::Label name, level, output;
         Placeholder inserts { "Inserts", 4 }, sends { "Sends", 2 };
-        juce::Slider pan, fader;
+        PanKnob pan;
+        juce::Slider fader;
         Meter meter;
         juce::TextButton solo { "S" }, mute { "M" };
     };
