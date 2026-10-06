@@ -4,7 +4,7 @@
 
 // Where Left/Right moves the transport line in the MIDI editor. Right: to the nearest
 // note end ahead; left: to the nearest note start behind (with parallel notes, the
-// closest one). No note that way: one grid step.
+// closest one). No note that way: to the next grid line.
 inline juce::int64 nextPlayheadStop (juce::int64 position, bool forward, const MidiSequence* sequence, juce::int64 step)
 {
     juce::int64 best = -1;
@@ -28,5 +28,10 @@ inline juce::int64 nextPlayheadStop (juce::int64 position, bool forward, const M
     if (best >= 0)
         return best;
 
-    return juce::jmax ((juce::int64) 0, position + (forward ? step : -step));
+    step = juce::jmax ((juce::int64) 1, step);
+
+    if (forward)
+        return (position / step + 1) * step;
+
+    return juce::jmax ((juce::int64) 0, ((position + step - 1) / step - 1) * step);
 }

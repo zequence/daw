@@ -1407,6 +1407,10 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (triggerArticulation ([&key] (const ExpressionMap& map) { return map.findByKeyCommand (key.getTextDescription()); }))
         return true;
 
+    // The MIDI editor's keys work while it shows, even when the focus is elsewhere (opened with E or D)
+    if (pianoRollView.isShowing() && ! pianoRollView.hasKeyboardFocus (true) && pianoRollView.keyPressed (key))
+        return true;
+
     // (KeyCommands.h lists these; Settings > Key commands changes them; KEY_COMMANDS.md documents them)
     if (keys::matches ("view.edit", key) || keys::matches ("view.draw", key))
     {

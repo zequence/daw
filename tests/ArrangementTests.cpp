@@ -94,6 +94,8 @@ public:
             expectEquals (nextPlayheadStop (4 * Q, false, seq.get(), grid), (juce::int64) 0);
             expectEquals (nextPlayheadStop (0, false, seq.get(), grid), (juce::int64) 0); // clamps at the start
             expectEquals (nextPlayheadStop (Q, false, nullptr, grid), Q - grid);
+            expectEquals (nextPlayheadStop (Q + 5, true, nullptr, grid), Q + grid);   // off the grid: to the next line
+            expectEquals (nextPlayheadStop (Q + 5, false, nullptr, grid), Q);
         }
 
         beginTest ("empty sequence yields no blocks");

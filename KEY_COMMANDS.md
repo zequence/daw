@@ -14,7 +14,7 @@ ids shown below. A test fails if a command there is missing from this file.
    The note input toggle (N) works whenever the MIDI editor shows.
 2. **Articulation keys** from the selected track's expression map. These are set
    per map in the expression map editor, not here.
-3. **MIDI editor** keys, when the editor has the keyboard focus (click in it).
+3. **MIDI editor** keys, while the MIDI editor shows.
 4. **Global** keys.
 
 A key that is typed into a text field goes to the field.
@@ -46,8 +46,8 @@ arrangement. It also closes Settings.
 | Note input on / off | N | `editor.noteInput` |
 | Delete the selected notes | Delete, Backspace | `editor.delete` |
 | Select all notes | Ctrl+A | `editor.selectAll` |
-| Transport line to the previous note start (else a grid step) | Left | `editor.playheadLeft` |
-| Transport line to the next note end (else a grid step) | Right | `editor.playheadRight` |
+| Transport line to the previous note start (else the next grid line) | Left | `editor.playheadLeft` |
+| Transport line to the next note end (else the next grid line) | Right | `editor.playheadRight` |
 | Move the selected notes a grid step earlier | Alt+Left | `editor.nudgeLeft` |
 | Move the selected notes a grid step later | Alt+Right | `editor.nudgeRight` |
 | Transpose the selected notes a half step up | Up | `editor.transposeUp` |
@@ -55,7 +55,8 @@ arrangement. It also closes Settings.
 | Transpose the selected notes an octave up | Ctrl+Up | `editor.octaveUp` |
 | Transpose the selected notes an octave down | Ctrl+Down | `editor.octaveDown` |
 
-With parallel notes, Left and Right stop at the closest start or end first.
+With parallel notes, Left and Right stop at the closest start or end first. With no note
+that way, they move to the next grid line of the editor's division.
 
 ## Note input
 
