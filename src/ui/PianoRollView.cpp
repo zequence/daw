@@ -432,40 +432,42 @@ juce::String PianoRollView::laneValueAt (juce::Point<int> position) const
 
     const auto lane = lanes::parse (shownLanes()[index]);
     const auto tick = xToTick (position.x);
+    const auto name = lane.kind == lanes::Kind::velocity ? juce::String ("Velocity")
+                                                         : lanes::Settings::get().displayName (shownLanes()[index]);
+    const auto shown = [&lane] (int v) { return lane.kind == lanes::Kind::pitchBend ? juce::String (v - 8192) : juce::String (v); };
 
-    const auto inMaximized = laneArea().contains (position);
-    const auto atHeight = [&]
-    {
-        const auto v = laneValueFromY (position.y);
-        return lanes::Settings::get().displayName (shownLanes()[index]) + ": "
-                 + (lane.kind == lanes::Kind::pitchBend ? juce::String (v - 8192) : juce::String (v));
-    };
+    // What is there now at the mouse's x: the note's velocity, or the controller's value
+    int current = -1;
 
     if (lane.kind == lanes::Kind::velocity)
     {
         for (auto& note : seq->getNotes())
             if (tick >= note.startTick && tick < note.startTick + note.lengthTicks)
-                return "Velocity " + juce::String (note.velocity);
-
-        return inMaximized ? atHeight() : juce::String();
+            {
+                current = note.velocity;
+                break;
+            }
     }
-
-    int value = -1;
-
-    for (auto& control : seq->getControls())
+    else
     {
-        if (control.tick > tick)
-            break;
+        for (auto& control : seq->getControls())
+        {
+            if (control.tick > tick)
+                break;
 
-        if (lane.shows (control))
-            value = control.value;
+            if (lane.shows (control))
+                current = control.value;
+        }
     }
 
-    if (value < 0)
-        return inMaximized ? atHeight() : juce::String();
+    // The maximized lane: the value at the mouse's height - what a drag sets - and what is there now
+    if (laneArea().contains (position))
+    {
+        const auto atHeight = laneValueFromY (position.y);
+        return name + " " + shown (atHeight) + (current >= 0 && current != atHeight ? "  (now " + shown (current) + ")" : juce::String());
+    }
 
-    const auto name = lanes::Settings::get().displayName (shownLanes()[index]);
-    return name + ": " + (lane.kind == lanes::Kind::pitchBend ? juce::String (value - 8192) : juce::String (value));
+    return current >= 0 ? name + " " + shown (current) : juce::String();   // a minimized lane: what is there
 }
 
 juce::int64 PianoRollView::xToTick (int x) const
@@ -1590,7 +1592,8 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
 
             {
                 laneGesture[tick] = laneValueFromY (position.y);
-                hoverValue = juce::String (laneMode() == LaneMode::pitchBend ? laneGesture[tick] - 8192 : laneGesture[tick]);
+                hoverValue = lanes::Settings::get().displayName (maximizedLaneId()) + " "
+                               + juce::String (laneMode() == LaneMode::pitchBend ? laneGesture[tick] - 8192 : laneGesture[tick]);
                 hoverPoint = position;
             }
         }

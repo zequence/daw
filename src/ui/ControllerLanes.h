@@ -227,8 +227,12 @@ namespace lanes
         normalized = juce::jlimit (0.0f, 1.0f, normalized);
 
         if (kind == Kind::velocity)
-            return juce::Colour::fromHSV (0.62f - 0.12f * normalized, 0.72f - 0.12f * normalized,   // blue 223deg (soft, still
-                                          0.82f + 0.18f * normalized, 1.0f);                       // well visible) -> cyan 180deg (loud)
+        {
+            // Purple-blue 252deg (soft, still well visible) -> cyan 180deg (loud). The hue moves most
+            // near the top: cyans look alike, so the loud velocities need the bigger steps
+            const auto t = std::pow (normalized, 1.6f);
+            return juce::Colour::fromHSV (0.70f - 0.20f * t, 0.62f - 0.07f * normalized, 0.8f + 0.2f * normalized, 1.0f);
+        }
 
         // dark purple, almost blue (250deg, dim) -> bright magenta (305deg), not too saturated
         return juce::Colour::fromHSV (0.695f + 0.152f * normalized, 0.62f - 0.07f * normalized,
