@@ -555,7 +555,6 @@ void PianoRollView::commitLaneGesture()
 
     juce::Array<juce::var> events;
 
-    if (! laneErasing)
     {
         for (auto& [tick, value] : laneGesture)
         {
@@ -571,7 +570,6 @@ void PianoRollView::commitLaneGesture()
 
     laneGesture.clear();
     gestureMinTick = gestureMaxTick = -1;
-    laneErasing = false;
 }
 
 //==============================================================================
@@ -1373,10 +1371,15 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
 
     if (laneArea().contains (position))
     {
+        if (event.mods.isPopupMenu())   // right-click: the lane menu (never erasing)
+        {
+            showLaneMenu();
+            return;
+        }
+
         drag = Drag::lane;
         laneGesture.clear();
         gestureMinTick = gestureMaxTick = -1;
-        laneErasing = event.mods.isPopupMenu() && laneMode() != LaneMode::velocity;
         mouseDrag (event);
         return;
     }
@@ -1579,7 +1582,6 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
             gestureMinTick = gestureMinTick < 0 ? tick : juce::jmin (gestureMinTick, tick);
             gestureMaxTick = juce::jmax (gestureMaxTick, tick);
 
-            if (! laneErasing)
             {
                 laneGesture[tick] = laneValueFromY (position.y);
                 hoverValue = juce::String (laneMode() == LaneMode::pitchBend ? laneGesture[tick] - 8192 : laneGesture[tick]);
@@ -2164,18 +2166,12 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
             }
 
             // Gesture overlay
-            if (drag == Drag::lane && ! laneErasing)
+            if (drag == Drag::lane)
             {
                 g.setColour (juce::Colours::orange);
 
                 for (auto& [tick, value] : laneGesture)
                     g.fillRect (tickToX (tick) - 1, laneValueToY (value) - 1, 3, 3);
-            }
-            else if (drag == Drag::lane && laneErasing && gestureMinTick >= 0)
-            {
-                g.setColour (juce::Colours::red.withAlpha (0.25f));
-                g.fillRect (tickToX (gestureMinTick), lane.getY(),
-                            juce::jmax (2, tickToX (gestureMaxTick) - tickToX (gestureMinTick)), lane.getHeight());
             }
         }
     }

@@ -200,7 +200,6 @@ private:
     // CC/bend lane gesture (tick -> value while drawing)
     std::map<juce::int64, int> laneGesture;
     juce::int64 gestureMinTick = -1, gestureMaxTick = -1;
-    bool laneErasing = false;
 
     // Toolbar
     juce::TextButton auditionToggle { "Hear" }, inputToggle { "Input" };
