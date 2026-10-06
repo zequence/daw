@@ -251,7 +251,7 @@ namespace lanes
 
         if (kind == Kind::velocity)
         {
-            // Violet 262deg (soft) -> cyan 180deg (loud), the hue moving more near the top (cyans look
+            // Violet 262deg (soft) -> a blue-leaning cyan 194deg (loud; 180 looks greenish), the hue moving more near the top (cyans look
             // alike). The brightness is set by how bright each hue LOOKS, so the ramp goes evenly
             // from dark to light - purple doesn't outshine the blue after it, nor cyan jump out
             static const auto table = []
@@ -262,7 +262,7 @@ namespace lanes
                 {
                     const auto n = (float) v / 127.0f;
                     const auto t = std::pow (n, 1.4f);
-                    colours[(size_t) v] = withLuminance (0.728f - 0.228f * t, 0.62f - 0.1f * n, 0.07f + 0.43f * n);
+                    colours[(size_t) v] = withLuminance (0.728f - 0.188f * t, 0.62f - 0.1f * n, 0.07f + 0.43f * n);
                 }
 
                 return colours;
