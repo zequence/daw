@@ -107,9 +107,23 @@ private:
     // (same Y axis); declared before both.
     sidebar::VerticalScroll trackScroll;
     // Above the lists: MIDI / AUDIO in a block of the domain's colour, the letters in
-    // the background colour (inverted)
+    // the background colour (inverted). The block spans about 90% of the sidebar at its
+    // minimum width; the letters are sized to fill it (both words the same size).
     struct SidebarHeader final : juce::Component
     {
+        static constexpr int minSidebarWidth = 150;
+        static constexpr int blockWidth = minSidebarWidth * 9 / 10, padding = 8, margin = 6;
+
+        static juce::Font font()
+        {
+            auto base = juce::Font (juce::FontOptions (12.0f, juce::Font::bold | juce::Font::italic).withKerningFactor (0.12f));
+            const auto width = juce::GlyphArrangement::getStringWidth (base, "AUDIO");   // the longer word
+            return base.withHeight (12.0f * (float) (blockWidth - 2 * padding) / juce::jmax (1.0f, width));
+        }
+
+        static int blockHeight()      { return juce::roundToInt (font().getAscent() + 2 * padding * 0.6f); }
+        static int preferredHeight()  { return blockHeight() + 2 * margin; }
+
         void set (const juce::String& newText, juce::Colour newColour)
         {
             text = newText;
@@ -119,14 +133,13 @@ private:
 
         void paint (juce::Graphics& g) override
         {
-            const auto font = juce::Font (juce::FontOptions (12.0f, juce::Font::bold | juce::Font::italic).withKerningFactor (0.12f));
-            const auto textWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, text));
-            const auto block = juce::Rectangle<int> (8, 0, textWidth + 14, 18).withCentre ({ 8 + (textWidth + 14) / 2, getHeight() / 2 });
+            const auto block = juce::Rectangle<int> (0, 0, juce::jmin (blockWidth, getWidth() - 2 * margin), blockHeight())
+                                   .withCentre ({ getWidth() / 2, getHeight() / 2 });
 
             g.setColour (colour);
             g.fillRoundedRectangle (block.toFloat(), theme::corner);
             g.setColour (theme::colour (theme::Token::surfaceWindow));
-            g.setFont (font);
+            g.setFont (font());
             g.drawText (text, block, juce::Justification::centred, false);
         }
 
