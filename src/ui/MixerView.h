@@ -130,7 +130,7 @@ private:
             addAndMakeVisible (name);
 
             inserts.setTooltip (placeholderTip);
-            inserts.slots = kind == Kind::channel ? 16 : 8;   // channels 16 inserts, Aux buses and the master 8
+            inserts.slots = kind == Kind::aux ? 8 : 16;   // channels and the master 16 inserts, Aux buses 8
             addChildComponent (inserts);
 
             // The inserts sit behind the EQ and dynamics: this flips between them
@@ -374,7 +374,7 @@ private:
 
             if (kind == Kind::master)
             {
-                inserts.setBounds (area.removeFromTop (150));
+                inserts.setBounds (area.removeFromTop (330));   // its 16 slots
                 area.removeFromTop (5);
             }
             else

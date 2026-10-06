@@ -761,7 +761,7 @@ scanned but filtered out.
 
 - **Console styles** (added 2026-10-07). The strip is drawn in a console style;
   SSL first (others later, chosen in the mixer's header). The SSL strip, top to
-  bottom: the inserts (16 on a channel, 8 on an Aux bus and the master) behind the
+  bottom: the inserts (16 on a channel and the master, 8 on an Aux bus) behind the
   EQ and dynamics, flipped with a button at the top; EQ after the SSL 4000 E channel (HPF, LPF; HF gain / freq +
   BELL; HMF gain / freq / Q; LMF gain / freq / Q; LF gain / freq + BELL; EQ IN);
   dynamics (threshold, ratio, attack, release, make-up; DYN IN); six aux send
