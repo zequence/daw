@@ -34,6 +34,7 @@ public:
     void mouseUp (const juce::MouseEvent&) override;
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+    void paintOverChildren (juce::Graphics&) override;   // the selection rectangle
 
 private:
     struct BlockRef
@@ -42,6 +43,7 @@ private:
         juce::int64 startTick = 0, endTick = 0;
 
         bool valid() const noexcept { return trackId != 0 && endTick > startTick; }
+        bool operator== (const BlockRef& other) const noexcept { return trackId == other.trackId && startTick == other.startTick; }
     };
 
     using Items = std::vector<AudioEngine::SidebarItem>;
@@ -83,8 +85,17 @@ private:
 
     std::map<AudioEngine::TrackId, CacheEntry> cache;
 
-    // Interaction state
-    BlockRef selected, dragging;
+    // Interaction state. A press on a selected block moves the selection; anywhere
+    // else draws a selection rectangle, which selects what it touches on release
+    // (Ctrl adds to the selection).
+    bool isSelected (const BlockRef& block) const   { return std::find (selection.begin(), selection.end(), block) != selection.end(); }
+    std::vector<BlockRef> blocksTouching (juce::Rectangle<int>);
+    void moveSelection();
+
+    std::vector<BlockRef> selection;
+    BlockRef dragging;                     // the pressed block of a move (its snap and its track lead)
+    bool marquee = false, marqueeAdds = false;
+    juce::Point<int> dragNow;
     juce::Point<int> dragStart;
     juce::int64 dragDeltaTicks = 0;
     AudioEngine::TrackId dragTargetTrack = 0;   // the track under the mouse (up/down moves to it)

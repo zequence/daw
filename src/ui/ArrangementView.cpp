@@ -114,11 +114,12 @@ void ArrangementView::runCommand (const juce::String& cmd, juce::DynamicObject::
 void ArrangementView::mouseDown (const juce::MouseEvent& event)
 {
     const auto position = event.getPosition();
-    dragStart = position;
+    dragStart = dragNow = position;
     dragDeltaTicks = 0;
     didDrag = false;
     dragging = {};
     dragTargetTrack = 0;
+    marquee = false;
 
     const auto hit = blockAt (position);
 
@@ -126,31 +127,27 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
     {
         if (hit.valid())
         {
-            selected = hit;
+            if (! isSelected (hit))
+                selection = { hit };
+
             showBlockMenu (hit);
         }
 
+        repaint();
         return;
     }
 
-    selected = hit;
-
-    if (hit.valid())
+    if (hit.valid() && isSelected (hit))
     {
+        // Moving starts only on something already selected (Ctrl = copy)
         dragging = hit;
         dragTargetTrack = hit.trackId;
         dragIsCopy = event.mods.isCtrlDown();
-
-        if (onSelectTrack)
-            onSelectTrack (hit.trackId);
     }
     else
     {
-        const auto items = itemsNow();
-        const auto index = itemIndexAt (items, position.y);
-
-        if (index >= 0 && items[(size_t) index].member != 0 && onSelectTrack)
-            onSelectTrack (items[(size_t) index].member);
+        marquee = true;
+        marqueeAdds = event.mods.isCtrlDown();
     }
 
     repaint();
@@ -158,6 +155,17 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
 
 void ArrangementView::mouseDrag (const juce::MouseEvent& event)
 {
+    dragNow = event.getPosition();
+
+    if (event.getDistanceFromDragStart() > 2)
+        didDrag = true;
+
+    if (marquee)
+    {
+        repaint();
+        return;
+    }
+
     if (! dragging.valid())
         return;
 
@@ -166,42 +174,131 @@ void ArrangementView::mouseDrag (const juce::MouseEvent& event)
                                   : juce::jmax ((juce::int64) 0, dragging.startTick + rawDelta);
     dragDeltaTicks = target - dragging.startTick;
 
-    // Up/down: to the track under the mouse (folders and empty space keep the last one)
+    // Up/down (a single block): to the track under the mouse (folders and empty space keep the last one)
     const auto items = itemsNow();
 
-    if (const auto index = itemIndexAt (items, event.y); index >= 0 && items[(size_t) index].member != 0)
+    if (const auto index = itemIndexAt (items, event.y); selection.size() == 1 && index >= 0 && items[(size_t) index].member != 0)
         dragTargetTrack = items[(size_t) index].member;
 
-    didDrag = true;
     repaint();
 }
 
-void ArrangementView::mouseUp (const juce::MouseEvent&)
+std::vector<ArrangementView::BlockRef> ArrangementView::blocksTouching (juce::Rectangle<int> area)
 {
-    const auto toTrack = dragTargetTrack != 0 ? dragTargetTrack : dragging.trackId;
+    std::vector<BlockRef> touched;
+    const auto items = itemsNow();
 
-    if (dragging.valid() && didDrag && (dragDeltaTicks != 0 || toTrack != dragging.trackId))
+    for (size_t i = 0; i < items.size(); ++i)
     {
-        const auto destStart = juce::jmax ((juce::int64) 0, dragging.startTick + dragDeltaTicks);
+        if (items[i].member == 0)
+            continue;
 
-        auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
-        params->setProperty ("trackId", dragging.trackId);
-        params->setProperty ("start", dragging.startTick);
-        params->setProperty ("end", dragging.endTick);
-        params->setProperty ("destStart", destStart);
-        params->setProperty ("destTrackId", toTrack);
-        runCommand (dragIsCopy ? "clip.copyRange" : "clip.moveRange", params);
+        const auto top = rowTop (items, i);
 
-        if (toTrack != dragging.trackId && onSelectTrack)
-            onSelectTrack (toTrack);
+        for (auto& block : blocksFor (items[i].member))
+        {
+            const BlockRef ref { items[i].member, block.startTick, block.endTick };
 
-        selected = { toTrack, destStart, destStart + (dragging.endTick - dragging.startTick) };
+            if (blockRect (ref, top).intersects (area))
+                touched.push_back (ref);
+        }
     }
 
+    return touched;
+}
+
+void ArrangementView::mouseUp (const juce::MouseEvent& event)
+{
+    if (marquee)
+    {
+        // A click is a 1-pixel rectangle: it selects the block under it (or clears)
+        auto area = juce::Rectangle<int> (dragStart, dragNow);
+        area.setSize (juce::jmax (1, area.getWidth()), juce::jmax (1, area.getHeight()));
+        const auto touched = blocksTouching (area);
+
+        if (! marqueeAdds)
+            selection.clear();
+
+        for (auto& block : touched)
+            if (! isSelected (block))
+                selection.push_back (block);
+
+        // The track follows the click (or the first block touched)
+        const auto items = itemsNow();
+        const auto index = itemIndexAt (items, dragStart.y);
+
+        if (onSelectTrack)
+        {
+            if (! touched.empty())
+                onSelectTrack (touched.front().trackId);
+            else if (index >= 0 && items[(size_t) index].member != 0)
+                onSelectTrack (items[(size_t) index].member);
+        }
+    }
+    else if (dragging.valid())
+    {
+        if (didDrag)
+            moveSelection();
+        else if (event.mods.isCtrlDown())
+            std::erase (selection, dragging);   // Ctrl-click on a selected block deselects it
+        else
+            selection = { dragging };           // a plain click narrows to this block
+
+        if (onSelectTrack && ! selection.empty())
+            onSelectTrack (selection.front().trackId);
+    }
+
+    marquee = false;
     dragging = {};
     dragDeltaTicks = 0;
     dragTargetTrack = 0;
     repaint();
+}
+
+// Moves (or copies) every selected block by the drag; a single block may also change track.
+// Blocks on one track are processed so a moved range never lands on one still to move.
+void ArrangementView::moveSelection()
+{
+    const auto toTrack = selection.size() == 1 && dragTargetTrack != 0 ? dragTargetTrack : 0;
+
+    if (dragDeltaTicks == 0 && (toTrack == 0 || toTrack == selection.front().trackId))
+        return;
+
+    auto order = selection;
+    std::sort (order.begin(), order.end(), [forward = dragDeltaTicks > 0] (const BlockRef& a, const BlockRef& b)
+               { return forward ? a.startTick > b.startTick : a.startTick < b.startTick; });
+
+    std::vector<BlockRef> moved;
+
+    for (auto& block : order)
+    {
+        const auto destStart = juce::jmax ((juce::int64) 0, block.startTick + dragDeltaTicks);
+        const auto destTrack = toTrack != 0 ? toTrack : block.trackId;
+
+        auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
+        params->setProperty ("trackId", block.trackId);
+        params->setProperty ("start", block.startTick);
+        params->setProperty ("end", block.endTick);
+        params->setProperty ("destStart", destStart);
+        params->setProperty ("destTrackId", destTrack);
+        runCommand (dragIsCopy ? "clip.copyRange" : "clip.moveRange", params);
+
+        moved.push_back ({ destTrack, destStart, destStart + (block.endTick - block.startTick) });
+    }
+
+    selection = moved;   // (blocks recompute from the notes; the refs re-match at their new starts)
+}
+
+void ArrangementView::paintOverChildren (juce::Graphics& g)
+{
+    if (! marquee || ! didDrag)
+        return;
+
+    const auto area = juce::Rectangle<int> (dragStart, dragNow).toFloat();
+    g.setColour (theme::colour (theme::Token::selectionBorder).withAlpha (0.15f));
+    g.fillRect (area);
+    g.setColour (theme::colour (theme::Token::selectionBorder));
+    g.drawRect (area, 1.0f);
 }
 
 void ArrangementView::mouseDoubleClick (const juce::MouseEvent& event)
@@ -287,7 +384,7 @@ void ArrangementView::showBlockMenu (const BlockRef& block)
         params->setProperty ("start", block.startTick);
         params->setProperty ("end", block.endTick);
         safe->runCommand ("clip.eraseRange", params);
-        safe->selected = {};
+        std::erase (safe->selection, block);
     });
 
     menu.showMenuAsync (juce::PopupMenu::Options());
@@ -407,10 +504,8 @@ void ArrangementView::paint (juce::Graphics& g)
             for (auto& block : blocksFor (trackId))
             {
                 BlockRef ref { trackId, block.startTick, block.endTick };
-                const auto isSelected = selected.valid() && selected.trackId == trackId
-                                          && selected.startTick == block.startTick;
-                const auto isDragged = dragging.valid() && dragging.trackId == trackId
-                                         && dragging.startTick == block.startTick && didDrag;
+                const auto selectedBlock = isSelected (ref);
+                const auto isDragged = dragging.valid() && didDrag && selectedBlock;
 
                 if (isDragged)
                 {
@@ -418,13 +513,13 @@ void ArrangementView::paint (juce::Graphics& g)
                     ref.endTick += dragDeltaTicks;
                 }
 
-                const auto rect = blockRect (ref, isDragged && dragTargetTrack != 0 ? targetLaneTop : y);
+                const auto rect = blockRect (ref, isDragged && selection.size() == 1 && dragTargetTrack != 0 ? targetLaneTop : y);
 
                 if (rect.getRight() < TimeAxis::gutter || rect.getX() > getWidth())
                     continue;
 
                 // Opacity and brightness of the box and border come from the theme
-                const auto style = theme::regionStyle (base, isSelected || isDragged);
+                const auto style = theme::regionStyle (base, selectedBlock || isDragged);
 
                 g.setColour (style.fill);
                 g.fillRoundedRectangle (rect.toFloat(), theme::corner);
