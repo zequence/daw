@@ -45,6 +45,24 @@ arrangement. It also closes Settings. In the MIDI editor, Esc first deselects th
 selected notes and closes the editor only when nothing is selected. In the arrangement
 it clears the region selection.
 
+## Mouse in the arrangement
+
+These are mouse gestures, not key commands, so they can't be changed in Settings.
+
+| Gesture | What it does |
+|---|---|
+| Click a region | Selects it (Ctrl adds it to the selection) |
+| Drag on empty space | A selection rectangle; what it touches is selected on release (Ctrl adds) |
+| Alt + drag | A selection rectangle, even when starting on a region (Alt+Ctrl adds) |
+| Drag a selected region | Moves the selection (Ctrl copies); up/down moves it to other tracks |
+| Drag a selected folder region | Moves everything inside the folder, sideways only |
+| Double-click a region | Opens the MIDI editor (a folder region: on all its tracks) |
+| Click where two regions meet (glue pointer) | Joins them into one region |
+
+With **Settings > Editor > Moving regions** set to "Select and move in one go", pressing
+any region selects and drags it straight away; use Alt + drag for a selection rectangle
+that starts on a region.
+
 ## MIDI editor
 
 | Command | Default | Id |

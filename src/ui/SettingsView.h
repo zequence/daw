@@ -142,7 +142,8 @@ public:
         moveModeBox.addItem ("Select first, then move", 1);
         moveModeBox.addItem ("Select and move in one go", 2);
         moveModeBox.setTooltip ("Select first: a click selects, and a selected region drags. In one go: pressing any region "
-                                "drags it straight away (a selection rectangle then starts on empty space).");
+                                "drags it straight away (a selection rectangle then starts on empty space). Alt+drag always "
+                                "draws a selection rectangle, on regions too.");
         moveModeBox.setSelectedId (editorSettings::moveRegionsDirectly (settings) ? 2 : 1, juce::dontSendNotification);
         moveModeBox.setWantsKeyboardFocus (false);
         moveModeBox.onChange = [this]

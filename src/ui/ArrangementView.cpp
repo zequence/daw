@@ -128,6 +128,14 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
 
     // A selected folder region: dragged sideways, with everything inside it (an unselected one is
     // selected on release, like a region)
+    // Alt: a selection rectangle wherever the press is, on a region too (Alt+Ctrl adds)
+    if (event.mods.isAltDown() && ! event.mods.isPopupMenu())
+    {
+        marquee = true;
+        marqueeAdds = event.mods.isCtrlDown();
+        return;
+    }
+
     const auto moveDirectly = editorSettings::moveRegionsDirectly (engine.getSettingsFile());
 
     if (const auto span = folderSpanAt (position); span.folder != 0 && ! event.mods.isPopupMenu()
