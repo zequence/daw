@@ -125,6 +125,74 @@ public:
             expectEquals (added[0].region, 1);
         }
 
+        beginTest ("overlapped notes across regions: the earlier stops, the later lasts as long");
+        {
+            auto withRegion = [] (MidiSequence::Note note, int region) { note.region = region; return note; };
+
+            // C4 from 0 to 4Q (region 0); C4 again at 1Q for 1Q (region 1): cut at 1Q, the later lasts to 4Q
+            const auto seq = sequenceOf ({ { 0, 4 * Q, 1, 60, 100 }, withRegion ({ Q, Q, 1, 60, 90 }, 1),
+                                           { 0, 4 * Q, 1, 64, 100 } });   // another key: untouched
+            const auto cut = MidiSequence::withRegionOverlapsCut (seq);
+            const auto& notes = cut->getNotes();
+
+            for (auto& n : notes)
+            {
+                if (n.key == 60 && n.region == 0) expectEquals (n.lengthTicks, Q);
+                if (n.key == 60 && n.region == 1) { expectEquals (n.startTick, Q); expectEquals (n.lengthTicks, 3 * Q); }
+                if (n.key == 64)                  expectEquals (n.lengthTicks, 4 * Q);
+            }
+
+            // Within one region nothing changes (the same sequence comes back)
+            const auto single = sequenceOf ({ { 0, 4 * Q, 1, 60, 100 }, { Q, Q, 1, 60, 90 } });
+            expect (MidiSequence::withRegionOverlapsCut (single) == single);
+        }
+
+        beginTest ("overlapped notes: nested, same start and growing never leave two notes sounding on one key");
+        {
+            auto withRegion = [] (MidiSequence::Note note, int region) { note.region = region; return note; };
+
+            // Same start in two regions: one note left
+            auto same = MidiSequence::withRegionOverlapsCut (sequenceOf ({ { 0, 2 * Q, 1, 60, 100 }, withRegion ({ 0, Q, 1, 60, 90 }, 1) }));
+            expectEquals ((int) same->getNotes().size(), 1);
+            expectEquals (same->getNotes()[0].lengthTicks, 2 * Q);
+
+            // Growing stops at the next note on the key (here one of its own region)
+            auto grow = MidiSequence::withRegionOverlapsCut (sequenceOf ({ { 0, 8 * Q, 1, 60, 100 },
+                                                                          withRegion ({ Q, Q, 1, 60, 90 }, 1),
+                                                                          withRegion ({ 3 * Q, Q, 1, 60, 90 }, 1) }));
+            for (auto& n : grow->getNotes())
+                if (n.region == 1 && n.startTick == Q)
+                    expectEquals (n.lengthTicks, 2 * Q);
+
+            // Randomized: across regions, no two notes on one key ever sound together
+            juce::Random random (1234);
+
+            for (int round = 0; round < 300; ++round)
+            {
+                std::vector<MidiSequence::Note> notes;
+
+                for (int k = 0; k < 24; ++k)
+                    notes.push_back (withRegion ({ random.nextInt (16) * Q / 2, (1 + random.nextInt (8)) * Q / 2, 1,
+                                                   60 + random.nextInt (2), 100 }, random.nextInt (3)));
+
+                const auto cut = MidiSequence::withRegionOverlapsCut (sequenceOf (notes));
+                const auto& out = cut->getNotes();
+                bool parallel = false;
+
+                for (size_t i = 0; i < out.size(); ++i)
+                    for (size_t j = i + 1; j < out.size(); ++j)
+                        if (out[i].key == out[j].key && out[i].region != out[j].region
+                             && out[j].startTick < out[i].startTick + out[i].lengthTicks
+                             && out[i].startTick < out[j].startTick + out[j].lengthTicks)
+                            parallel = true;
+
+                expect (! parallel, "round " + juce::String (round) + ": two regions' notes sound together on one key");
+
+                if (parallel)
+                    break;
+            }
+        }
+
         beginTest ("empty sequence yields no blocks");
         {
             expect (computePhraseBlocks (*sequenceOf ({}), *map).empty());

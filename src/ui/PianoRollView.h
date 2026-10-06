@@ -4,6 +4,7 @@
 #include "TimeAxis.h"
 #include "../model/PlayheadSteps.h"
 #include "KeyCommands.h"
+#include "../model/PhraseBlocks.h"
 #include "CloseButton.h"
 
 class CommandDispatcher;
@@ -169,6 +170,14 @@ private:
     static constexpr double chordWindowMs = 60.0;
     juce::int64 chordTick = -1;            // where the current chord is written (-1: none yet)
     double chordStartMs = 0.0;             // when its first note arrived
+
+    // Overlapping regions (the arrangement): tabs switch between them. Another region's notes
+    // are dimmed and can't be picked; new notes go into the chosen one. -1 = all regions.
+    int activeRegion = -1;
+    std::vector<int> tabRegions;
+    std::vector<std::unique_ptr<juce::TextButton>> regionTabs;
+    void rebuildRegionTabs();
+    bool isEditable (const MidiSequence::Note& note) const   { return activeRegion < 0 || note.region == activeRegion; }
 
     // Undo/redo of a note written by note input also puts the transport line back: each
     // written note remembers the clip it produced and the line before and after it

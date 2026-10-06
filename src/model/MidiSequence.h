@@ -122,6 +122,97 @@ public:
                     }
     }
 
+    // Overlapped notes (Settings > Editor): where a note starts while earlier ones on the same key
+    // and channel still sound - and 'applies' says so for the pair - each of them stops there (one
+    // starting at the same tick is dropped), and the later note lasts at least until the longest of
+    // them would have ended, but never into the next note on that key. So where it applies, two
+    // notes on one key never sound at once. Notes must be sorted by start.
+    static void cutOverlaps (std::vector<Note>& notes, const std::function<bool (const Note& earlier, const Note& later)>& applies)
+    {
+        const auto slotOf = [] (const Note& n) { return n.channel * 128 + n.key; };
+
+        // Where the next note on each note's key starts (the limit for growing it): walking back,
+        // the smallest start seen per key, and the smallest one above it
+        std::vector<juce::int64> nextStart (notes.size());
+        {
+            constexpr auto none = std::numeric_limits<juce::int64>::max();
+            std::map<int, std::pair<juce::int64, juce::int64>> seen;   // key -> (smallest start, smallest above it)
+
+            for (size_t i = notes.size(); i-- > 0;)
+            {
+                auto [it, fresh] = seen.try_emplace (slotOf (notes[i]), none, none);
+
+                if (notes[i].startTick < it->second.first)
+                    it->second = { notes[i].startTick, it->second.first };
+
+                nextStart[i] = it->second.second;
+            }
+        }
+
+        std::map<int, std::vector<size_t>> sounding;   // per key: the notes still sounding
+        std::vector<size_t> dropped;
+
+        for (size_t i = 0; i < notes.size(); ++i)
+        {
+            auto& later = notes[i];
+            auto& list = sounding[slotOf (later)];
+            std::erase_if (list, [&] (size_t index) { return notes[index].startTick + notes[index].lengthTicks <= later.startTick; });
+
+            auto growTo = later.startTick + later.lengthTicks;
+            bool grew = false;
+
+            for (auto it = list.begin(); it != list.end();)
+            {
+                auto& earlier = notes[*it];
+
+                if (! applies (earlier, later))
+                {
+                    ++it;
+                    continue;
+                }
+
+                growTo = juce::jmax (growTo, earlier.startTick + earlier.lengthTicks);
+                grew = true;
+
+                if (earlier.startTick < later.startTick)
+                    earlier.lengthTicks = later.startTick - earlier.startTick;
+                else
+                    dropped.push_back (*it);   // started together: the later one plays
+
+                it = list.erase (it);
+            }
+
+            if (grew)
+                later.lengthTicks = juce::jmax (later.lengthTicks, juce::jmin (growTo, nextStart[i]) - later.startTick);
+
+            list.push_back (i);
+        }
+
+        std::sort (dropped.begin(), dropped.end());
+
+        for (auto it = dropped.rbegin(); it != dropped.rend(); ++it)
+            notes.erase (notes.begin() + (std::ptrdiff_t) *it);
+    }
+
+    // Only where notes of different regions overlap (overlapping regions)
+    static bool acrossRegions (const Note& earlier, const Note& later)   { return earlier.region != later.region; }
+
+    // A copy with the overlaps between regions cut (playback); the same sequence when there are none
+    static Ptr withRegionOverlapsCut (const Ptr& sequence)
+    {
+        if (sequence == nullptr)
+            return sequence;
+
+        const auto& source = sequence->getNotes();
+
+        if (std::all_of (source.begin(), source.end(), [&source] (const Note& n) { return n.region == source.front().region; }))
+            return sequence;
+
+        auto notes = source;
+        cutOverlaps (notes, acrossRegions);
+        return create (std::move (notes), sequence->getControls());
+    }
+
     const std::vector<Note>& getNotes() const noexcept       { return notes; }
     const std::vector<Control>& getControls() const noexcept { return controls; }
     juce::int64 getLengthTicks() const noexcept              { return lengthTicks; }

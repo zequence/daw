@@ -27,6 +27,11 @@ namespace editorSettings
         return octave >= 3 && octave <= 5 ? octave : 3;
     }
 
+    // Where regions overlap, a note started over another on the same key cuts it there, and lasts
+    // at least as long as the cut one would have (playback; gluing makes it permanent). On by default.
+    constexpr auto cutOverlappedNotesKey = "editorCutOverlappedNotes";
+    inline bool cutOverlappedNotes (juce::PropertiesFile& settings)   { return settings.getBoolValue (cutOverlappedNotesKey, true); }
+
     inline bool askBeforeDropping (juce::PropertiesFile& settings)    { return settings.getBoolValue (askBeforeDroppingKey, true); }
     inline bool firstRootIsDefault (juce::PropertiesFile& settings)   { return settings.getBoolValue (firstRootIsDefaultKey, false); }
 }

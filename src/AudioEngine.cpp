@@ -1220,7 +1220,10 @@ std::optional<ExpressionMap> AudioEngine::mapForTrack (const Track& track) const
 void AudioEngine::refreshPlayback (Track& track)
 {
     const auto map = mapForTrack (track);
-    const auto built = playback::build (track.sequence, map.has_value() ? &*map : nullptr, *masterTempoMap,
+    // Overlapping regions: the overlapped notes are cut for playback only (Settings > Editor)
+    const auto written = editorSettings::cutOverlappedNotes (settings) ? MidiSequence::withRegionOverlapsCut (track.sequence)
+                                                                       : track.sequence;
+    const auto built = playback::build (written, map.has_value() ? &*map : nullptr, *masterTempoMap,
                                         editorSettings::firstRootIsDefault (settings));
     track.preRollNeededMs = -built.earliestOffsetMs;
 

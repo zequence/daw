@@ -199,6 +199,44 @@ public:
             expectEquals ((int) blocks().size(), 2);
         }
 
+        beginTest ("overlapping regions: no parallel notes on one key in playback, before or after the glue");
+        {
+            // Region A: C4 over two bars. Region B (moved in): C4 starting inside it
+            juce::Array<juce::var> notes { note (0, 8 * Q, 60), note (16 * Q, Q, 60) };
+            api.run ("clip.set", params ({ { "trackId", tid }, { "notes", notes } }));
+            juce::Array<juce::var> moves {
+                params ({ { "trackId", tid }, { "start", 16 * Q }, { "end", 17 * Q }, { "destStart", 2 * Q }, { "region", 0 } }) };
+            expect (api.run ("clip.moveRanges", params ({ { "moves", moves } }))["ok"]);
+
+            const auto noParallel = [] (const MidiSequence::Ptr& seq)
+            {
+                std::vector<MidiSequence::Note> real;
+
+                for (auto& n : seq->getNotes())
+                    if (! n.isKeyswitch)
+                        real.push_back (n);
+
+                for (size_t i = 0; i < real.size(); ++i)
+                    for (size_t j = i + 1; j < real.size(); ++j)
+                        if (real[i].key == real[j].key && real[i].channel == real[j].channel
+                             && real[j].startTick < real[i].startTick + real[i].lengthTicks
+                             && real[i].startTick < real[j].startTick + real[j].lengthTicks)
+                            return false;
+
+                return true;
+            };
+
+            // Written: both as they were. Played: no two C4s at once
+            expectEquals ((int) engine.getTrackSequence (trackId)->getNotes().size(), 2);
+            expect (noParallel (engine.getTrackPlaybackSequence (trackId)), "parallel C4s in playback before the glue");
+
+            // Glued: the cut is written, and playback still has no parallel notes
+            const auto moved = computePhraseBlocks (*engine.getTrackSequence (trackId), *engine.getTransport().getTempoMap())[1].region;
+            expect (api.run ("clip.glue", params ({ { "trackId", tid }, { "region", moved }, { "into", 0 } }))["ok"]);
+            expect (noParallel (engine.getTrackSequence (trackId)), "parallel C4s written after the glue");
+            expect (noParallel (engine.getTrackPlaybackSequence (trackId)), "parallel C4s in playback after the glue");
+        }
+
         beginTest ("a region moved onto part of its old position stays one region");
         {
             juce::Array<juce::var> notes { note (0, 2 * Q, 60), note (4 * Q, 2 * Q, 62), note (8 * Q, 2 * Q, 64) };

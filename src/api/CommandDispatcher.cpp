@@ -4,6 +4,7 @@
 #include "../integrations/VeproKeyRange.h"
 #include "../model/ExpressionMapLibrary.h"
 #include "../model/NoteNames.h"
+#include "../ui/EditorSettings.h"
 #include <AppVersion.h>
 #include "../engine/AudioChannelProcessor.h"
 #include "../engine/HistoryManager.h"
@@ -540,6 +541,7 @@ void CommandDispatcher::registerCommands()
             out.push_back ({ (juce::int64) n["start"], (juce::int64) n["length"],
                              (int) n.getProperty ("channel", 1), (int) n["key"],
                              (int) n.getProperty ("velocity", 100) });
+            out.back().region = juce::jmax (0, (int) n.getProperty ("region", 0));   // the arrangement region (0 = ordinary)
 
             if (n.hasProperty ("articulation"))
                 if (auto error = ExpressionMap::Selection::fromVar (n["articulation"], out.back().articulation); error.isNotEmpty())
@@ -1018,6 +1020,13 @@ void CommandDispatcher::registerCommands()
 
              auto notes = sequence->getNotes();
              int changed = 0;
+
+             // Gluing makes the overlap cut permanent (Settings > Editor: cut overlapped notes)
+             if (editorSettings::cutOverlappedNotes (engine.getSettingsFile()))
+                 MidiSequence::cutOverlaps (notes, [region, into] (const MidiSequence::Note& a, const MidiSequence::Note& b)
+                 {
+                     return (a.region == region && b.region == into) || (a.region == into && b.region == region);
+                 });
 
              for (auto& note : notes)
                  if (note.region == region)

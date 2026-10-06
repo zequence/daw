@@ -268,6 +268,9 @@ void PianoRollView::noteInput (const juce::MidiMessage& message, double received
     note->setProperty ("key", message.getNoteNumber());
     note->setProperty ("velocity", juce::jlimit (1, 127, (int) message.getVelocity()));
 
+    if (activeRegion >= 0)
+        note->setProperty ("region", activeRegion);
+
     if (! newNoteArticulation.isEmpty() && engine.getTrackExpressionMap (trackId).has_value())
         note->setProperty ("articulation", newNoteArticulation.toVar());
 
@@ -293,6 +296,8 @@ void PianoRollView::setTrack (AudioEngine::TrackId id)
     {
         trackId = id;
         selection.clear();
+        activeRegion = -1;   // another track: its own regions (the tabs follow)
+        tabRegions.clear();
         newNoteArticulation = {};   // another track, maybe another map
         articulationKey.clear();
         drag = Drag::none;
@@ -745,6 +750,9 @@ void PianoRollView::commitNewNote (const MidiSequence::Note& newNote)
     note->setProperty ("key", juce::jlimit (0, 127, newNote.key));
     note->setProperty ("velocity", newNote.velocity);
 
+    if (activeRegion >= 0)
+        note->setProperty ("region", activeRegion);
+
     // New notes get the articulation chosen for them (nothing is written when none is chosen:
     // the default-root setting is implicit)
     if (! newNoteArticulation.isEmpty() && engine.getTrackExpressionMap (trackId).has_value())
@@ -938,7 +946,7 @@ int PianoRollView::noteIndexAt (juce::Point<int> position, bool& onRightEdge) co
     {
         const auto rect = noteRect (seq->getNotes()[(size_t) i]);
 
-        if (rect.contains (position))
+        if (rect.contains (position) && isEditable (seq->getNotes()[(size_t) i]))
         {
             onRightEdge = position.x >= rect.getRight() - juce::jmin (6, rect.getWidth() / 3);
             return i;
@@ -1180,7 +1188,7 @@ void PianoRollView::mouseUp (const juce::MouseEvent& event)
 
         if (auto seq = sequence())
             for (int i = 0; i < (int) seq->getNotes().size(); ++i)
-                if (rect.intersects (noteRect (seq->getNotes()[(size_t) i])))
+                if (rect.intersects (noteRect (seq->getNotes()[(size_t) i])) && isEditable (seq->getNotes()[(size_t) i]))
                     selection.insert (i);
     }
     else if (drag == Drag::move || drag == Drag::resize)
@@ -1406,7 +1414,8 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
         {
             selection.clear();
             for (int i = 0; i < (int) seq->getNotes().size(); ++i)
-                selection.insert (i);
+                if (isEditable (seq->getNotes()[(size_t) i]))
+                    selection.insert (i);
             repaint();
         }
         return true;
@@ -1431,6 +1440,64 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
 }
 
 //==============================================================================
+// One tab per region that overlaps another ("Bar N" where it starts), plus "All"
+void PianoRollView::rebuildRegionTabs()
+{
+    std::vector<int> regions;
+    std::vector<juce::String> names;
+    const auto seq = sequence();
+    const auto map = engine.getTransport().getTempoMap();
+
+    if (seq != nullptr)
+        for (auto& block : computePhraseBlocks (*seq, *map))
+            if (block.layers > 1 && std::find (regions.begin(), regions.end(), block.region) == regions.end())
+            {
+                regions.push_back (block.region);
+                names.push_back ("Bar " + juce::String (map->ticksToBarsBeats (block.startTick).bar));
+            }
+
+    if (regions == tabRegions)
+        return;
+
+    tabRegions = regions;
+
+    if (std::find (regions.begin(), regions.end(), activeRegion) == regions.end())
+        activeRegion = -1;   // its region was glued or moved away
+
+    regionTabs.clear();
+
+    if (! regions.empty())
+    {
+        const auto addTab = [this] (const juce::String& name, int region)
+        {
+            auto tab = std::make_unique<juce::TextButton> (name);
+            tab->setClickingTogglesState (true);
+            tab->setRadioGroupId (0x5e610);
+            tab->setConnectedEdges (juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);
+            tab->setWantsKeyboardFocus (false);
+            tab->setToggleState (region == activeRegion, juce::dontSendNotification);
+            theme::setButtonRole (*tab, "accent");
+            tab->setTooltip (region < 0 ? juce::String ("All the overlapping regions")
+                                        : "Edit only this region; the others are dimmed. New notes go into it.");
+            tab->onClick = [this, region]
+            {
+                activeRegion = region;
+                selection.clear();
+                repaint();
+            };
+            addAndMakeVisible (*tab);
+            regionTabs.push_back (std::move (tab));
+        };
+
+        addTab ("All", -1);
+
+        for (size_t i = 0; i < regions.size(); ++i)
+            addTab (names[i], regions[i]);
+    }
+
+    resized();
+}
+
 void PianoRollView::timerCallback()
 {
     const auto seq = sequence();
@@ -1438,6 +1505,7 @@ void PianoRollView::timerCallback()
     if (seq != lastSeen)
     {
         lastSeen = seq;
+        rebuildRegionTabs();
 
         // Drop selection indices that no longer exist
         const auto noteCount = seq != nullptr ? (int) seq->getNotes().size() : 0;
@@ -1492,6 +1560,14 @@ void PianoRollView::resized()
     toolbar.removeFromLeft (10);
     colourBox.setBounds (toolbar.removeFromLeft (150));
     toolbar.removeFromLeft (10);
+
+    // The region tabs (only while regions overlap), right of the tools
+    for (auto it = regionTabs.rbegin(); it != regionTabs.rend(); ++it)
+    {
+        (*it)->setBounds (toolbar.removeFromRight (juce::jmin (72, (*it)->getBestWidthForHeight (toolbar.getHeight()) + 16)));
+        toolbar.removeFromRight (2);
+    }
+
     trackLabel.setBounds (toolbar);
 }
 
@@ -1624,6 +1700,9 @@ void PianoRollView::paint (juce::Graphics& g)
                                                                          : juce::Colour (0xff8a8d93));
             else   // velocity: soft = yellow, through orange, loud = red
                 g.setColour (juce::Colour::fromHSV ((1.0f / 6.0f) * (1.0f - (float) velocity / 127.0f), 0.8f, 0.95f, 1.0f));
+
+            if (! isEditable (note))
+                g.setOpacity (0.25f);   // another region's note (the region tabs)
 
             g.fillRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f);
             g.setColour (juce::Colours::black.withAlpha (selected ? 0.7f : 0.4f));

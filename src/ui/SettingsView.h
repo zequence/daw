@@ -123,6 +123,17 @@ public:
             engine.refreshAllPlayback();   // notes with no articulation now play as the first root, or no longer
         };
 
+        cutOverlapsToggle.setToggleState (editorSettings::cutOverlappedNotes (settings), juce::dontSendNotification);
+        cutOverlapsToggle.setTooltip ("Where regions overlap, a note that starts over another on the same key stops the earlier one "
+                                      "there, and lasts at least until the earlier one would have ended. Playback only - the notes "
+                                      "stay as written until the regions are glued.");
+        cutOverlapsToggle.onClick = [this]
+        {
+            engine.getSettingsFile().setValue (editorSettings::cutOverlappedNotesKey, cutOverlapsToggle.getToggleState());
+            engine.getSettingsFile().saveIfNeeded();
+            engine.refreshAllPlayback();
+        };
+
         middleCLabel.setText ("Middle C (MIDI note 60) is called", juce::dontSendNotification);
         middleCLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
         page.addAndMakeVisible (middleCLabel);
@@ -229,7 +240,8 @@ public:
         page.addChildComponent (keyCommandsEditor);
 
         for (auto* c : std::initializer_list<juce::Component*> { &scanButton, &retryButton, &rescanButton,
-                                                                 &onTopToggle, &autoRecordToggle, &mcpToggle, &defaultRootToggle })
+                                                                 &onTopToggle, &autoRecordToggle, &mcpToggle, &defaultRootToggle,
+                                                                 &cutOverlapsToggle })
         {
             c->setWantsKeyboardFocus (false);
             page.addAndMakeVisible (c);
@@ -303,7 +315,7 @@ private:
         autoRecordToggle.setVisible (category == tracks);
 
         for (auto* c : std::initializer_list<juce::Component*> { &editorMidiHeading, &dropLabel, &dropBox, &defaultRootToggle,
-                                                                 &middleCLabel, &middleCBox })
+                                                                 &cutOverlapsToggle, &middleCLabel, &middleCBox })
             c->setVisible (category == editor);
 
         for (auto* c : std::initializer_list<juce::Component*> { &mcpToggle, &mcpStatus, &mcpRegisterHint })
@@ -360,6 +372,8 @@ private:
                 dropBox.setBounds (4, y, 200, 24);
                 y += 36;
                 defaultRootToggle.setBounds (4, y, juce::jmin (width - 8, 640), 24);
+                y += 36;
+                cutOverlapsToggle.setBounds (4, y, juce::jmin (width - 8, 640), 24);
                 y += 36;
                 middleCLabel.setBounds (4, y, 230, 24);
                 middleCBox.setBounds (238, y, 170, 24);
@@ -510,6 +524,7 @@ private:
     juce::ComboBox dropBox, middleCBox;
     juce::Label middleCLabel;
     juce::ToggleButton defaultRootToggle { "Use the first root articulation as the default (notes with no articulation behave as if it were chosen)" };
+    juce::ToggleButton cutOverlapsToggle { "Overlapping regions: a note started over another on the same key cuts it (playback; glue makes it permanent)" };
     juce::ToggleButton mcpToggle { "Run the MCP server for AI agents (starts with the app)" };
     juce::Label mcpStatus;
     juce::TextEditor mcpRegisterHint;
