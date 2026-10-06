@@ -82,6 +82,20 @@ public:
         g.fillAll (theme::colour (theme::Token::surfaceContent));
     }
 
+    // Studio lights: a soft, wide sheen falling diagonally over the whole console
+    void paintOverChildren (juce::Graphics& g) override
+    {
+        const auto w = (float) getWidth(), h = (float) getHeight();
+        juce::ColourGradient sheen (juce::Colours::white.withAlpha (0.0f), 0.0f, 0.0f,
+                                    juce::Colours::white.withAlpha (0.0f), w, h, false);
+        sheen.addColour (0.30, juce::Colours::white.withAlpha (0.05f));
+        sheen.addColour (0.42, juce::Colours::white.withAlpha (0.09f));
+        sheen.addColour (0.55, juce::Colours::white.withAlpha (0.03f));
+        sheen.addColour (0.80, juce::Colours::black.withAlpha (0.06f));
+        g.setGradientFill (sheen);
+        g.fillAll();
+    }
+
 private:
     enum class Kind { channel, aux, master };
     static constexpr int stripWidth = 180, stripHeight = 1040;
