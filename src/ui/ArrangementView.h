@@ -44,9 +44,20 @@ private:
     {
         AudioEngine::TrackId trackId = 0;
         juce::int64 startTick = 0, endTick = 0;
+        int region = -1;              // the notes' region id; -1 = any (a ref made before the ids are known)
+        int layer = 0, layers = 1;    // stacking among overlapping blocks
 
         bool valid() const noexcept { return trackId != 0 && endTick > startTick; }
-        bool operator== (const BlockRef& other) const noexcept { return trackId == other.trackId && startTick == other.startTick; }
+        bool operator== (const BlockRef& other) const noexcept
+        {
+            return trackId == other.trackId && startTick == other.startTick
+                     && (region < 0 || other.region < 0 || region == other.region);
+        }
+
+        static BlockRef of (AudioEngine::TrackId track, const PhraseBlock& block)
+        {
+            return { track, block.startTick, block.endTick, block.region, block.layer, block.layers };
+        }
     };
 
     using Items = std::vector<AudioEngine::SidebarItem>;
@@ -95,9 +106,9 @@ private:
     std::vector<BlockRef> blocksTouching (juce::Rectangle<int>);
     void moveSelection();
 
-    // Where two regions touch (kept apart by a region cut that alone separates them):
-    // hovering shows the glue pointer, clicking joins them
-    struct GluePoint { AudioEngine::TrackId trackId = 0; juce::int64 tick = -1; };
+    // Where a region starts touching or overlapping an earlier one (different region ids keep
+    // them apart): hovering its left edge shows the glue pointer, clicking joins them
+    struct GluePoint { AudioEngine::TrackId trackId = 0; int region = 0, into = 0; };
     GluePoint gluePointAt (juce::Point<int>);
     static juce::MouseCursor glueCursor();
 

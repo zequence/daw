@@ -98,21 +98,31 @@ public:
             expectEquals (nextPlayheadStop (Q + 5, false, nullptr, grid), Q);
         }
 
-        beginTest ("a region cut splits touching notes; the block starts at the cut");
+        beginTest ("notes of different regions never share a block; overlapping blocks stack");
         {
-            // Notes in bars 1 and 2 (no silence between); a cut at bar 2
-            const auto plain = sequenceOf ({ { 0, 4 * Q, 1, 60, 100 }, { 4 * Q + Q, Q, 1, 62, 100 } });
-            expectEquals ((int) computePhraseBlocks (*plain, *map).size(), 1);
+            auto withRegion = [] (MidiSequence::Note note, int region) { note.region = region; return note; };
 
-            const auto cut = plain->withCuts ({ 4 * Q });
-            const auto blocks = computePhraseBlocks (*cut, *map);
+            // Touching: bar 1 (region 0) and bar 2 (region 1)
+            const auto touching = sequenceOf ({ { 0, 4 * Q, 1, 60, 100 }, withRegion ({ 4 * Q, 4 * Q, 1, 62, 100 }, 1) });
+            const auto blocks = computePhraseBlocks (*touching, *map);
             expectEquals ((int) blocks.size(), 2);
-            expectEquals (blocks[1].startTick, 4 * Q);
-            expectEquals (blocks[0].endTick, 4 * Q);
+            expectEquals (blocks[0].layers, 1);   // touching is not overlapping
 
-            // Cuts survive the XML round trip (project files)
-            const auto loaded = MidiSequence::fromXml (*cut->toXml());
-            expect (loaded->getCuts() == std::vector<juce::int64> { 4 * Q });
+            // Overlapping: region 1 starts inside region 0
+            const auto overlapping = sequenceOf ({ { 0, 8 * Q, 1, 60, 100 }, withRegion ({ 4 * Q, 8 * Q, 1, 62, 100 }, 1) });
+            const auto stacked = computePhraseBlocks (*overlapping, *map);
+            expectEquals ((int) stacked.size(), 2);
+            expectEquals (stacked[0].layers, 2);
+            expect (stacked[0].layer != stacked[1].layer);
+
+            // Region ids survive the XML round trip (project files)
+            const auto loaded = MidiSequence::fromXml (*overlapping->toXml());
+            expectEquals (loaded->getNotes()[1].region, 1);
+
+            // A note ADDED inside a region's span joins it; existing notes keep theirs
+            std::vector<MidiSequence::Note> added { { 5 * Q, Q, 1, 64, 100 } };
+            MidiSequence::joinRegions (added, overlapping->getNotes());
+            expectEquals (added[0].region, 1);
         }
 
         beginTest ("empty sequence yields no blocks");

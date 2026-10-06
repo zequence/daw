@@ -1002,30 +1002,42 @@ void CommandDispatcher::registerCommands()
          "trackId:int start:int64 end:int64 destStart:int64 [destTrackId:int=trackId] [includeControls:bool=true]",
          rangeCopier (true));
 
-    // Glue: two touching regions become one (their cut goes)
-    add ("clip.glue", "Join the two regions that meet at 'tick' (removes the region cut there)",
-         "trackId:int tick:int64",
+    // Glue: two regions (touching or overlapping) become one
+    add ("clip.glue", "Join region 'region' into region 'into' on a track (the notes' region ids; 0 = ordinary material)",
+         "trackId:int region:int into:int",
          [this, requireTrack] (const juce::var& params, Respond respond)
          {
              int id = 0;
              if (! requireTrack (params, respond, id)) return;
 
-             const auto tick = (juce::int64) params.getProperty ("tick", 0);
+             const int region = params.getProperty ("region", 0), into = params.getProperty ("into", 0);
              const auto sequence = engine.getTrackSequence (id);
 
-             if (sequence == nullptr || std::find (sequence->getCuts().begin(), sequence->getCuts().end(), tick) == sequence->getCuts().end())
-                 return respond (fail ("no region cut at tick " + juce::String (tick)));
+             if (sequence == nullptr || region == into)
+                 return respond (fail ("nothing to glue"));
 
-             auto cuts = sequence->getCuts();
-             std::erase (cuts, tick);
-             engine.setTrackSequence (id, sequence->withCuts (std::move (cuts)));
+             auto notes = sequence->getNotes();
+             int changed = 0;
+
+             for (auto& note : notes)
+                 if (note.region == region)
+                 {
+                     note.region = into;
+                     ++changed;
+                 }
+
+             if (changed == 0)
+                 return respond (fail ("no notes in region " + juce::String (region)));
+
+             engine.setTrackSequence (id, MidiSequence::create (std::move (notes), sequence->getControls()));
              respond (ok ({}));
          });
 
     // Several regions at once (the arrangement's selection): every source range is read from the
     // tracks as they were, then each track is written ONCE - one undo step per track, one history entry
     add ("clip.moveRanges", "Move (or copy) several ranges at once, possibly to other tracks",
-         "moves:[{trackId:int start:int64 end:int64 destStart:int64 [destTrackId:int=trackId]}] [copy:bool=false] "
+         "moves:[{trackId:int start:int64 end:int64 destStart:int64 [destTrackId:int=trackId] [region:int (only that region's notes)]}] "
+         "[copy:bool=false] "
          "[includeControls:bool=true]",
          [this] (const juce::var& params, Respond respond)
          {
@@ -1039,8 +1051,7 @@ void CommandDispatcher::registerCommands()
              const auto ids = engine.getTrackIds();
              const auto known = [&ids] (int id) { return std::find (ids.begin(), ids.end(), (AudioEngine::TrackId) id) != ids.end(); };
 
-             struct Work { std::vector<MidiSequence::Note> notes; std::vector<MidiSequence::Control> controls;
-                           std::vector<juce::int64> cuts; };
+             struct Work { std::vector<MidiSequence::Note> notes; std::vector<MidiSequence::Control> controls; };
              std::map<int, Work> original, result;
 
              const auto load = [this, &original, &result] (int id)
@@ -1054,7 +1065,6 @@ void CommandDispatcher::registerCommands()
                  {
                      work.notes = sequence->getNotes();
                      work.controls = sequence->getControls();
-                     work.cuts = sequence->getCuts();
                  }
 
                  original[id] = work;
@@ -1081,15 +1091,25 @@ void CommandDispatcher::registerCommands()
                  for (auto& move : *moves)
                  {
                      const juce::int64 start = move.getProperty ("start", 0), end = move.getProperty ("end", 0);
+                     const auto region = move.getProperty ("region", {});
                      auto& work = result[(int) move.getProperty ("trackId", 0)];
-                     std::erase_if (work.notes, [=] (const auto& n) { return n.startTick >= start && n.startTick < end; });
+                     std::erase_if (work.notes, [=] (const auto& n) { return n.startTick >= start && n.startTick < end
+                                                                             && (region.isVoid() || n.region == (int) region); });
 
                      if (includeControls)
                          std::erase_if (work.controls, [=] (const auto& c) { return c.tick >= start && c.tick < end; });
-
-                     // Cuts inside the region leave with it (its edges may still bound its neighbours)
-                     std::erase_if (work.cuts, [=] (juce::int64 cut) { return cut > start && cut < end; });
                  }
+
+             // A moved or copied region gets a region id of its own where it lands
+             const auto freshRegion = [&result] (int track)
+             {
+                 int highest = 0;
+
+                 for (auto& note : result[track].notes)
+                     highest = juce::jmax (highest, note.region);
+
+                 return highest + 1;
+             };
 
              for (auto& move : *moves)
              {
@@ -1097,16 +1117,14 @@ void CommandDispatcher::registerCommands()
                  const int to = move.getProperty ("destTrackId", from);
                  const juce::int64 start = move.getProperty ("start", 0), end = move.getProperty ("end", 0);
                  const auto offset = (juce::int64) move.getProperty ("destStart", 0) - start;
-
-                 // The moved region stays a region of its own where it lands, even touching another
-                 // (until glued): cuts at its new edges
-                 result[to].cuts.push_back (start + offset);
-                 result[to].cuts.push_back (end + offset);
+                 const auto region = move.getProperty ("region", {});
+                 const auto newRegion = freshRegion (to);
 
                  for (auto note : original[from].notes)
-                     if (note.startTick >= start && note.startTick < end)
+                     if (note.startTick >= start && note.startTick < end && (region.isVoid() || note.region == (int) region))
                      {
                          note.startTick = juce::jmax ((juce::int64) 0, note.startTick + offset);
+                         note.region = newRegion;   // stays a region of its own (touching or overlapping) until glued
                          result[to].notes.push_back (note);
                      }
 
@@ -1124,8 +1142,7 @@ void CommandDispatcher::registerCommands()
              for (auto& [id, work] : result)
                  engine.setTrackSequence ((AudioEngine::TrackId) id, work.notes.empty() && work.controls.empty()
                                                                        ? nullptr
-                                                                       : MidiSequence::create (std::move (work.notes), std::move (work.controls))
-                                                                             ->withCuts (std::move (work.cuts)));
+                                                                       : MidiSequence::create (std::move (work.notes), std::move (work.controls)));
 
              auto reply = object();
              reply->setProperty ("tracks", (int) result.size());

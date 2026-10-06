@@ -77,7 +77,11 @@ juce::Rectangle<int> ArrangementView::blockRect (const BlockRef& block, int lane
 {
     const auto x = tickToX (block.startTick);
     const auto right = tickToX (block.endTick);
-    return { x, laneTop + 4, juce::jmax (8, right - x), sidebar::trackRowHeight - 8 };
+    const auto laneHeight = sidebar::trackRowHeight - 8;
+    const auto layers = juce::jmax (1, block.layers);
+    const auto top = laneTop + 4 + block.layer * laneHeight / layers;
+    const auto bottom = laneTop + 4 + (block.layer + 1) * laneHeight / layers;
+    return { x, top, juce::jmax (8, right - x), juce::jmax (3, bottom - top - (layers > 1 ? 1 : 0)) };
 }
 
 ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)
@@ -92,11 +96,11 @@ ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)
         return {};
 
     const auto trackId = items[(size_t) index].member;
-    const auto tick = xToTick (position.x);
+    const auto top = rowTop (items, (size_t) index);
 
     for (auto& block : blocksFor (trackId))
-        if (tick >= block.startTick && tick < block.endTick)
-            return { trackId, block.startTick, block.endTick };
+        if (const auto ref = BlockRef::of (trackId, block); blockRect (ref, top).contains (position))
+            return ref;
 
     return {};
 }
@@ -126,7 +130,8 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
     {
         auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
         params->setProperty ("trackId", glue.trackId);
-        params->setProperty ("tick", glue.tick);
+        params->setProperty ("region", glue.region);
+        params->setProperty ("into", glue.into);
         runCommand ("clip.glue", params);
         selection.clear();
         setMouseCursor (juce::MouseCursor::NormalCursor);
@@ -210,7 +215,7 @@ std::vector<ArrangementView::BlockRef> ArrangementView::blocksTouching (juce::Re
 
         for (auto& block : blocksFor (items[i].member))
         {
-            const BlockRef ref { items[i].member, block.startTick, block.endTick };
+            const auto ref = BlockRef::of (items[i].member, block);
 
             if (blockRect (ref, top).intersects (area))
                 touched.push_back (ref);
@@ -333,9 +338,13 @@ void ArrangementView::moveSelection()
         move->setProperty ("end", block.endTick);
         move->setProperty ("destStart", destStart);
         move->setProperty ("destTrackId", destTrack);
+
+        if (block.region >= 0)
+            move->setProperty ("region", block.region);   // only this region's notes (others may overlap it)
+
         moves.add (juce::var (move.get()));
 
-        moved.push_back ({ destTrack, destStart, destStart + (block.endTick - block.startTick) });
+        moved.push_back ({ destTrack, destStart, destStart + (block.endTick - block.startTick) });   // (its new region id: any)
     }
 
     // One command for the whole selection: one edit per track, one history entry
@@ -369,26 +378,27 @@ ArrangementView::GluePoint ArrangementView::gluePointAt (juce::Point<int> positi
         return {};
 
     const auto trackId = items[(size_t) index].member;
-    const auto sequence = engine.getTrackSequence (trackId);
-
-    if (sequence == nullptr || sequence->getCuts().empty())
-        return {};
-
+    const auto top = rowTop (items, (size_t) index);
     const auto& blocks = blocksFor (trackId);
     const auto map = engine.getTransport().getTempoMap();
-    const auto& cuts = sequence->getCuts();
 
     for (size_t i = 1; i < blocks.size(); ++i)
     {
-        const auto& before = blocks[i - 1];
         const auto& after = blocks[i];
+        const auto rect = blockRect (BlockRef::of (trackId, after), top);
 
-        // Touching: only the cut keeps them apart (less than the two bars of silence that would)
-        const auto touching = after.startTick - before.endTick < 2 * map->getTicksPerBar (before.endTick);
+        if (std::abs (position.x - rect.getX()) > 5 || position.y < rect.getY() - 2 || position.y > rect.getBottom() + 2)
+            continue;
 
-        if (touching && std::find (cuts.begin(), cuts.end(), after.startTick) != cuts.end()
-             && std::abs (position.x - tickToX (after.startTick)) <= 5)
-            return { trackId, after.startTick };
+        // The earlier region it touches or overlaps (closer than the two bars of silence that would part them)
+        for (auto j = i; j-- > 0;)
+        {
+            const auto& before = blocks[j];
+
+            if (before.region != after.region
+                 && after.startTick - before.endTick < 2 * map->getTicksPerBar (juce::jmin (before.endTick, after.startTick)))
+                return { trackId, after.region, before.region };
+        }
     }
 
     return {};
@@ -645,7 +655,7 @@ void ArrangementView::paint (juce::Graphics& g)
 
             for (auto& block : blocksFor (trackId))
             {
-                BlockRef ref { trackId, block.startTick, block.endTick };
+                auto ref = BlockRef::of (trackId, block);
                 const auto selectedBlock = isSelected (ref);
                 const auto isDragged = dragging.valid() && didDrag && selectedBlock;
 
@@ -656,6 +666,10 @@ void ArrangementView::paint (juce::Graphics& g)
                 }
 
                 const auto shifted = isDragged ? shift.find (trackId) : shift.end();
+
+                if (isDragged)
+                    ref.layer = 0, ref.layers = 1;   // drawn whole while it moves
+
                 const auto rect = blockRect (ref, shifted != shift.end() ? laneTops[shifted->second] : y);
 
                 if (rect.getRight() < TimeAxis::gutter || rect.getX() > getWidth())
@@ -677,7 +691,7 @@ void ArrangementView::paint (juce::Graphics& g)
 
                     for (auto& note : sequence->getNotes())
                     {
-                        if (note.startTick < block.startTick || note.startTick >= block.endTick)
+                        if (note.startTick < block.startTick || note.startTick >= block.endTick || note.region != block.region)
                             continue;
 
                         const auto tickShift = isDragged ? dragDeltaTicks : 0;
@@ -688,6 +702,30 @@ void ArrangementView::paint (juce::Graphics& g)
                     }
                 }
             }
+
+            // Where regions overlap: a hatched band across the lane, so the overlap shows
+            const auto& blocks = blocksFor (trackId);
+
+            for (size_t i = 0; i < blocks.size(); ++i)
+                for (size_t j = i + 1; j < blocks.size() && blocks[j].startTick < blocks[i].endTick; ++j)
+                {
+                    const auto from = tickToX (blocks[j].startTick);
+                    const auto to = tickToX (juce::jmin (blocks[i].endTick, blocks[j].endTick));
+
+                    if (to <= from || to < TimeAxis::gutter || from > getWidth())
+                        continue;
+
+                    const auto band = juce::Rectangle<int> (from, y + 2, to - from, height - 4);
+                    juce::Graphics::ScopedSaveState state (g);
+                    g.reduceClipRegion (band);
+                    g.setColour (juce::Colours::white.withAlpha (0.35f));
+
+                    for (int x = band.getX() - band.getHeight(); x < band.getRight(); x += 6)
+                        g.drawLine ((float) x, (float) band.getBottom(), (float) (x + band.getHeight()), (float) band.getY(), 1.0f);
+
+                    g.setColour (juce::Colours::white.withAlpha (0.6f));
+                    g.drawRect (band, 1);
+                }
 
             y += height;
         }

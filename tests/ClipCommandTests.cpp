@@ -164,29 +164,55 @@ public:
             expectEquals (notesOf()[1].startTick, 8 * Q);
         }
 
-        beginTest ("a moved region stays separate where it touches another, until glued");
+        beginTest ("a moved region stays separate where it touches or overlaps another, until glued");
         {
-            // Region A in bar 1, region B in bar 5; B moves right after A (bar 2)
+            const auto map = engine.getTransport().getTempoMap();
+            const auto blocks = [&] { return computePhraseBlocks (*engine.getTrackSequence (trackId), *map); };
+
+            // Region A in bar 1, region B in bar 5; B moves right after A (bar 2): touching
             juce::Array<juce::var> notes { note (0, 4 * Q, 60), note (16 * Q, 2 * Q, 62) };
+            api.run ("clip.set", params ({ { "trackId", tid }, { "notes", notes } }));
+
+            juce::Array<juce::var> moves {
+                params ({ { "trackId", tid }, { "start", 16 * Q }, { "end", 18 * Q }, { "destStart", 4 * Q }, { "region", 0 } }) };
+            expect (api.run ("clip.moveRanges", params ({ { "moves", moves } }))["ok"]);
+            expectEquals ((int) blocks().size(), 2);
+            const auto movedRegion = blocks()[1].region;
+            expect (movedRegion != 0);
+
+            // A note drawn inside the moved region joins it (still two regions)
+            api.run ("clip.addNotes", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var> { note (5 * Q, Q, 64) } } }));
+            expectEquals ((int) blocks().size(), 2);
+
+            // Moved back over A: overlapping, still two (stacked)
+            juce::Array<juce::var> back {
+                params ({ { "trackId", tid }, { "start", 4 * Q }, { "end", 6 * Q }, { "destStart", 2 * Q }, { "region", movedRegion } }) };
+            expect (api.run ("clip.moveRanges", params ({ { "moves", back } }))["ok"]);
+            expectEquals ((int) blocks().size(), 2);
+            expectEquals (blocks()[0].layers, 2);
+
+            // Glue: one region; undo separates them again
+            const auto overlapRegion = blocks()[1].region;
+            expect (api.run ("clip.glue", params ({ { "trackId", tid }, { "region", overlapRegion }, { "into", 0 } }))["ok"]);
+            expectEquals ((int) blocks().size(), 1);
+            expect (engine.undoTrackSequence (trackId));
+            expectEquals ((int) blocks().size(), 2);
+        }
+
+        beginTest ("a region moved onto part of its old position stays one region");
+        {
+            juce::Array<juce::var> notes { note (0, 2 * Q, 60), note (4 * Q, 2 * Q, 62), note (8 * Q, 2 * Q, 64) };
             api.run ("clip.set", params ({ { "trackId", tid }, { "notes", notes } }));
             const auto map = engine.getTransport().getTempoMap();
 
             juce::Array<juce::var> moves {
-                params ({ { "trackId", tid }, { "start", 16 * Q }, { "end", 18 * Q }, { "destStart", 4 * Q } }) };
+                params ({ { "trackId", tid }, { "start", 0 }, { "end", 10 * Q }, { "destStart", 4 * Q }, { "region", 0 } }) };
             expect (api.run ("clip.moveRanges", params ({ { "moves", moves } }))["ok"]);
-            expectEquals ((int) computePhraseBlocks (*engine.getTrackSequence (trackId), *map).size(), 2);
 
-            // Other edits keep the cut
-            api.run ("clip.addNotes", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var> { note (32 * Q, Q, 64) } } }));
-            expectEquals ((int) computePhraseBlocks (*engine.getTrackSequence (trackId), *map).size(), 3);
-
-            // Glue at the contact point: one region again; undo separates them again
-            expect (api.run ("clip.glue", params ({ { "trackId", tid }, { "tick", 4 * Q } }))["ok"]);
-            expectEquals ((int) computePhraseBlocks (*engine.getTrackSequence (trackId), *map).size(), 2);
-            expect (! api.run ("clip.glue", params ({ { "trackId", tid }, { "tick", 4 * Q } }))["ok"]);   // no cut there now
-
-            expect (engine.undoTrackSequence (trackId));
-            expectEquals ((int) computePhraseBlocks (*engine.getTrackSequence (trackId), *map).size(), 3);
+            const auto blocks = computePhraseBlocks (*engine.getTrackSequence (trackId), *map);
+            expectEquals ((int) blocks.size(), 1);
+            expectEquals (blocks[0].noteCount, 3);
+            expectEquals (blocks[0].startTick, 4 * Q);
         }
 
         beginTest ("undo of a region moved onto a track with its own region: no duplicate, from either track");

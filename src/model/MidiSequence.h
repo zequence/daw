@@ -1,6 +1,7 @@
 #pragma once
 
 #include <limits>
+#include <map>
 #include "ExpressionMap.h"
 #include "TempoMap.h"
 
@@ -33,6 +34,11 @@ public:
         // A keyswitch inserted by an articulation (playback sequences only). When playback starts or a loop
         // wraps mid-piece, the keyswitch of the articulation in effect is re-sent (the chase).
         bool isKeyswitch = false;
+
+        // The arrangement region the note belongs to (PhraseBlocks.h). 0 = the track's ordinary
+        // material, divided by silence. A moved or copied region gets its own id, so it stays a
+        // region of its own - touching or overlapping others - until glued.
+        int region = 0;
     };
 
     enum class ControlType { controller, pitchBend, programChange };
@@ -79,8 +85,6 @@ public:
 
         std::stable_sort (notes.begin(), notes.end(),
                           [] (const Note& a, const Note& b) { return a.startTick < b.startTick; });
-        std::stable_sort (controls.begin(), controls.end(),
-                          [] (const Control& a, const Control& b) { return a.tick < b.tick; });
 
         for (auto& n : notes)    seq->lengthTicks = juce::jmax (seq->lengthTicks, n.startTick + n.lengthTicks);
         for (auto& c : controls) seq->lengthTicks = juce::jmax (seq->lengthTicks, c.tick + 1);
@@ -90,21 +94,32 @@ public:
         return seq;
     }
 
-    // Region cuts (the arrangement's phrase blocks): ticks where a region boundary is kept even
-    // without silence - a region moved next to another stays separate until glued. A sequence
-    // built by create() has its cuts UNSET: storing it on a track keeps the track's cuts.
-    const std::vector<juce::int64>& getCuts() const noexcept { return cuts; }
-    bool areCutsSet() const noexcept                         { return cutsSet; }
-
-    Ptr withCuts (std::vector<juce::int64> newCuts) const
+    // Notes being ADDED (drawn, recorded, entered) inside a region's span join that region;
+    // the existing notes keep theirs (a moved region may overlap ordinary material)
+    static void joinRegions (std::vector<Note>& added, const std::vector<Note>& existing)
     {
-        auto seq = std::shared_ptr<MidiSequence> (new MidiSequence (*this));
-        std::sort (newCuts.begin(), newCuts.end());
-        newCuts.erase (std::unique (newCuts.begin(), newCuts.end()), newCuts.end());
-        std::erase_if (newCuts, [] (juce::int64 tick) { return tick <= 0; });
-        seq->cuts = std::move (newCuts);
-        seq->cutsSet = true;
-        return seq;
+        std::map<int, std::pair<juce::int64, juce::int64>> spans;
+
+        for (auto& n : existing)
+            if (n.region != 0)
+            {
+                auto [it, fresh] = spans.try_emplace (n.region, n.startTick, n.startTick + n.lengthTicks);
+
+                if (! fresh)
+                {
+                    it->second.first = juce::jmin (it->second.first, n.startTick);
+                    it->second.second = juce::jmax (it->second.second, n.startTick + n.lengthTicks);
+                }
+            }
+
+        for (auto& n : added)
+            if (n.region == 0)
+                for (auto& [region, span] : spans)
+                    if (n.startTick >= span.first && n.startTick < span.second)
+                    {
+                        n.region = region;
+                        break;
+                    }
     }
 
     const std::vector<Note>& getNotes() const noexcept       { return notes; }
@@ -125,6 +140,9 @@ public:
             e->setAttribute ("key", n.key);
             e->setAttribute ("velocity", n.velocity);
 
+            if (n.region != 0)
+                e->setAttribute ("region", n.region);
+
             if (! n.articulation.isEmpty())
                 e->addChildElement (n.articulation.toXml().release());
         }
@@ -138,9 +156,6 @@ public:
             e->setAttribute ("number", c.number);
             e->setAttribute ("value", c.value);
         }
-
-        for (auto cut : cuts)
-            xml->createNewChildElement ("CUT")->setAttribute ("tick", juce::String (cut));
 
         return xml;
     }
@@ -158,6 +173,8 @@ public:
                         e->getIntAttribute ("key", 60),
                         e->getIntAttribute ("velocity", 100) };
 
+            note.region = e->getIntAttribute ("region", 0);
+
             if (auto* articulation = e->getChildByName ("ARTICULATION"))   // absent in older projects
                 note.articulation = ExpressionMap::Selection::fromXml (*articulation);
 
@@ -171,12 +188,7 @@ public:
                                   e->getIntAttribute ("number"),
                                   e->getIntAttribute ("value") });
 
-        std::vector<juce::int64> cutTicks;
-
-        for (auto* e : xml.getChildWithTagNameIterator ("CUT"))
-            cutTicks.push_back (e->getStringAttribute ("tick").getLargeIntValue());
-
-        return create (std::move (notes), std::move (controls))->withCuts (std::move (cutTicks));
+        return create (std::move (notes), std::move (controls));
     }
 
 private:
@@ -185,8 +197,6 @@ private:
     std::vector<Note> notes;
     std::vector<Control> controls;
     juce::int64 lengthTicks = 0;
-    std::vector<juce::int64> cuts;
-    bool cutsSet = false;
 
     JUCE_LEAK_DETECTOR (MidiSequence)
 };

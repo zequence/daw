@@ -1276,10 +1276,6 @@ void AudioEngine::setTrackSequence (TrackId id, MidiSequence::Ptr sequence)
         track->redoStack.clear();
         track->redoGroups.clear();
 
-        // An edit that doesn't speak about cuts keeps the track's (they go when the clip is cleared)
-        if (sequence != nullptr && ! sequence->areCutsSet() && track->sequence != nullptr && ! track->sequence->getCuts().empty())
-            sequence = sequence->withCuts (track->sequence->getCuts());
-
         juce::Logger::writeToLog ("Track " + juce::String (id)
                                   + (sequence != nullptr ? ": sequence set (" + juce::String ((int) sequence->getNotes().size()) + " notes)"
                                                          : ": sequence cleared"));
@@ -2123,6 +2119,9 @@ void AudioEngine::stopRecording()
             controls.insert (controls.end(), result.controls.begin(), result.controls.end());
 
             if (base != nullptr)
+                MidiSequence::joinRegions (notes, base->getNotes());   // the take joins the regions it lands in
+
+            if (base != nullptr)
             {
                 notes.insert (notes.end(), base->getNotes().begin(), base->getNotes().end());
                 controls.insert (controls.end(), base->getControls().begin(), base->getControls().end());
@@ -2198,6 +2197,7 @@ void AudioEngine::addToTrackSequence (TrackId id, std::vector<MidiSequence::Note
     if (track->sequence != nullptr)
     {
         const auto& existing = *track->sequence;
+        MidiSequence::joinRegions (notes, existing.getNotes());   // added inside a region: part of it
         notes.insert (notes.end(), existing.getNotes().begin(), existing.getNotes().end());
         controls.insert (controls.end(), existing.getControls().begin(), existing.getControls().end());
     }
