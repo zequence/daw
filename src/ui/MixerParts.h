@@ -189,6 +189,32 @@ struct LitButton : juce::Button
     {
         const auto area = getLocalBounds().toFloat().reduced (1.0f);
         const auto on = getToggleState();
+
+        if (led)   // a small round LED in a black bezel, its legend beside it
+        {
+            const auto lamp = juce::Rectangle<float> (9.0f, 9.0f).withCentre ({ area.getX() + 6.0f, area.getCentreY() });
+
+            if (on)   // the glow around it
+            {
+                g.setGradientFill (juce::ColourGradient (lit.withAlpha (0.55f), lamp.getCentre(), lit.withAlpha (0.0f), lamp.getCentre().translated (8.0f, 0.0f), true));
+                g.fillEllipse (lamp.expanded (5.0f));
+            }
+
+            g.setColour (juce::Colour (0xff0c0d0f));
+            g.fillEllipse (lamp.expanded (1.5f));
+            const auto body = on ? lit : lit.darker (2.2f).withMultipliedSaturation (0.5f).brighter (highlighted ? 0.25f : 0.0f);
+            g.setGradientFill (juce::ColourGradient (body.brighter (on ? 0.6f : 0.3f), lamp.getCentreX() - 1.5f, lamp.getCentreY() - 2.0f,
+                                                     body.darker (0.3f), lamp.getRight(), lamp.getBottom(), true));
+            g.fillEllipse (lamp);
+            g.setColour (juce::Colours::white.withAlpha (on ? 0.8f : 0.3f));   // the lens's highlight
+            g.fillEllipse (juce::Rectangle<float> (2.5f, 2.0f).withCentre (lamp.getCentre().translated (-1.3f, -1.8f)));
+
+            g.setColour (juce::Colours::white.withAlpha (0.7f));
+            g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
+            g.drawText (getButtonText(), area.withTrimmedLeft (15.0f), juce::Justification::centredLeft, false);
+            return;
+        }
+
         g.setColour (on ? lit : juce::Colour (0xff1c1e22).brighter (highlighted ? 0.15f : 0.0f));
         g.fillRoundedRectangle (area, 2.0f);
 
@@ -204,6 +230,7 @@ struct LitButton : juce::Button
     }
 
     juce::Colour lit;
+    bool led = false;   // a round LED with its legend beside it, not a lit key
 };
 
 //==========================================================================

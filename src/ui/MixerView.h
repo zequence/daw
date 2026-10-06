@@ -98,34 +98,54 @@ public:
 
 private:
     enum class Kind { channel, aux, master };
-    static constexpr int stripWidth = 136, stripHeight = 1310;
+    static constexpr int stripWidth = 136, stripHeight = 1420;
 
     const mixer::ConsoleStyle& style() const   { return mixer::ConsoleStyle::ssl(); }
 
     //==========================================================================
-    // A section of a strip: a panel with a legend; its controls are laid out by the strip
+    // A section of a strip: a panel with a legend; its controls are laid out by the strip. The panel
+    // takes the shape the strip gives it (a section can end in one column while the next begins in
+    // the other: their edges then run diagonally); without a shape it fills its bounds.
     struct Section final : juce::Component
     {
         explicit Section (const juce::String& legendToUse) : legend (legendToUse) {}
 
+        juce::Path outline() const
+        {
+            if (! shape.isEmpty())
+                return shape;
+
+            juce::Path box;
+            box.addRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
+            return box;
+        }
+
         void paint (juce::Graphics& g) override
         {
             const auto& style = mixer::ConsoleStyle::ssl();
+            const auto path = outline();
             g.setColour (style.section);
-            g.fillRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
-            g.setGradientFill (juce::ColourGradient (juce::Colours::black.withAlpha (0.18f), 0.0f, 0.0f,
-                                                     juce::Colours::transparentBlack, 0.0f, 6.0f, false));   // recessed: shade under the top edge
-            g.fillRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
+            g.fillPath (path);
+
+            {
+                juce::Graphics::ScopedSaveState state (g);   // recessed: a shade under the top edges
+                g.reduceClipRegion (path);
+                g.setColour (juce::Colours::black.withAlpha (0.16f));
+                g.strokePath (path, juce::PathStrokeType (5.0f), juce::AffineTransform::translation (0.0f, 2.5f));
+            }
+
             g.setColour (style.sectionLine);
-            g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 3.0f, 1.0f);
-            g.setColour (juce::Colours::white.withAlpha (0.07f));   // the bottom edge catching the light
-            g.drawHorizontalLine (getHeight() - 1, 3.0f, (float) getWidth() - 3.0f);
+            g.strokePath (path, juce::PathStrokeType (1.0f));
             g.setColour (style.sectionText);
             g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
-            g.drawText (legend, getLocalBounds().removeFromTop (12), juce::Justification::centred, false);
+            g.drawText (legend, titleArea.isEmpty() ? getLocalBounds().removeFromTop (12) : titleArea, juce::Justification::centred, false);
         }
 
+        bool hitTest (int x, int y) override   { return outline().contains ((float) x, (float) y); }
+
         juce::String legend;
+        juce::Path shape;
+        juce::Rectangle<int> titleArea;
     };
 
     //==========================================================================
@@ -205,6 +225,7 @@ private:
                     eq.addAndMakeVisible (b);
                 }
 
+                eqIn.led = dynamicsIn.led = true;   // the sections' on/off: LEDs
                 dynamicsIn.setTooltip (placeholderTip);
                 dynamics.addAndMakeVisible (dynamicsIn);
                 addAndMakeVisible (eq);
@@ -476,59 +497,133 @@ private:
                 area.removeFromTop (4);
             }
 
-            // Two knobs side by side per row
-            // A row of two knobs, each half the width, packed edge to edge (one alone is centred)
-            const auto row = [] (juce::Rectangle<int>& inside, int height, juce::Component* a, juce::Component* b)
-            {
-                auto line = inside.removeFromTop (height);
-                const auto column = line.getWidth() / 2;
-                line = line.withSizeKeepingCentre (column * (b != nullptr ? 2 : 1), height);
-
-                for (auto* knob : { a, b })
-                    if (knob != nullptr)
-                        knob->setBounds (line.removeFromLeft (column));
-            };
-            constexpr int knobRow = 72, buttonRow = 16;
-
+            // The knobs, staggered: two columns that overlap a little, each knob diagonally below the
+            // last one in the other column, so they pack tightly. A section that ends in one column
+            // lets the next begin beside it; their panels follow the knobs, diagonal where they meet.
             if (kind != Kind::master)
             {
-                // The EQ and dynamics - or, flipped, the inserts in the same space
+                constexpr int knobW = 68, knobH = 79, stagger = 41, buttonW = 44, buttonH = 16, titleH = 12, pad = 2, gap = 4;
+                const auto left = area.getX() + pad, right = area.getRight() - pad, mid = area.getCentreX();
+                const int columnX[2] = { left, right - knobW };
+                int columnY[2] = { area.getY() + pad, area.getY() + pad };
+                int lastY = area.getY() - stagger, next = 0;
+
+                struct Extent { int top = std::numeric_limits<int>::max(), bottom = std::numeric_limits<int>::min(); };
+                std::array<Extent, 2> extent;
+                std::vector<std::pair<juce::Component*, juce::Rectangle<int>>> placed;
+                Section* current = nullptr;
+                juce::Rectangle<int> title;
+
+                const auto mark = [&] (int column, int top, int bottom)
+                {
+                    extent[(size_t) column].top = juce::jmin (extent[(size_t) column].top, top);
+                    extent[(size_t) column].bottom = juce::jmax (extent[(size_t) column].bottom, bottom);
+                };
+
+                const auto finish = [&]
+                {
+                    if (current == nullptr)
+                        return;
+
+                    for (int c = 0; c < 2; ++c)   // a column without controls follows the other
+                        if (extent[(size_t) c].top > extent[(size_t) c].bottom)
+                            extent[(size_t) c] = extent[(size_t) (1 - c)];
+
+                    const auto x0 = (float) (left - pad), x1 = (float) (right + pad), m = (float) mid, d = 10.0f;
+                    const auto t0 = (float) (extent[0].top - pad), t1 = (float) (extent[1].top - pad);
+                    const auto b0 = (float) (extent[0].bottom + pad), b1 = (float) (extent[1].bottom + pad);
+                    juce::Path path;
+                    path.startNewSubPath (x0, t0);
+                    path.lineTo (m - d, t0);
+                    path.lineTo (m + d, t1);
+                    path.lineTo (x1, t1);
+                    path.lineTo (x1, b1);
+                    path.lineTo (m + d, b1);
+                    path.lineTo (m - d, b0);
+                    path.lineTo (x0, b0);
+                    path.closeSubPath();
+
+                    const auto bounds = path.getBounds().getSmallestIntegerContainer();
+                    current->setBounds (bounds);
+                    current->shape = path.createPathWithRoundedCorners (3.0f);
+                    current->shape.applyTransform (juce::AffineTransform::translation ((float) -bounds.getX(), (float) -bounds.getY()));
+                    current->titleArea = title - bounds.getPosition();
+
+                    for (auto& [component, r] : placed)
+                        component->setBounds (r - bounds.getPosition());
+
+                    placed.clear();
+                    extent = {};
+                    current = nullptr;
+                };
+
+                const auto begin = [&] (Section& section)
+                {
+                    const auto first = current == nullptr;
+                    finish();
+                    current = &section;
+
+                    if (! first)
+                        for (auto& y : columnY)
+                            y += gap + 2 * pad;
+
+                    // The title, at the top of the column the section's first knob goes into
+                    title = { columnX[next], columnY[next], knobW, titleH };
+                    mark (next, title.getY(), title.getBottom());
+                    columnY[next] = title.getBottom();
+                };
+
+                const auto knob = [&] (juce::Component* k)
+                {
+                    const auto y = juce::jmax (columnY[next], lastY + stagger);
+                    placed.push_back ({ k, { columnX[next], y, knobW, knobH } });
+                    mark (next, y, y + knobH);
+                    columnY[next] = y + knobH;
+                    lastY = y;
+                    next = 1 - next;
+                };
+
+                const auto button = [&] (juce::Component& b)   // in the column with more room
+                {
+                    const auto c = columnY[0] <= columnY[1] ? 0 : 1;
+                    placed.push_back ({ &b, juce::Rectangle<int> (columnX[c], columnY[c], knobW, buttonH).withSizeKeepingCentre (buttonW, buttonH - 2) });
+                    mark (c, columnY[c], columnY[c] + buttonH);
+                    columnY[c] += buttonH;
+                };
+
                 const auto pageTop = area.getY();
-                auto e = area.removeFromTop (12 + 6 * knobRow + 3 * buttonRow + 8);
-                eq.setBounds (e);
-                auto inside = eq.getLocalBounds().reduced (2).withTrimmedTop (12);
-                row (inside, knobRow, &hpf, &lpf);
-                row (inside, knobRow, &hfGain, &hfFreq);
-                hfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (44, buttonRow - 2));
-                row (inside, knobRow, &hmfGain, &hmfFreq);
-                row (inside, knobRow, &hmfQ, &lmfQ);
-                row (inside, knobRow, &lmfGain, &lmfFreq);
-                row (inside, knobRow, &lfGain, &lfFreq);
-                lfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (44, buttonRow - 2));
-                eqIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (48, buttonRow - 1));
-                area.removeFromTop (5);
 
-                auto d = area.removeFromTop (12 + 3 * knobRow + buttonRow + 6);
-                dynamics.setBounds (d);
-                inside = dynamics.getLocalBounds().reduced (2).withTrimmedTop (12);
-                row (inside, knobRow, &threshold, &ratio);
-                row (inside, knobRow, &attack, &release);
-                row (inside, knobRow, &makeup, nullptr);
-                dynamicsIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (48, buttonRow - 1));
-                inserts.setBounds (getLocalBounds().reduced (4).withTop (pageTop).withBottom (dynamics.getBottom()));
-                area.removeFromTop (5);
-            }
+                begin (eq);
+                for (auto* k : { &hpf, &lpf, &hfGain, &hfFreq })
+                    knob (k);
+                button (hfBell);
+                for (auto* k : { &hmfGain, &hmfFreq, &hmfQ, &lmfGain, &lmfFreq, &lmfQ, &lfGain, &lfFreq })
+                    knob (k);
+                button (lfBell);
+                button (eqIn);
 
-            if (kind == Kind::channel)
-            {
-                auto a = area.removeFromTop (12 + 3 * knobRow + 4);
-                aux.setBounds (a);
-                auto inside = aux.getLocalBounds().reduced (2).withTrimmedTop (12);
+                begin (dynamics);
+                for (auto* k : { &threshold, &ratio, &attack, &release, &makeup })
+                    knob (k);
+                button (dynamicsIn);
 
-                for (size_t i = 0; i + 1 < auxKnobs.size(); i += 2)
-                    row (inside, knobRow, auxKnobs[i].get(), auxKnobs[i + 1].get());
+                auto pageBottom = juce::jmax (columnY[0], columnY[1]) + pad;   // the inserts share the EQ and dynamics' space
 
-                area.removeFromTop (5);
+                if (kind == Kind::channel)
+                {
+                    begin (aux);
+
+                    for (auto& k : auxKnobs)
+                        knob (k.get());
+                }
+
+                finish();
+
+                if (kind == Kind::channel)
+                    pageBottom = aux.getY() - 2;
+
+                inserts.setBounds (getLocalBounds().reduced (4).withTop (pageTop).withBottom (pageBottom));
+                area.setTop (juce::jmax (columnY[0], columnY[1]) + pad + 5);
             }
 
             output.setBounds (area.removeFromBottom (20));
