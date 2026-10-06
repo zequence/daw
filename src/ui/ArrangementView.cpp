@@ -300,6 +300,11 @@ void ArrangementView::mouseUp (const juce::MouseEvent& event)
 
             const auto landed = juce::jmax ((juce::int64) 0, draggingFolder.start + dragDeltaTicks);
             selectedFolderSpan = { draggingFolder.folder, landed, landed + (draggingFolder.end - draggingFolder.start) };
+
+            // The folder's first track becomes the selected one, so Ctrl+Z (the selected track's undo,
+            // which takes back a multi-track edit on all its tracks) undoes this move
+            if (onSelectTrack && ! draggingFolderTracks.empty())
+                onSelectTrack (draggingFolderTracks.front());
         }
 
         draggingFolder = {};
