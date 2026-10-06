@@ -41,7 +41,7 @@ public:
         int region = 0;
     };
 
-    enum class ControlType { controller, pitchBend, programChange };
+    enum class ControlType { controller, pitchBend, programChange, aftertouch };   // aftertouch = channel pressure
 
     struct Control
     {
@@ -274,7 +274,7 @@ public:
 
         for (auto* e : xml.getChildWithTagNameIterator ("CONTROL"))
             controls.push_back ({ e->getStringAttribute ("tick").getLargeIntValue(),
-                                  (ControlType) juce::jlimit (0, 2, e->getIntAttribute ("type")),
+                                  (ControlType) juce::jlimit (0, 3, e->getIntAttribute ("type")),
                                   e->getIntAttribute ("channel", 1),
                                   e->getIntAttribute ("number"),
                                   e->getIntAttribute ("value") });

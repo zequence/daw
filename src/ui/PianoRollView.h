@@ -4,6 +4,7 @@
 #include "TimeAxis.h"
 #include "../model/PlayheadSteps.h"
 #include "KeyCommands.h"
+#include "ControllerLanes.h"
 #include "../model/PhraseBlocks.h"
 #include "CloseButton.h"
 
@@ -82,13 +83,30 @@ public:
 
 private:
     enum class Drag { none, marquee, move, resize, lane, draw };
-    enum class LaneMode { velocity, pitchBend, controller };
+    enum class LaneMode { velocity, pitchBend, aftertouch, controller };
 
     //==============================================================================
     // Geometry (time <-> x comes from the shared axis; keysWidth == TimeAxis::gutter)
     juce::Rectangle<int> keysArea() const;
     juce::Rectangle<int> gridArea() const;
-    juce::Rectangle<int> laneArea() const;
+    juce::Rectangle<int> laneArea() const;          // the maximized lane's value area (where editing happens)
+
+    // The controller lanes (Settings > Controller lanes; the track's choice, saved per track): stacked
+    // under the grid, one maximized, the others minimized strips (name + a coloured line of their values)
+    static constexpr int maximizedLaneHeight = 120, minimizedLaneHeight = 18;
+    juce::StringArray shownLanes() const;           // the track's lanes that are available, in order
+    juce::String maximizedLaneId() const;
+    int lanesHeight() const;
+    juce::Rectangle<int> laneRowArea (int index) const;   // full width (names in the keys column)
+    int laneIndexAt (juce::Point<int>) const;             // -1 = not in the lane pane
+    void showLaneMenu();                                  // right-click: which lanes the track shows
+    void paintLanes (juce::Graphics&, const MidiSequence*);
+    void paintMinimizedLane (juce::Graphics&, juce::Rectangle<int> strip, const lanes::Lane&, const MidiSequence*);
+    juce::String laneValueAt (juce::Point<int>) const;   // the value under the mouse ("" = none)
+
+    juce::String maximizedLane;   // id; empty = the first shown
+    juce::String hoverValue;      // drawn by the mouse (always visible, no tooltip delay)
+    juce::Point<int> hoverPoint;
 
     juce::int64 xToTick (int x) const;
     int tickToX (juce::int64 tick) const;
@@ -109,7 +127,6 @@ private:
     int laneValueMax() const;                 // 127, or 16383 for pitch bend
     int laneValueFromY (int y) const;
     int laneValueToY (int value) const;
-    void rebuildLaneBox();
     void commitLaneGesture();
 
     //==============================================================================
@@ -235,7 +252,7 @@ private:
     std::vector<InputStep> inputSteps;
     void noteInput (const juce::MidiMessage&, double receivedMs);
     bool drawMode = false;   // the top bar's Draw (pen) vs Edit (select)
-    juce::ComboBox lengthBox, laneBox, colourBox;
+    juce::ComboBox lengthBox, colourBox;
     juce::TextButton quantizeButton { "Q" };
     juce::TextButton articulationButton { "Articulation" };
     ExpressionMap::Selection newNoteArticulation;   // what new notes are drawn with (nothing selected)
@@ -243,9 +260,8 @@ private:
     std::optional<ExpressionMap> cachedMap;         // the track's map for painting, refreshed when the engine changes
     AudioEngine::TrackId cachedMapTrack = -1;
     int cachedMapRevision = -1;
-    std::vector<int> lastCcList;           // CCs currently offered by laneBox
 
-    static constexpr int keysWidth = TimeAxis::gutter, laneHeight = 80, toolbarHeight = 30;
+    static constexpr int keysWidth = TimeAxis::gutter, toolbarHeight = 30;
     static constexpr juce::int64 laneDrawQuantum = Ticks::perQuarterNote / 32;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (PianoRollView)

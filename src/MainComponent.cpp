@@ -33,6 +33,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 {
     noteNames::middleCOctave() = editorSettings::middleCOctave (engine.getSettingsFile());   // Settings > Editor
     keys::Bindings::get().load (engine.getSettingsFile());                                   // Settings > Key commands
+    lanes::Settings::get().load (engine.getSettingsFile());                                  // Settings > Controller lanes
 
     // Keep the window state sane when projects change through the API.
     dispatcher.onBeforeProjectChange = [safe = juce::Component::SafePointer<MainComponent> (this)]

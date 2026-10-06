@@ -1162,6 +1162,21 @@ bool AudioEngine::isTrackSoloed (TrackId id) const
     return track != nullptr && track->soloed;
 }
 
+void AudioEngine::setTrackEditorLanes (TrackId id, const juce::StringArray& lanes)
+{
+    if (auto* track = findTrack (id); track != nullptr && track->editorLanes != lanes)
+    {
+        track->editorLanes = lanes;
+        projectDirty = true;   // saved with the project; a view choice, not an edit (no history entry)
+    }
+}
+
+juce::StringArray AudioEngine::getTrackEditorLanes (TrackId id) const
+{
+    auto* track = findTrack (id);
+    return track != nullptr ? track->editorLanes : juce::StringArray();
+}
+
 void AudioEngine::setTrackRecordReplace (TrackId id, bool replace)
 {
     if (auto* track = findTrack (id))
@@ -2321,6 +2336,9 @@ bool AudioEngine::saveProject (const juce::File& file)
         e->setAttribute ("armed", isTrackArmed (id));
         e->setAttribute ("primary", id == armedTrack);
         e->setAttribute ("recordReplace", track.recordReplace);
+
+        if (! track.editorLanes.isEmpty())
+            e->setAttribute ("editorLanes", track.editorLanes.joinIntoString (","));
         e->setAttribute ("folder", getTrackFolder (id));
         e->setAttribute ("position", track.position);
         e->setAttribute ("colour", track.colour);
@@ -2594,6 +2612,7 @@ void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std:
         setTrackMuted (trackId, e->getBoolAttribute ("muted"));
         setTrackSoloed (trackId, e->getBoolAttribute ("soloed"));
         setTrackRecordReplace (trackId, e->getBoolAttribute ("recordReplace"));
+        setTrackEditorLanes (trackId, juce::StringArray::fromTokens (e->getStringAttribute ("editorLanes"), ",", {}));
 
         if (auto it = folderIds.find (e->getIntAttribute ("folder")); it != folderIds.end())
             setTrackFolder (trackId, it->second);

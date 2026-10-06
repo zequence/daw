@@ -175,6 +175,11 @@ public:
     // Recording mode (DESIGN.md): false = add to existing (merge), true = replace on
     // first input (existing material plays until you play; from then it's erased
     // under the playhead until recording stops).
+    // The controller lanes the MIDI editor shows under this track's notes (ids like "velocity",
+    // "pitchBend", "aftertouch", "cc1"; ui/ControllerLanes.h). Saved with the project. Empty = the default.
+    void setTrackEditorLanes (TrackId, const juce::StringArray&);
+    juce::StringArray getTrackEditorLanes (TrackId) const;
+
     void setTrackRecordReplace (TrackId, bool);
     bool isTrackRecordReplace (TrackId) const;
 
@@ -499,6 +504,7 @@ private:
         std::vector<Output> outputs;
         bool muted = false, soloed = false;
         bool recordReplace = false;                 // false = add, true = replace on first input
+        juce::StringArray editorLanes;              // the MIDI editor's controller lanes (empty = default)
         FolderId folder = 0;                        // 0 = root
         int position = 0;                           // order among siblings
         juce::String colour;                        // "#rrggbb"; empty = none

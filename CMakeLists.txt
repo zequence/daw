@@ -136,6 +136,7 @@ target_sources(OrchestralDAWTests PRIVATE
     tests/PlaybackWiringTests.cpp
     tests/VeproStateTests.cpp
     tests/KeyCommandTests.cpp
+    tests/ControllerLaneTests.cpp
     src/AudioEngine.cpp
     src/api/CommandDispatcher.cpp
     src/model/TempoMap.cpp

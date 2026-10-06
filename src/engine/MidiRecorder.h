@@ -114,6 +114,11 @@ private:
             pending.controls.push_back ({ event.tick, MidiSequence::ControlType::pitchBend,
                                           message.getChannel(), 0, message.getPitchWheelValue() });
         }
+        else if (message.isChannelPressure())
+        {
+            pending.controls.push_back ({ event.tick, MidiSequence::ControlType::aftertouch,
+                                          message.getChannel(), 0, message.getChannelPressureValue() });
+        }
         else if (message.isProgramChange())
         {
             pending.controls.push_back ({ event.tick, MidiSequence::ControlType::programChange,

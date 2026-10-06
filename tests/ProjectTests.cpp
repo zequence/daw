@@ -101,6 +101,7 @@ public:
         engine.addTrackOutput (track, instrumentId, 5);
         engine.setTrackSequence (track, makeDemoSequence());
         engine.setTrackMuted (track, true);
+        engine.setTrackEditorLanes (track, { "velocity", "aftertouch", "cc11" });
         engine.setInstrumentChannelName (instrumentId, 5, "Solo");
         engine.setTempoBpm (93.0);
 
@@ -153,6 +154,7 @@ public:
 
         expectEquals (engine.getTrackName (newTrack), juce::String ("Lead"));
         expect (engine.isTrackMuted (newTrack));
+        expect (engine.getTrackEditorLanes (newTrack) == juce::StringArray { "velocity", "aftertouch", "cc11" });
         expectEquals (engine.getArmedTrack(), newTrack);
 
         const auto outputs = engine.getTrackOutputs (newTrack);

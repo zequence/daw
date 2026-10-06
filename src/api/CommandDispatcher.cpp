@@ -509,7 +509,7 @@ void CommandDispatcher::registerCommands()
                  {
                      auto o = object();
                      o->setProperty ("tick", c.tick);
-                     o->setProperty ("type", (int) c.type);   // 0=controller 1=pitchBend 2=programChange
+                     o->setProperty ("type", (int) c.type);   // 0=controller 1=pitchBend 2=programChange 3=aftertouch
                      o->setProperty ("number", c.number);
                      o->setProperty ("value", c.value);
                      o->setProperty ("channel", c.channel);
@@ -563,7 +563,7 @@ void CommandDispatcher::registerCommands()
 
         for (auto& c : *array)
             out.push_back ({ (juce::int64) c["tick"],
-                             (MidiSequence::ControlType) juce::jlimit (0, 2, (int) c.getProperty ("type", 0)),
+                             (MidiSequence::ControlType) juce::jlimit (0, 3, (int) c.getProperty ("type", 0)),
                              (int) c.getProperty ("channel", 1), (int) c.getProperty ("number", 1),
                              (int) c.getProperty ("value", 0) });
 
@@ -1161,14 +1161,14 @@ void CommandDispatcher::registerCommands()
     add ("clip.setControlRange",
          "Replace one controller's events inside [start,end) in one undoable step; empty 'events' erases. "
          "The CC-lane editor draws through this.",
-         "trackId:int type:int(0=cc,1=pitchBend,2=program) number:int(cc only) start:int64 end:int64 "
+         "trackId:int type:int(0=cc,1=pitchBend,2=program,3=aftertouch) number:int(cc only) start:int64 end:int64 "
          "events:[{tick,value}] [channel:int=1]",
          [requireTrack, editClip] (const juce::var& params, Respond respond)
          {
              int id = 0;
              if (! requireTrack (params, respond, id)) return;
 
-             const auto type = (MidiSequence::ControlType) juce::jlimit (0, 2, (int) params.getProperty ("type", 0));
+             const auto type = (MidiSequence::ControlType) juce::jlimit (0, 3, (int) params.getProperty ("type", 0));
              const auto number = (int) params.getProperty ("number", 1);
              const auto start = (juce::int64) params.getProperty ("start", 0);
              const auto end = (juce::int64) params.getProperty ("end", 0);

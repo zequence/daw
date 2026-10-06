@@ -347,6 +347,10 @@ private:
             case Type::programChange:
                 midi.addEvent (juce::MidiMessage::programChange (c.channel, c.value), offset);
                 break;
+
+            case Type::aftertouch:
+                midi.addEvent (juce::MidiMessage::channelPressureChange (c.channel, c.value), offset);
+                break;
         }
     }
 
@@ -355,6 +359,7 @@ private:
         std::memset (ccState, -1, sizeof (ccState));
         std::memset (bendState, -1, sizeof (bendState));
         std::memset (programState, -1, sizeof (programState));
+        std::memset (pressureState, -1, sizeof (pressureState));
 
         // The state just before 'chaseTick': events both scheduled and written before it (an event written
         // later but scheduled earlier belongs to the pre-roll and is played, not chased)
@@ -372,6 +377,7 @@ private:
                 case Type::controller:    ccState[c.channel - 1][c.number] = (juce::int16) c.value; break;
                 case Type::pitchBend:     bendState[c.channel - 1] = c.value; break;
                 case Type::programChange: programState[c.channel - 1] = c.value; break;
+                case Type::aftertouch:    pressureState[c.channel - 1] = c.value; break;
             }
         }
 
@@ -392,6 +398,9 @@ private:
 
             if (bendState[ch - 1] >= 0)
                 midi.addEvent (juce::MidiMessage::pitchWheel (ch, bendState[ch - 1]), offset);
+
+            if (pressureState[ch - 1] >= 0)
+                midi.addEvent (juce::MidiMessage::channelPressureChange (ch, pressureState[ch - 1]), offset);
         }
 
         chaseKeyswitch (midi, seq, chaseTick, offset, emitTick);
@@ -447,7 +456,7 @@ private:
 
     // Chase scratch space (kept as members to stay off the audio-thread stack)
     juce::int16 ccState[16][128];
-    int bendState[16], programState[16];
+    int bendState[16], programState[16], pressureState[16];
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MidiSourceProcessor)
 };

@@ -8,6 +8,7 @@
 #include "../model/NoteNames.h"
 #include "ThemeEditor.h"
 #include "KeyCommandsEditor.h"
+#include "ControllerLanesEditor.h"
 
 // Full-window settings page (replaces the whole UI; close with X or ESC).
 // Tab system (ISSUES.md "Settings Window"): a category column on the left
@@ -33,7 +34,7 @@ public:
         closeButton.onClick = [this] { if (onClose) onClose(); };
         addAndMakeVisible (closeButton);
 
-        categories.names = { "Audio & MIDI", "Plugins", "Tracks", "Editor", "Agents (MCP)", "Integrations",
+        categories.names = { "Audio & MIDI", "Plugins", "Tracks", "Editor", "Controller lanes", "Agents (MCP)", "Integrations",
                              "Theming", "Key commands" };
         categories.onSelect = [this] (int index) { setCategory (index); };
         addAndMakeVisible (categories);
@@ -239,6 +240,9 @@ public:
         // --- Key commands ---
         page.addChildComponent (keyCommandsEditor);
 
+        // --- Controller lanes (the MIDI editor's lower pane) ---
+        page.addChildComponent (controllerLanesEditor);
+
         for (auto* c : std::initializer_list<juce::Component*> { &scanButton, &retryButton, &rescanButton,
                                                                  &onTopToggle, &autoRecordToggle, &mcpToggle, &defaultRootToggle,
                                                                  &cutOverlapsToggle })
@@ -283,7 +287,7 @@ public:
     }
 
 private:
-    enum Category { audioMidi = 0, plugins, tracks, editor, agents, integrations, theming, keyCommands };
+    enum Category { audioMidi = 0, plugins, tracks, editor, controllerLanes, agents, integrations, theming, keyCommands };
 
     void setCategory (int index)
     {
@@ -328,6 +332,7 @@ private:
 
         themeEditor.setVisible (category == theming);
         keyCommandsEditor.setVisible (category == keyCommands);
+        controllerLanesEditor.setVisible (category == controllerLanes);
 
         switch (category)
         {
@@ -406,6 +411,11 @@ private:
             case theming:
                 themeEditor.setTopLeftPosition (4, y);
                 y += themeEditor.layout (width - 8) + 8;
+                break;
+
+            case controllerLanes:
+                controllerLanesEditor.setTopLeftPosition (4, y);
+                y += controllerLanesEditor.layout (width - 8) + 8;
                 break;
 
             case keyCommands:
@@ -535,6 +545,7 @@ private:
     ThemeEditor themeEditor { engine };
 
     KeyCommandsEditor keyCommandsEditor;
+    ControllerLanesEditor controllerLanesEditor;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SettingsView)
 };
