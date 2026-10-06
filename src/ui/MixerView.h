@@ -543,7 +543,7 @@ private:
             // lets the next begin beside it; their panels follow the knobs, diagonal where they meet.
             if (kind != Kind::master)
             {
-                constexpr int knobW = 58, knobH = 64, stagger = 33, buttonW = 44, buttonH = 16, titleH = 12, pad = 2, gap = 4;
+                constexpr int knobW = 58, knobH = 64, stagger = 33, buttonW = 44, buttonH = 16, titleH = 12, pad = 2, gap = 1;
                 const auto left = area.getX() + pad, right = area.getRight() - pad, mid = area.getCentreX();
                 const int columnX[2] = { left, right - knobW };
                 int columnY[2] = { area.getY() + pad, area.getY() + pad };
@@ -617,7 +617,8 @@ private:
                     {
                         const auto c = 1 - next;
                         const auto y = juce::jmax (columnY[c], title.getY());
-                        placed.push_back ({ onOff, juce::Rectangle<int> (columnX[c], y, knobW, buttonH).withSizeKeepingCentre (buttonW, buttonH - 2) });
+                        auto r = juce::Rectangle<int> (columnX[c], y, knobW, buttonH).withSizeKeepingCentre (buttonW, buttonH - 2);
+                        placed.push_back ({ onOff, c == 1 ? r.withX (right - buttonW) : r.withX (left) });   // out towards the edge
                         mark (c, y, y + buttonH);
                         columnY[c] = y + buttonH;
                     }
@@ -661,17 +662,33 @@ private:
                 {
                     begin (aux, nullptr);
 
-                    // The sends are smaller (about 2/3 of the EQ's knobs): three to a row
-                    const auto auxW = (right - left) / 3, auxH = auxW + 7;
-                    const auto y = juce::jmax (columnY[0], columnY[1]);
+                    // The sends (3/4 of the EQ's knobs) in threes, each three a diagonal down three
+                    // columns - starting on the side the dynamics left room, so the two interlock
+                    constexpr int auxW = 44, auxH = 51, auxStep = 34;
+                    const int auxX[3] = { left, left + (right - left - auxW) / 2, right - auxW };
+                    int auxY[3] = { columnY[0], juce::jmax (columnY[0], columnY[1]), columnY[1] };
+                    int latest[3] = { std::numeric_limits<int>::min() / 2, std::numeric_limits<int>::min() / 2, std::numeric_limits<int>::min() / 2 };
+                    const auto fromRight = next == 1;
 
                     for (size_t i = 0; i < auxKnobs.size(); ++i)
-                        placed.push_back ({ auxKnobs[i].get(), { left + (int) (i % 3) * auxW, y + (int) (i / 3) * auxH, auxW, auxH } });
+                    {
+                        const auto c = fromRight ? 2 - (int) (i % 3) : (int) (i % 3);
+                        auto y = auxY[c];
 
-                    const auto bottom = y + (int) ((auxKnobs.size() + 2) / 3) * auxH;
-                    mark (0, y, bottom);
-                    mark (1, y, bottom);
-                    columnY[0] = columnY[1] = bottom;
+                        for (auto a : { c - 1, c + 1 })   // clear of the neighbouring columns' knobs
+                            if (a >= 0 && a < 3)
+                                y = juce::jmax (y, latest[a] + auxStep);
+
+                        placed.push_back ({ auxKnobs[i].get(), { auxX[c], y, auxW, auxH } });
+                        latest[c] = y;
+                        auxY[c] = y + auxH;
+
+                        if (c != 2) mark (0, y, y + auxH);
+                        if (c != 0) mark (1, y, y + auxH);
+                    }
+
+                    columnY[0] = juce::jmax (auxY[0], auxY[1]);
+                    columnY[1] = juce::jmax (auxY[1], auxY[2]);
                 }
 
                 finish();
@@ -693,8 +710,8 @@ private:
 
             if (kind != Kind::master)   // drive and pan, side by side, by the level
             {
-                auto knobs = area.removeFromTop (64);   // pan as big as the EQ's knobs, drive about 2/3 of it
-                drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2).withSizeKeepingCentre (40, 46).withY (knobs.getY() + 9));
+                auto knobs = area.removeFromTop (64);   // pan as big as the EQ's knobs, drive about 3/4 of it
+                drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2).withSizeKeepingCentre (44, 51).withY (knobs.getY() + 6));
                 pan.setBounds (knobs.withSizeKeepingCentre (58, 64));
                 area.removeFromTop (4);
             }
