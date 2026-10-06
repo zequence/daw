@@ -77,11 +77,7 @@ juce::Rectangle<int> ArrangementView::blockRect (const BlockRef& block, int lane
 {
     const auto x = tickToX (block.startTick);
     const auto right = tickToX (block.endTick);
-    const auto laneHeight = sidebar::trackRowHeight - 8;
-    const auto layers = juce::jmax (1, block.layers);
-    const auto top = laneTop + 4 + block.layer * laneHeight / layers;
-    const auto bottom = laneTop + 4 + (block.layer + 1) * laneHeight / layers;
-    return { x, top, juce::jmax (8, right - x), juce::jmax (3, bottom - top - (layers > 1 ? 1 : 0)) };
+    return { x, laneTop + 4, juce::jmax (8, right - x), sidebar::trackRowHeight - 8 };   // overlapping ones share it (hatched)
 }
 
 ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)
@@ -98,8 +94,11 @@ ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)
     const auto trackId = items[(size_t) index].member;
     const auto top = rowTop (items, (size_t) index);
 
-    for (auto& block : blocksFor (trackId))
-        if (const auto ref = BlockRef::of (trackId, block); blockRect (ref, top).contains (position))
+    // Where regions overlap, the later one (drawn on top) is hit
+    const auto& blocks = blocksFor (trackId);
+
+    for (auto it = blocks.rbegin(); it != blocks.rend(); ++it)
+        if (const auto ref = BlockRef::of (trackId, *it); blockRect (ref, top).contains (position))
             return ref;
 
     return {};
@@ -667,9 +666,6 @@ void ArrangementView::paint (juce::Graphics& g)
 
                 const auto shifted = isDragged ? shift.find (trackId) : shift.end();
 
-                if (isDragged)
-                    ref.layer = 0, ref.layers = 1;   // drawn whole while it moves
-
                 const auto rect = blockRect (ref, shifted != shift.end() ? laneTops[shifted->second] : y);
 
                 if (rect.getRight() < TimeAxis::gutter || rect.getX() > getWidth())
@@ -715,16 +711,14 @@ void ArrangementView::paint (juce::Graphics& g)
                     if (to <= from || to < TimeAxis::gutter || from > getWidth())
                         continue;
 
-                    const auto band = juce::Rectangle<int> (from, y + 2, to - from, height - 4);
+                    // Slight diagonal lines only: the notes underneath stay readable
+                    const auto band = juce::Rectangle<int> (from, y + 4, to - from, height - 8);
                     juce::Graphics::ScopedSaveState state (g);
                     g.reduceClipRegion (band);
-                    g.setColour (juce::Colours::white.withAlpha (0.35f));
+                    g.setColour (juce::Colours::white.withAlpha (0.18f));
 
-                    for (int x = band.getX() - band.getHeight(); x < band.getRight(); x += 6)
+                    for (int x = band.getX() - band.getHeight(); x < band.getRight(); x += 7)
                         g.drawLine ((float) x, (float) band.getBottom(), (float) (x + band.getHeight()), (float) band.getY(), 1.0f);
-
-                    g.setColour (juce::Colours::white.withAlpha (0.6f));
-                    g.drawRect (band, 1);
                 }
 
             y += height;
