@@ -144,7 +144,6 @@ private:
     void undo();
     void redo();
     void pasteAtPlayhead();
-    void deleteNote (int index);
     void commitMoveOrResize();
     void commitVelocities();
     void nudgeSelection (juce::int64 tickDelta, int keyDelta);

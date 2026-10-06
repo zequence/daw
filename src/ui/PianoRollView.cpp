@@ -1039,18 +1039,6 @@ void PianoRollView::pasteAtPlayhead()
     repaint();
 }
 
-void PianoRollView::deleteNote (int index)
-{
-    juce::Array<juce::var> indices;
-    indices.add (index);
-
-    auto params = new juce::DynamicObject();
-    params->setProperty ("trackId", trackId);
-    params->setProperty ("indices", indices);
-    runCommand ("clip.removeNotes", params);
-    selection.clear();
-}
-
 void PianoRollView::commitMoveOrResize()
 {
     const auto seq = sequence();
@@ -1405,10 +1393,15 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
             hit = noteIndexAt (position, onRightEdge);
         }
 
-    if (event.mods.isPopupMenu())
+    if (event.mods.isPopupMenu())   // right-click never deletes: it just picks the note
     {
-        if (hit >= 0)
-            deleteNote (hit);
+        if (hit >= 0 && selection.count (hit) == 0)
+        {
+            clearAllSelections();
+            selection = { hit };
+            repaint();
+        }
+
         return;
     }
 
