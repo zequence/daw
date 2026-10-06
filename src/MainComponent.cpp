@@ -1143,8 +1143,8 @@ void MainComponent::updateWindowTitle()
 {
     if (auto* window = dynamic_cast<juce::DocumentWindow*> (getTopLevelComponent()))
         window->setName (currentProjectFile != juce::File()
-                             ? "Orchestral DAW - " + currentProjectFile.getFileNameWithoutExtension()
-                             : juce::String ("Orchestral DAW"));
+                             ? "DAW+ - " + currentProjectFile.getFileNameWithoutExtension()
+                             : juce::String ("DAW+"));
 }
 
 void MainComponent::openSettings()

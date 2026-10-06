@@ -3,16 +3,34 @@
 #include <juce_core/juce_core.h>
 
 // Per-user data shared by every build of the app (Debug, Release, installed).
-// Default: %APPDATA%\OrchestralDAW. Override with the ORCHESTRAL_DAW_DATA_DIR environment variable.
+// Default: %APPDATA%\DawPlus. Override with the DAWPLUS_DATA_DIR environment variable (the older
+// ORCHESTRAL_DAW_DATA_DIR still works). The folder used to be %APPDATA%\OrchestralDAW: the first
+// start after the rename moves it to the new place (settings, maps, themes, startup project, logs).
 namespace UserData
 {
     inline juce::File getDir()
     {
-        const auto overridePath = juce::SystemStats::getEnvironmentVariable ("ORCHESTRAL_DAW_DATA_DIR", {});
+        auto overridePath = juce::SystemStats::getEnvironmentVariable ("DAWPLUS_DATA_DIR", {});
 
-        auto dir = overridePath.isNotEmpty()
-                       ? juce::File (overridePath)
-                       : juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory).getChildFile ("OrchestralDAW");
+        if (overridePath.isEmpty())
+            overridePath = juce::SystemStats::getEnvironmentVariable ("ORCHESTRAL_DAW_DATA_DIR", {});
+
+        if (overridePath.isNotEmpty())
+        {
+            juce::File dir (overridePath);
+            dir.createDirectory();
+            return dir;
+        }
+
+        const auto appData = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory);
+        auto dir = appData.getChildFile ("DawPlus");
+
+        // Once: the old folder moves to the new name (or is copied, if it can't be moved)
+        if (const auto old = appData.getChildFile ("OrchestralDAW"); ! dir.exists() && old.isDirectory())
+        {
+            if (! old.moveFileTo (dir))
+                old.copyDirectoryTo (dir);
+        }
 
         dir.createDirectory();
         return dir;
@@ -43,7 +61,7 @@ namespace UserData
     }
 
     inline juce::File getPluginScanLog()    { return getLogsDir().getChildFile ("PluginScan.log"); }
-    inline juce::File getAppLog()           { return getLogsDir().getChildFile ("OrchestralDAW.log"); }
+    inline juce::File getAppLog()           { return getLogsDir().getChildFile ("DawPlus.log"); }
     inline juce::File getAppPerfLog()       { return getLogsDir().getChildFile ("perf-app.csv"); }
     inline juce::File getScannerPerfLog()   { return getLogsDir().getChildFile ("perf-scanner.csv"); }
 }

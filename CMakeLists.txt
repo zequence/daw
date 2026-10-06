@@ -24,7 +24,7 @@ target_include_directories(zstd_decoder PUBLIC external/zstd/lib)
 target_compile_definitions(zstd_decoder PRIVATE ZSTD_DISABLE_ASM=1 ZSTD_LEGACY_SUPPORT=0)
 
 juce_add_gui_app(OrchestralDAW
-    PRODUCT_NAME "Orchestral DAW"
+    PRODUCT_NAME "Daw+"
     COMPANY_NAME "Loitsut")
 
 target_sources(OrchestralDAW PRIVATE

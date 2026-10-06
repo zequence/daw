@@ -20,4 +20,4 @@ done
 if [[ -z "${WINEPREFIX:-}" && -d ../prefix/drive_c ]]; then
   export WINEPREFIX="$(cd ../prefix && pwd)"
 fi
-exec "build/$config/OrchestralDAW_artefacts/$config/Orchestral DAW"
+exec "build/$config/OrchestralDAW_artefacts/$config/Daw+"

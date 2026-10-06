@@ -12,4 +12,4 @@ call "%~dp0build.cmd" %CONFIG% || (
     exit /b 1
 )
 
-start "" "%~dp0build\%CONFIG%\OrchestralDAW_artefacts\%CONFIG%\Orchestral DAW.exe"
+start "" "%~dp0build\%CONFIG%\OrchestralDAW_artefacts\%CONFIG%\Daw+.exe"

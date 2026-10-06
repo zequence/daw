@@ -28,4 +28,4 @@ cmake -S "%~dp0." -B "%~dp0build\%CONFIG%" -G Ninja -DCMAKE_BUILD_TYPE=%CONFIG% 
 cmake --build "%~dp0build\%CONFIG%" || exit /b 1
 
 echo.
-echo Built: %~dp0build\%CONFIG%\OrchestralDAW_artefacts\%CONFIG%\Orchestral DAW.exe
+echo Built: %~dp0build\%CONFIG%\OrchestralDAW_artefacts\%CONFIG%\Daw+.exe
