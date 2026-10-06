@@ -98,7 +98,7 @@ public:
 
 private:
     enum class Kind { channel, aux, master };
-    static constexpr int stripWidth = 180, stripHeight = 1040;
+    static constexpr int stripWidth = 136, stripHeight = 1310;
 
     const mixer::ConsoleStyle& style() const   { return mixer::ConsoleStyle::ssl(); }
 
@@ -477,42 +477,43 @@ private:
             }
 
             // Two knobs side by side per row
-            // A row of up to three knobs, each a third of the width, centred together
-            const auto row = [] (juce::Rectangle<int>& inside, int height, juce::Component* a, juce::Component* b, juce::Component* c = nullptr)
+            // A row of two knobs, each half the width, packed edge to edge (one alone is centred)
+            const auto row = [] (juce::Rectangle<int>& inside, int height, juce::Component* a, juce::Component* b)
             {
                 auto line = inside.removeFromTop (height);
-                const auto column = line.getWidth() / 3;
-                const auto count = c != nullptr ? 3 : (b != nullptr ? 2 : 1);
-                line = line.withSizeKeepingCentre (column * count, height);
+                const auto column = line.getWidth() / 2;
+                line = line.withSizeKeepingCentre (column * (b != nullptr ? 2 : 1), height);
 
-                for (auto* knob : { a, b, c })
+                for (auto* knob : { a, b })
                     if (knob != nullptr)
                         knob->setBounds (line.removeFromLeft (column));
             };
-            constexpr int knobRow = 66, buttonRow = 16;
+            constexpr int knobRow = 72, buttonRow = 16;
 
             if (kind != Kind::master)
             {
                 // The EQ and dynamics - or, flipped, the inserts in the same space
                 const auto pageTop = area.getY();
-                auto e = area.removeFromTop (12 + 5 * knobRow + 3 * buttonRow + 8);
+                auto e = area.removeFromTop (12 + 6 * knobRow + 3 * buttonRow + 8);
                 eq.setBounds (e);
                 auto inside = eq.getLocalBounds().reduced (2).withTrimmedTop (12);
                 row (inside, knobRow, &hpf, &lpf);
                 row (inside, knobRow, &hfGain, &hfFreq);
                 hfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (44, buttonRow - 2));
-                row (inside, knobRow, &hmfGain, &hmfFreq, &hmfQ);
-                row (inside, knobRow, &lmfGain, &lmfFreq, &lmfQ);
+                row (inside, knobRow, &hmfGain, &hmfFreq);
+                row (inside, knobRow, &hmfQ, &lmfQ);
+                row (inside, knobRow, &lmfGain, &lmfFreq);
                 row (inside, knobRow, &lfGain, &lfFreq);
                 lfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (44, buttonRow - 2));
                 eqIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (48, buttonRow - 1));
                 area.removeFromTop (5);
 
-                auto d = area.removeFromTop (12 + 2 * knobRow + buttonRow + 6);
+                auto d = area.removeFromTop (12 + 3 * knobRow + buttonRow + 6);
                 dynamics.setBounds (d);
                 inside = dynamics.getLocalBounds().reduced (2).withTrimmedTop (12);
-                row (inside, knobRow, &threshold, &ratio, &makeup);
+                row (inside, knobRow, &threshold, &ratio);
                 row (inside, knobRow, &attack, &release);
+                row (inside, knobRow, &makeup, nullptr);
                 dynamicsIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (48, buttonRow - 1));
                 inserts.setBounds (getLocalBounds().reduced (4).withTop (pageTop).withBottom (dynamics.getBottom()));
                 area.removeFromTop (5);
@@ -520,12 +521,12 @@ private:
 
             if (kind == Kind::channel)
             {
-                auto a = area.removeFromTop (12 + 2 * knobRow + 4);
+                auto a = area.removeFromTop (12 + 3 * knobRow + 4);
                 aux.setBounds (a);
                 auto inside = aux.getLocalBounds().reduced (2).withTrimmedTop (12);
 
-                for (size_t i = 0; i + 2 < auxKnobs.size(); i += 3)
-                    row (inside, knobRow, auxKnobs[i].get(), auxKnobs[i + 1].get(), auxKnobs[i + 2].get());
+                for (size_t i = 0; i + 1 < auxKnobs.size(); i += 2)
+                    row (inside, knobRow, auxKnobs[i].get(), auxKnobs[i + 1].get());
 
                 area.removeFromTop (5);
             }
