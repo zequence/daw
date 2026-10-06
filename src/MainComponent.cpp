@@ -1172,7 +1172,7 @@ void MainComponent::updateViewVisibility()
     trackList.setVisible (domain == Domain::midi);
     channelList.setVisible (domain == Domain::audio);
     // Midi: dark blue/cyan; Audio: dried blood. Black text on both
-    sidebarHeader.set (domain == Domain::midi ? "MIDI TRACKS" : "AUDIO CHANNELS",
+    sidebarHeader.set (domain == Domain::midi ? "MIDI" : "AUDIO",
                        juce::Colour (domain == Domain::midi ? 0xff3aa6c4 : 0xffc0504a));
 
     midiDomainButton.setToggleState (domain == Domain::midi, juce::dontSendNotification);

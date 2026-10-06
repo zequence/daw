@@ -49,7 +49,10 @@ struct TimeAxis
         const auto step = gridStep (map, tick);
         const auto lines = (tick - bar + step / 2) / step;
         const auto nextBar = map.getBarStart (bar + barLength);
-        return juce::jmin (nextBar, bar + lines * step);
+        const auto line = juce::jmin (nextBar, bar + lines * step);
+
+        // A step that doesn't divide the bar evenly (a half note in 3/4): the next bar line may be nearer
+        return nextBar - tick < std::abs (tick - line) ? nextBar : line;
     }
 
     juce::int64 xToTick (int x) const noexcept

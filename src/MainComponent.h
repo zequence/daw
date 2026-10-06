@@ -106,8 +106,8 @@ private:
     // Sidebar. The track list and the arrangement share one vertical scroll
     // (same Y axis); declared before both.
     sidebar::VerticalScroll trackScroll;
-    // Above the lists: what they show (MIDI tracks / audio channels) - small
-    // spaced caps in the domain's colour, over a thin line of the same colour
+    // Above the lists: MIDI / AUDIO in a block of the domain's colour, the letters in
+    // the background colour (inverted)
     struct SidebarHeader final : juce::Component
     {
         void set (const juce::String& newText, juce::Colour newColour)
@@ -119,11 +119,15 @@ private:
 
         void paint (juce::Graphics& g) override
         {
-            auto area = getLocalBounds();
+            const auto font = juce::Font (juce::FontOptions (12.0f, juce::Font::bold | juce::Font::italic).withKerningFactor (0.12f));
+            const auto textWidth = juce::roundToInt (juce::GlyphArrangement::getStringWidth (font, text));
+            const auto block = juce::Rectangle<int> (8, 0, textWidth + 14, 18).withCentre ({ 8 + (textWidth + 14) / 2, getHeight() / 2 });
+
             g.setColour (colour);
-            g.fillRect (area.removeFromBottom (2).reduced (2, 0));
-            g.setFont (juce::FontOptions (12.0f, juce::Font::bold).withKerningFactor (0.12f));
-            g.drawText (text, area.reduced (10, 0), juce::Justification::centredLeft, true);
+            g.fillRoundedRectangle (block.toFloat(), theme::corner);
+            g.setColour (theme::colour (theme::Token::surfaceWindow));
+            g.setFont (font);
+            g.drawText (text, block, juce::Justification::centred, false);
         }
 
         juce::String text;
