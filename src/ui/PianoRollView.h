@@ -2,6 +2,7 @@
 
 #include "../AudioEngine.h"
 #include "TimeAxis.h"
+#include "CloseButton.h"
 
 class CommandDispatcher;
 
@@ -26,6 +27,8 @@ class PianoRollView final : public juce::Component,
                             private juce::Timer
 {
 public:
+    CloseButton closeButton;   // the X at the right end of the top bar (MainComponent wires it)
+
     PianoRollView (AudioEngine&, CommandDispatcher&, TimeAxis&);
 
     // Draw: click adds a note at the length dropdown's value, dragging stretches it.

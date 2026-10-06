@@ -226,6 +226,11 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     trackList.onShowContextMenu = [this] (auto id) { showTrackContextMenu (id); };
 
     // --- Content views ---
+    // The X on every view over the arrangement: back to the arrangement
+    for (auto* close : { &pianoRollView.closeButton, &instrumentsView.closeButton, &instrumentEditorView.closeButton,
+                         &expressionMapView.closeButton, &historyView.closeButton })
+        close->onClick = [this] { showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions); };
+
     arrangementView.onSelectTrack = [this] (auto id) { selectTrack (id, false); };
     arrangementView.onOpenEditor = [this] (auto id)
     {

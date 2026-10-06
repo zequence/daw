@@ -3,6 +3,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../api/CommandDispatcher.h"
 #include "Theme.h"
+#include "CloseButton.h"
 
 // Content view: the global action history. Purely command-driven - it reads
 // history.list and clicks become history.travel, the same surface agents use.
@@ -12,6 +13,8 @@ class HistoryView final : public juce::Component,
                           private juce::Timer
 {
 public:
+    CloseButton closeButton;   // the X at the right end of the top bar (MainComponent wires it)
+
     explicit HistoryView (CommandDispatcher& d) : dispatcher (d)
     {
         titleLabel.setText ("History", juce::dontSendNotification);
@@ -31,6 +34,7 @@ public:
         filterBox.setWantsKeyboardFocus (false);
         filterBox.onChange = [this] { refresh(); };
         addAndMakeVisible (filterBox);
+        addAndMakeVisible (closeButton);
 
         list.setModel (this);
         list.setRowHeight (26);
@@ -85,6 +89,8 @@ public:
     {
         auto area = getLocalBounds().reduced (12);
         auto header = area.removeFromTop (32);
+        closeButton.setBounds (header.removeFromRight (header.getHeight()));
+        header.removeFromRight (8);
         filterBox.setBounds (header.removeFromRight (160).reduced (0, 3));
         titleLabel.setBounds (header);
         area.removeFromTop (6);

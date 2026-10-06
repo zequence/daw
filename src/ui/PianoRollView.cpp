@@ -135,6 +135,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
         chordTick = -1;
     };
     addAndMakeVisible (inputToggle);
+    addAndMakeVisible (closeButton);
 
     engine.onNoteInput = [safe = juce::Component::SafePointer<PianoRollView> (this)] (const juce::MidiMessage& message, double receivedMs)
     {
@@ -1443,6 +1444,8 @@ void PianoRollView::timerCallback()
 void PianoRollView::resized()
 {
     auto toolbar = juce::Rectangle<int> (0, 0, getWidth(), toolbarHeight).reduced (6, 3);
+    closeButton.setBounds (toolbar.removeFromRight (toolbar.getHeight() + 4));
+    toolbar.removeFromRight (8);
     snapBox.setBounds (toolbar.removeFromLeft (68));
     toolbar.removeFromLeft (10);
     lengthBox.setBounds (toolbar.removeFromLeft (68));

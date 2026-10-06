@@ -3,6 +3,7 @@
 #include "../AudioEngine.h"
 #include "../api/CommandDispatcher.h"
 #include "ThemedLookAndFeel.h"
+#include "CloseButton.h"
 #include "../model/NoteNames.h"
 #include "ColorPalette.h"
 #include "Smufl.h"
@@ -31,6 +32,7 @@ public:
         backButton.setWantsKeyboardFocus (false);
         backButton.onClick = [this] { if (onBack) onBack(); };
         addAndMakeVisible (backButton);
+        addAndMakeVisible (closeButton);
 
         titleLabel.setText ("Expression maps", juce::dontSendNotification);
         titleLabel.setFont (juce::FontOptions (20.0f, juce::Font::bold));
@@ -139,6 +141,7 @@ public:
     }
 
     std::function<void()> onBack;
+    CloseButton closeButton;   // the X at the right end of the top bar (MainComponent wires it)
 
     // Open the editor on a map (empty = keep the current one)
     void select (const juce::String& mapName)
@@ -188,6 +191,8 @@ public:
         auto header = area.removeFromTop (34);
         backButton.setBounds (header.removeFromLeft (70));
         header.removeFromLeft (10);
+        closeButton.setBounds (header.removeFromRight (header.getHeight()));
+        header.removeFromRight (8);
         libraryButton.setBounds (header.removeFromRight (90));
         titleLabel.setBounds (header);
 

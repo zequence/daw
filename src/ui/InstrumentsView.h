@@ -2,6 +2,7 @@
 
 #include "../AudioEngine.h"
 #include "Theme.h"
+#include "CloseButton.h"
 
 // Content view: the instrument rack. Instruments used by the focused track sort to the
 // top of the list. Call refresh() from a UI timer.
@@ -16,6 +17,7 @@ public:
                                "(server address in Settings > Integrations)");
         syncButton.onClick = [this] { if (onVeproSync) onVeproSync(); };
         addAndMakeVisible (syncButton);
+        addAndMakeVisible (closeButton);
 
         viewport.setViewedComponent (&rowContainer, false);
         viewport.setScrollBarsShown (true, false);
@@ -24,6 +26,7 @@ public:
 
     std::function<void (AudioEngine::InstrumentId)> onOpenPluginGui, onEditInstrument, onRemoveInstrument;
     std::function<void()> onAddInstrument, onVeproSync;
+    CloseButton closeButton;   // the X at the right end of the top bar (MainComponent wires it)
 
     // Instruments fed by this track float to the top and get a highlight.
     void focusTrack (AudioEngine::TrackId trackId)
@@ -56,6 +59,7 @@ public:
     {
         auto area = getLocalBounds().reduced (12);
         auto header = area.removeFromTop (30);
+        closeButton.setBounds (header.removeFromRight (header.getHeight()));
         syncButton.setBounds (header.removeFromLeft (170).reduced (0, 2));
         area.removeFromTop (6);
         viewport.setBounds (area);

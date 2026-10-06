@@ -3,6 +3,7 @@
 #include "../AudioEngine.h"
 #include "../api/CommandDispatcher.h"
 #include "ThemedLookAndFeel.h"
+#include "CloseButton.h"
 
 // Content view: one instrument's MIDI channels, 16 per port (a multiport plugin such as VE Pro has
 // up to 16 ports; the port selector at the top picks which). Per channel: its name, its expression
@@ -17,6 +18,7 @@ public:
         backButton.setWantsKeyboardFocus (false);
         backButton.onClick = [this] { if (onBack) onBack(); };
         addAndMakeVisible (backButton);
+        addAndMakeVisible (closeButton);
 
         titleLabel.setFont (juce::FontOptions (20.0f, juce::Font::bold));
         addAndMakeVisible (titleLabel);
@@ -56,6 +58,7 @@ public:
     }
 
     std::function<void()> onBack;
+    CloseButton closeButton;   // the X at the right end of the top bar (MainComponent wires it)
     std::function<void (AudioEngine::InstrumentId)> onOpenPluginGui;
     std::function<void (const juce::String&)> onEditMap;   // open the expression map editor (on that map, or the first)
 
@@ -89,6 +92,8 @@ public:
         auto header = area.removeFromTop (34);
         backButton.setBounds (header.removeFromLeft (70));
         header.removeFromLeft (10);
+        closeButton.setBounds (header.removeFromRight (header.getHeight()));
+        header.removeFromRight (8);
         guiButton.setBounds (header.removeFromRight (60));
         header.removeFromRight (8);
         mapsButton.setBounds (header.removeFromRight (150));
