@@ -128,15 +128,16 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
 
     // A selected folder region: dragged sideways, with everything inside it (an unselected one is
     // selected on release, like a region)
-    // Alt: a selection rectangle wherever the press is, on a region too (Alt+Ctrl adds)
-    if (event.mods.isAltDown() && ! event.mods.isPopupMenu())
+    // Alt swaps the two ways of moving (Settings > Editor): with "select first", Alt+drag moves a region
+    // straight away; with "in one go", Alt+drag draws a selection rectangle, on a region too (Alt+Ctrl adds)
+    const auto moveDirectly = editorSettings::moveRegionsDirectly (engine.getSettingsFile()) != event.mods.isAltDown();
+
+    if (event.mods.isAltDown() && ! moveDirectly && ! event.mods.isPopupMenu())
     {
         marquee = true;
         marqueeAdds = event.mods.isCtrlDown();
         return;
     }
-
-    const auto moveDirectly = editorSettings::moveRegionsDirectly (engine.getSettingsFile());
 
     if (const auto span = folderSpanAt (position); span.folder != 0 && ! event.mods.isPopupMenu()
                                                      && (isSelectedFolderSpan (span) || moveDirectly))
@@ -472,7 +473,7 @@ void ArrangementView::mouseMove (const juce::MouseEvent& event)
         return;
     }
 
-    const auto moveDirectly = editorSettings::moveRegionsDirectly (engine.getSettingsFile());
+    const auto moveDirectly = editorSettings::moveRegionsDirectly (engine.getSettingsFile()) != event.mods.isAltDown();
 
     if (const auto span = folderSpanAt (event.getPosition());   // a (selected) folder region drags sideways
         isSelectedFolderSpan (span) || (moveDirectly && span.folder != 0))
