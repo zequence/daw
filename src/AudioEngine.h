@@ -129,6 +129,13 @@ public:
     //==============================================================================
     // Audio channels (one per instrument for now; device inputs and summing later)
     AudioChannelProcessor* getAudioChannel (AudioChannelId) const;
+
+    // The mixer (MILESTONES.md "Audio mixer"): every channel feeds the master bus, which feeds the device
+    AudioChannelProcessor* getMasterChannel() const;
+    void setAudioChannelName (AudioChannelId, const juce::String&);   // a rename wins over the source's name
+    void setAudioChannelSoloed (AudioChannelId, bool);
+    bool isAudioChannelSoloed (AudioChannelId) const;
+    void setAudioChannelPan (AudioChannelId, float pan);             // -1 .. +1
     AudioChannelId getAudioChannelForInstrument (InstrumentId) const;          // 0 if none
     std::vector<AudioChannelId> getAudioChannelIds() const;
     juce::String getAudioChannelName (AudioChannelId) const;
@@ -425,6 +432,10 @@ public:
             bool muted = false;
             FolderId folder = 0;
             int position = 0;
+            float pan = 0.0f;
+            bool soloed = false;
+            juce::String name;
+            bool named = false;
         };
 
         struct FolderState
@@ -472,6 +483,8 @@ private:
         NodeID node;
         InstrumentId input = 0;                     // 0 = none (device inputs later)
         juce::String name;
+        bool named = false;                         // renamed in the mixer: the source's name no longer applies
+        bool soloed = false;
         FolderId folder = 0;                        // 0 = root
         int position = 0;                           // order among siblings
     };
@@ -596,7 +609,9 @@ private:
     std::atomic<bool> noteInputListening { false };
     juce::StringArray controllerDevices;
 
-    NodeID audioOutNode, midiInNode, recorderNode;
+    NodeID audioOutNode, midiInNode, recorderNode, masterNode;
+    void applySolo();   // silences the channels that aren't soloed while any is
+    void emitChannelChanged (AudioChannelId, const juce::String& change);
     std::unique_ptr<MidiRecorder> recorder;
     bool recordingSawPlayback = false;
 

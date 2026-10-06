@@ -58,6 +58,12 @@ AudioEngine::AudioEngine (juce::PropertiesFile& settingsToUse)
     enableAllMidiInputsIfFirstRun (savedAudio != nullptr);
 
     audioOutNode = graph.addNode (std::make_unique<IOProcessor> (IOProcessor::audioOutputNode))->nodeID;
+
+    // The master bus: every channel feeds it, it feeds the device (the mixer's master strip)
+    masterNode = graph.addNode (std::make_unique<AudioChannelProcessor>())->nodeID;
+
+    for (int ch = 0; ch < 2; ++ch)
+        graph.addConnection ({ { masterNode, ch }, { audioOutNode, ch } });
     midiInNode   = graph.addNode (std::make_unique<IOProcessor> (IOProcessor::midiInputNode))->nodeID;
 
     // Permanent tap on the live MIDI input for recording.
@@ -412,7 +418,7 @@ void AudioEngine::addInstrument (const juce::PluginDescription& description, Ins
             channel.node = graph.addNode (std::make_unique<AudioChannelProcessor>(), std::nullopt, updateKind())->nodeID;
 
             for (int ch = 0; ch < 2; ++ch)
-                graph.addConnection ({ { channel.node, ch }, { audioOutNode, ch } }, updateKind());
+                graph.addConnection ({ { channel.node, ch }, { masterNode, ch } }, updateKind());
 
             // Only the first stereo pair for now; multi-output routing comes later.
             if (numOuts == 1)
@@ -934,6 +940,68 @@ int AudioEngine::getNumLoadedInstruments() const
 }
 
 //==============================================================================
+AudioChannelProcessor* AudioEngine::getMasterChannel() const
+{
+    if (auto* node = graph.getNodeForId (masterNode))
+        return dynamic_cast<AudioChannelProcessor*> (node->getProcessor());
+
+    return nullptr;
+}
+
+void AudioEngine::setAudioChannelName (AudioChannelId id, const juce::String& name)
+{
+    if (auto it = audioChannels.find (id); it != audioChannels.end() && name.trim().isNotEmpty())
+    {
+        it->second.name = name.trim();
+        it->second.named = true;
+        emitChannelChanged (id, "name");
+    }
+}
+
+void AudioEngine::setAudioChannelSoloed (AudioChannelId id, bool soloed)
+{
+    if (auto it = audioChannels.find (id); it != audioChannels.end() && it->second.soloed != soloed)
+    {
+        it->second.soloed = soloed;
+        applySolo();
+        emitChannelChanged (id, "solo");
+    }
+}
+
+bool AudioEngine::isAudioChannelSoloed (AudioChannelId id) const
+{
+    const auto it = audioChannels.find (id);
+    return it != audioChannels.end() && it->second.soloed;
+}
+
+void AudioEngine::setAudioChannelPan (AudioChannelId id, float pan)
+{
+    if (auto* processor = getAudioChannel (id))
+    {
+        processor->setPan (pan);
+        projectDirty = true;
+    }
+}
+
+void AudioEngine::emitChannelChanged (AudioChannelId id, const juce::String& change)
+{
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    data->setProperty ("change", change);
+    emitEvent ("channelChanged", data);
+}
+
+// Solo in place: while any channel is soloed, every other one is silent
+void AudioEngine::applySolo()
+{
+    const auto anySoloed = std::any_of (audioChannels.begin(), audioChannels.end(),
+                                        [] (const auto& entry) { return entry.second.soloed; });
+
+    for (auto& [id, channel] : audioChannels)
+        if (auto* processor = getAudioChannel (id))
+            processor->setSoloSilenced (anySoloed && ! channel.soloed);
+}
+
 AudioChannelProcessor* AudioEngine::getAudioChannel (AudioChannelId id) const
 {
     if (auto it = audioChannels.find (id); it != audioChannels.end())
@@ -1428,7 +1496,8 @@ AudioEngine::HistorySnapshot AudioEngine::captureHistorySnapshot() const
     for (auto& [id, channel] : audioChannels)
         if (auto* processor = getAudioChannel (id))
             snapshot.channels.push_back ({ id, processor->getGain(), processor->isMuted(),
-                                           channel.folder, channel.position });
+                                           channel.folder, channel.position, processor->getPan(),
+                                           channel.soloed, channel.name, channel.named });
 
     for (auto& [id, folder] : folders)
         snapshot.folders.push_back ({ id, folder.name, folder.midiDomain, folder.parent,
@@ -1546,14 +1615,24 @@ void AudioEngine::applyHistorySnapshot (const HistorySnapshot& snapshot)
         {
             processor->setGain (channel.gain);
             processor->setMuted (channel.muted);
+            processor->setPan (channel.pan);
         }
 
         if (auto it = audioChannels.find (channel.id); it != audioChannels.end())
         {
             it->second.folder = folderExists (channel.folder) ? channel.folder : 0;
             it->second.position = channel.position;
+            it->second.soloed = channel.soloed;
+
+            if (channel.named)
+            {
+                it->second.name = channel.name;
+                it->second.named = true;
+            }
         }
     }
+
+    applySolo();
 
     refreshAllPlayback();   // the maps, the assignments and the tempo came back
     historySuppress = false;
@@ -2321,10 +2400,17 @@ bool AudioEngine::saveProject (const juce::File& file)
             auto* a = e->createNewChildElement ("AUDIOCHANNEL");
             a->setAttribute ("gain", audioChannel->getGain());
             a->setAttribute ("muted", audioChannel->isMuted());
+            a->setAttribute ("pan", audioChannel->getPan());
             a->setAttribute ("folder", getAudioChannelFolder (instrument.audioChannel));
 
             if (auto it = audioChannels.find (instrument.audioChannel); it != audioChannels.end())
+            {
                 a->setAttribute ("position", it->second.position);
+                a->setAttribute ("soloed", it->second.soloed);
+
+                if (it->second.named)
+                    a->setAttribute ("name", it->second.name);
+            }
         }
     }
 
@@ -2582,7 +2668,14 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
                     {
                         audioChannel->setGain ((float) a->getDoubleAttribute ("gain", 1.0));
                         audioChannel->setMuted (a->getBoolAttribute ("muted"));
+                        audioChannel->setPan ((float) a->getDoubleAttribute ("pan", 0.0));
                     }
+
+                    if (a->getBoolAttribute ("soloed"))
+                        setAudioChannelSoloed (channelId, true);
+
+                    if (a->hasAttribute ("name"))
+                        setAudioChannelName (channelId, a->getStringAttribute ("name"));
 
                     if (auto it = state->folderIdMap.find (a->getIntAttribute ("folder"));
                         it != state->folderIdMap.end())

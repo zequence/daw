@@ -2,8 +2,9 @@
 
 #include <juce_audio_processors/juce_audio_processors.h>
 
-// A stereo audio channel strip: gain, mute and peak metering.
-// Sits between an input (an instrument, later a device input) and the master output.
+// A stereo audio channel strip: fader (gain), pan, mute, solo-silencing and metering (peak and RMS).
+// Sits between an input (an instrument, later a device input) and the master bus; the master bus
+// is one too, between the channels and the device output.
 class AudioChannelProcessor final : public juce::AudioProcessor
 {
 public:
@@ -19,31 +20,52 @@ public:
     void setMuted (bool shouldMute) noexcept { muted.store (shouldMute); }
     bool isMuted() const noexcept            { return muted.load(); }
 
-    // Peak of the most recent block; any number of readers may poll this.
+    // Pan: -1 (left) .. 0 .. +1 (right), constant power (-3 dB in the middle)
+    void setPan (float newPan) noexcept      { pan.store (juce::jlimit (-1.0f, 1.0f, newPan)); }
+    float getPan() const noexcept            { return pan.load(); }
+
+    // Silenced because other channels are soloed (the engine sets it)
+    void setSoloSilenced (bool silenced) noexcept { soloSilenced.store (silenced); }
+    bool isSoloSilenced() const noexcept          { return soloSilenced.load(); }
+
+    // The most recent block's peak and RMS (0..1+, after the fader); any number of readers may poll these.
     float getLastPeak() const noexcept       { return peak.load(); }
+    float getLastRms() const noexcept        { return rms.load(); }
 
     //==============================================================================
-    void prepareToPlay (double, int) override { lastGain = muted.load() ? 0.0f : gain.load(); }
+    void prepareToPlay (double, int) override
+    {
+        const auto [left, right] = targetGains();
+        lastLeft = left;
+        lastRight = right;
+    }
+
     void releaseResources() override {}
 
     void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override
     {
         midi.clear();
+        const auto [left, right] = targetGains();
+        const auto samples = buffer.getNumSamples();
 
-        const auto target = muted.load() ? 0.0f : gain.load();
+        // Ramped when anything changed, so faders and pans don't click
+        if (buffer.getNumChannels() > 0) buffer.applyGainRamp (0, 0, samples, lastLeft, left);
+        if (buffer.getNumChannels() > 1) buffer.applyGainRamp (1, 0, samples, lastRight, right);
 
-        if (std::abs (target - lastGain) < 1.0e-6f)
-            buffer.applyGain (target);
-        else
-            buffer.applyGainRamp (0, buffer.getNumSamples(), lastGain, target);
+        lastLeft = left;
+        lastRight = right;
 
-        lastGain = target;
+        float blockPeak = 0.0f, sumSquares = 0.0f;
 
-        float blockPeak = 0.0f;
         for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-            blockPeak = juce::jmax (blockPeak, buffer.getMagnitude (ch, 0, buffer.getNumSamples()));
+        {
+            blockPeak = juce::jmax (blockPeak, buffer.getMagnitude (ch, 0, samples));
+            const auto r = buffer.getRMSLevel (ch, 0, samples);
+            sumSquares += r * r;
+        }
 
         peak.store (blockPeak);
+        rms.store (std::sqrt (sumSquares / (float) juce::jmax (1, buffer.getNumChannels())));
     }
 
     //==============================================================================
@@ -62,9 +84,21 @@ public:
     void setStateInformation (const void*, int) override    {}
 
 private:
-    std::atomic<float> gain { 1.0f }, peak { 0.0f };
-    std::atomic<bool> muted { false };
-    float lastGain = 1.0f;
+    // The left and right gains: the fader, the pan (constant power, normalised to unity in the
+    // middle so a centred channel is as loud as before pan existed), mute and solo
+    std::pair<float, float> targetGains() const noexcept
+    {
+        if (muted.load() || soloSilenced.load())
+            return { 0.0f, 0.0f };
+
+        const auto angle = (pan.load() + 1.0f) * juce::MathConstants<float>::pi * 0.25f;
+        const auto g = gain.load() * juce::MathConstants<float>::sqrt2;
+        return { g * std::cos (angle), g * std::sin (angle) };
+    }
+
+    std::atomic<float> gain { 1.0f }, pan { 0.0f }, peak { 0.0f }, rms { 0.0f };
+    std::atomic<bool> muted { false }, soloSilenced { false };
+    float lastLeft = 1.0f, lastRight = 1.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioChannelProcessor)
 };

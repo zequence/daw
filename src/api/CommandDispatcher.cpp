@@ -2639,7 +2639,10 @@ void CommandDispatcher::registerCommands()
                  {
                      o->setProperty ("gainDb", juce::Decibels::gainToDecibels (processor->getGain(), -60.0f));
                      o->setProperty ("muted", processor->isMuted());
+                     o->setProperty ("pan", processor->getPan());
+                     o->setProperty ("soloed", engine.isAudioChannelSoloed (id));
                      o->setProperty ("peak", processor->getLastPeak());
+                     o->setProperty ("rms", processor->getLastRms());
                  }
 
                  list.add (juce::var (o.get()));
@@ -2670,6 +2673,74 @@ void CommandDispatcher::registerCommands()
                  return respond (fail ("no audio channel with that id (see channel.list)"));
 
              processor->setMuted (params.getProperty ("muted", true));
+             respond (ok());
+         });
+
+    add ("channel.setPan", "Pan an audio channel", "channelId:int pan:number (-1 left .. 0 .. +1 right)",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const int id = params.getProperty ("channelId", 0);
+
+             if (engine.getAudioChannel (id) == nullptr)
+                 return respond (fail ("no audio channel with that id (see channel.list)"));
+
+             engine.setAudioChannelPan (id, (float) (double) params.getProperty ("pan", 0.0));
+             respond (ok());
+         });
+
+    add ("channel.setSolo", "Solo an audio channel (in place: the others go silent while any is soloed)",
+         "channelId:int soloed:bool",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const int id = params.getProperty ("channelId", 0);
+
+             if (engine.getAudioChannel (id) == nullptr)
+                 return respond (fail ("no audio channel with that id (see channel.list)"));
+
+             engine.setAudioChannelSoloed (id, params.getProperty ("soloed", true));
+             respond (ok());
+         });
+
+    add ("channel.setName", "Rename an audio channel (wins over its source's name)", "channelId:int name:string",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const int id = params.getProperty ("channelId", 0);
+             const auto name = params.getProperty ("name", {}).toString().trim();
+
+             if (engine.getAudioChannel (id) == nullptr)
+                 return respond (fail ("no audio channel with that id (see channel.list)"));
+
+             if (name.isEmpty())
+                 return respond (fail ("give a 'name'"));
+
+             engine.setAudioChannelName (id, name);
+             respond (ok());
+         });
+
+    add ("master.get", "The master bus: gain, mute and levels", "",
+         [this] (const juce::var&, Respond respond)
+         {
+             auto* master = engine.getMasterChannel();
+             auto o = object();
+             o->setProperty ("gainDb", juce::Decibels::gainToDecibels (master->getGain(), -60.0f));
+             o->setProperty ("muted", master->isMuted());
+             o->setProperty ("peak", master->getLastPeak());
+             o->setProperty ("rms", master->getLastRms());
+             respond (ok (juce::var (o.get())));
+         });
+
+    add ("master.setGain", "Set the master bus's gain", "db:number (-60..+6)",
+         [this] (const juce::var& params, Respond respond)
+         {
+             engine.getMasterChannel()->setGain (juce::Decibels::decibelsToGain (
+                 juce::jlimit (-60.0f, 6.0f, (float) (double) params.getProperty ("db", 0.0)), -60.0f));
+             respond (ok());
+         });
+
+    add ("master.setMuted", "Mute/unmute the master bus", "muted:bool",
+         [this] (const juce::var& params, Respond respond)
+         {
+             engine.getMasterChannel()->setMuted (params.getProperty ("muted", true));
              respond (ok());
          });
 
