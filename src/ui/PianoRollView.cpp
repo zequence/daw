@@ -135,6 +135,21 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
         chordTick = -1;
     };
     addAndMakeVisible (inputToggle);
+
+    editAllToggle.setTooltip ("Edit all the shown tracks: select and move notes of every track at once (the others stay "
+                              "dimmed; clicking one of their notes focuses that track). Off: only the focused track is edited.");
+    editAllToggle.setClickingTogglesState (true);
+    theme::setButtonRole (editAllToggle, "accent");
+    editAllToggle.onClick = [this]
+    {
+        editAll = editAllToggle.getToggleState();
+
+        if (! editAll)
+            otherSelections.clear();
+
+        repaint();
+    };
+    addAndMakeVisible (editAllToggle);
     addAndMakeVisible (closeButton);
 
     engine.onNoteInput = [safe = juce::Component::SafePointer<PianoRollView> (this)] (const juce::MidiMessage& message, double receivedMs)
@@ -807,18 +822,37 @@ void PianoRollView::addNoteAt (juce::int64 tick, int key)
 
 void PianoRollView::deleteSelection()
 {
-    if (selection.empty())
+    if (! anySelected())
         return;
 
     juce::Array<juce::var> indices;
     for (auto index : selection)
         indices.add (index);
 
-    auto params = new juce::DynamicObject();
-    params->setProperty ("trackId", trackId);
-    params->setProperty ("indices", indices);
-    runCommand ("clip.removeNotes", params);
-    selection.clear();
+    AudioEngine::ScopedUndoGroup group (engine);   // one undo for every track
+
+    if (! selection.empty())   // the focused track's part (edit all may have only others)
+    {
+        auto params = new juce::DynamicObject();
+        params->setProperty ("trackId", trackId);
+        params->setProperty ("indices", indices);
+        runCommand ("clip.removeNotes", params);
+        selection.clear();
+    }
+
+    forOtherSelections ([this] (AudioEngine::TrackId other, const MidiSequence&, std::set<int>& chosen)
+    {
+        juce::Array<juce::var> otherIndices;
+
+        for (auto index : chosen)
+            otherIndices.add (index);
+
+        auto otherParams = new juce::DynamicObject();
+        otherParams->setProperty ("trackId", other);
+        otherParams->setProperty ("indices", otherIndices);
+        runCommand ("clip.removeNotes", otherParams);
+        chosen.clear();
+    });
 }
 
 void PianoRollView::deleteNote (int index)
@@ -837,7 +871,7 @@ void PianoRollView::commitMoveOrResize()
 {
     const auto seq = sequence();
 
-    if (seq == nullptr || selection.empty() || (dragTickOffset == 0 && dragKeyOffset == 0))
+    if (seq == nullptr || ! anySelected() || (dragTickOffset == 0 && dragKeyOffset == 0))
         return;
 
     juce::Array<juce::var> edits;
@@ -869,11 +903,54 @@ void PianoRollView::commitMoveOrResize()
         edits.add (juce::var (edit));
     }
 
-    auto params = new juce::DynamicObject();
-    params->setProperty ("trackId", trackId);
-    params->setProperty ("notes", edits);
-    runCommand ("clip.updateNotes", params);
-    reselectByValue (wanted);
+    AudioEngine::ScopedUndoGroup group (engine);   // one undo for every track
+
+    if (! selection.empty())   // the focused track's part (edit all may have only others)
+    {
+        auto params = new juce::DynamicObject();
+        params->setProperty ("trackId", trackId);
+        params->setProperty ("notes", edits);
+        runCommand ("clip.updateNotes", params);
+        reselectByValue (wanted);
+    }
+
+    // Edit all: the other tracks' selected notes move (or resize) the same
+    forOtherSelections ([this] (AudioEngine::TrackId other, const MidiSequence& otherSeq, std::set<int>& chosen)
+    {
+        juce::Array<juce::var> otherEdits;
+        std::vector<MidiSequence::Note> otherWanted;
+
+        for (auto index : chosen)
+        {
+            auto note = otherSeq.getNotes()[(size_t) index];
+            auto edit = new juce::DynamicObject();
+            edit->setProperty ("index", index);
+
+            if (drag == Drag::move)
+            {
+                note.startTick = juce::jmax ((juce::int64) 0, note.startTick + dragTickOffset);
+                note.key = juce::jlimit (0, 127, note.key + dragKeyOffset);
+                edit->setProperty ("start", note.startTick);
+                edit->setProperty ("key", note.key);
+            }
+            else
+            {
+                note.lengthTicks = juce::jmax ((juce::int64) 1, note.lengthTicks + dragTickOffset);
+                edit->setProperty ("length", note.lengthTicks);
+            }
+
+            otherWanted.push_back (note);
+            otherEdits.add (juce::var (edit));
+        }
+
+        auto otherParams = new juce::DynamicObject();
+        otherParams->setProperty ("trackId", other);
+        otherParams->setProperty ("notes", otherEdits);
+        runCommand ("clip.updateNotes", otherParams);
+
+        if (auto updated = engine.getTrackSequence (other))
+            chosen = reselect (*updated, otherWanted);
+    });
 }
 
 void PianoRollView::commitVelocities()
@@ -902,7 +979,7 @@ void PianoRollView::nudgeSelection (juce::int64 tickDelta, int keyDelta)
 {
     const auto seq = sequence();
 
-    if (seq == nullptr || selection.empty())
+    if (seq == nullptr || ! anySelected())
         return;
 
     juce::Array<juce::var> edits;
@@ -925,12 +1002,113 @@ void PianoRollView::nudgeSelection (juce::int64 tickDelta, int keyDelta)
         wanted.push_back (note);
     }
 
-    auto params = new juce::DynamicObject();
-    params->setProperty ("trackId", trackId);
-    params->setProperty ("notes", edits);
-    runCommand ("clip.updateNotes", params);
-    reselectByValue (wanted);
+    AudioEngine::ScopedUndoGroup group (engine);   // one undo for every track
+
+    if (! selection.empty())   // the focused track's part (edit all may have only others)
+    {
+        auto params = new juce::DynamicObject();
+        params->setProperty ("trackId", trackId);
+        params->setProperty ("notes", edits);
+        runCommand ("clip.updateNotes", params);
+        reselectByValue (wanted);
+    }
+
+    forOtherSelections ([this, tickDelta, keyDelta] (AudioEngine::TrackId other, const MidiSequence& otherSeq, std::set<int>& chosen)
+    {
+        juce::Array<juce::var> otherEdits;
+        std::vector<MidiSequence::Note> otherWanted;
+
+        for (auto index : chosen)
+        {
+            auto note = otherSeq.getNotes()[(size_t) index];
+            note.startTick = juce::jmax ((juce::int64) 0, note.startTick + tickDelta);
+            note.key = juce::jlimit (0, 127, note.key + keyDelta);
+
+            auto edit = new juce::DynamicObject();
+            edit->setProperty ("index", index);
+            edit->setProperty ("start", note.startTick);
+            edit->setProperty ("key", note.key);
+            otherEdits.add (juce::var (edit));
+            otherWanted.push_back (note);
+        }
+
+        auto otherParams = new juce::DynamicObject();
+        otherParams->setProperty ("trackId", other);
+        otherParams->setProperty ("notes", otherEdits);
+        runCommand ("clip.updateNotes", otherParams);
+
+        if (auto updated = engine.getTrackSequence (other))
+            chosen = reselect (*updated, otherWanted);
+    });
+
     repaint();
+}
+
+std::set<int> PianoRollView::reselect (const MidiSequence& seq, const std::vector<MidiSequence::Note>& wanted)
+{
+    std::set<int> found;
+
+    for (auto& target : wanted)
+        for (int i = 0; i < (int) seq.getNotes().size(); ++i)
+        {
+            const auto& note = seq.getNotes()[(size_t) i];
+
+            if (note.startTick == target.startTick && note.key == target.key
+                 && note.lengthTicks == target.lengthTicks && found.count (i) == 0)
+            {
+                found.insert (i);
+                break;
+            }
+        }
+
+    return found;
+}
+
+void PianoRollView::forOtherSelections (const std::function<void (AudioEngine::TrackId, const MidiSequence&, std::set<int>&)>& edit)
+{
+    if (! editAll)
+        return;
+
+    for (auto& [other, chosen] : otherSelections)
+    {
+        if (other == trackId || ! isShown (other) || chosen.empty())
+            continue;
+
+        if (auto otherSeq = engine.getTrackSequence (other))
+        {
+            std::erase_if (chosen, [&otherSeq] (int index) { return index >= (int) otherSeq->getNotes().size(); });
+            edit (other, *otherSeq, chosen);
+        }
+    }
+}
+
+// Another shown track's note under the mouse (edit all), the topmost first
+std::pair<AudioEngine::TrackId, int> PianoRollView::otherNoteAt (juce::Point<int> position) const
+{
+    for (auto other : shownTracks)
+        if (other != trackId)
+            if (auto otherSeq = engine.getTrackSequence (other))
+                for (int i = (int) otherSeq->getNotes().size(); --i >= 0;)
+                    if (noteRect (otherSeq->getNotes()[(size_t) i]).contains (position))
+                        return { other, i };
+
+    return { 0, -1 };
+}
+
+// The focus moves to another shown track; every selection stays (edit all)
+void PianoRollView::focusTrack (AudioEngine::TrackId id)
+{
+    if (id == trackId)
+        return;
+
+    auto kept = otherSelections[id];
+    otherSelections.erase (id);
+    otherSelections[trackId] = selection;
+    setTrack (id);
+    selection = kept;
+
+    if (onEditedTrackChanged)
+        onEditedTrackChanged (id);
 }
 
 void PianoRollView::reselectByValue (const std::vector<MidiSequence::Note>& wanted)
@@ -1008,7 +1186,15 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
         return;
 
     bool onRightEdge = false;
-    const auto hit = noteIndexAt (position, onRightEdge);
+    auto hit = noteIndexAt (position, onRightEdge);
+
+    // Edit all: a note of another shown track focuses that track (no selection is lost)
+    if (hit < 0 && editAll && ! event.mods.isPopupMenu())
+        if (const auto [other, index] = otherNoteAt (position); other != 0)
+        {
+            focusTrack (other);
+            hit = noteIndexAt (position, onRightEdge);
+        }
 
     if (event.mods.isPopupMenu())
     {
@@ -1026,6 +1212,7 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
         }
         else if (selection.count (hit) == 0)
         {
+            clearAllSelections();
             selection = { hit };
         }
 
@@ -1060,7 +1247,7 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
     else
     {
         if (! event.mods.isShiftDown())
-            selection.clear();
+            clearAllSelections();
 
         drag = Drag::marquee;
     }
@@ -1211,6 +1398,14 @@ void PianoRollView::mouseUp (const juce::MouseEvent& event)
             for (int i = 0; i < (int) seq->getNotes().size(); ++i)
                 if (rect.intersects (noteRect (seq->getNotes()[(size_t) i])) && isEditable (seq->getNotes()[(size_t) i]))
                     selection.insert (i);
+
+        if (editAll)
+            for (auto other : shownTracks)
+                if (other != trackId)
+                    if (auto otherSeq = engine.getTrackSequence (other))
+                        for (int i = 0; i < (int) otherSeq->getNotes().size(); ++i)
+                            if (rect.intersects (noteRect (otherSeq->getNotes()[(size_t) i])))
+                                otherSelections[other].insert (i);
     }
     else if (drag == Drag::move || drag == Drag::resize)
     {
@@ -1437,6 +1632,14 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
             for (int i = 0; i < (int) seq->getNotes().size(); ++i)
                 if (isEditable (seq->getNotes()[(size_t) i]))
                     selection.insert (i);
+
+            if (editAll)
+                for (auto other : shownTracks)
+                    if (other != trackId)
+                        if (auto otherSeq = engine.getTrackSequence (other))
+                            for (int i = 0; i < (int) otherSeq->getNotes().size(); ++i)
+                                otherSelections[other].insert (i);
+
             repaint();
         }
         return true;
@@ -1447,7 +1650,7 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
     if (keys::matches ("editor.playheadRight", key)) { stepPlayhead (true);  return true; }
 
     // The selected notes: transpose (half step / octave) and move by the grid division
-    if (! selection.empty())
+    if (anySelected())
     {
         if (keys::matches ("editor.transposeUp", key))   { nudgeSelection (0, 1);   return true; }
         if (keys::matches ("editor.transposeDown", key)) { nudgeSelection (0, -1);  return true; }
@@ -1601,6 +1804,8 @@ void PianoRollView::resized()
     auditionToggle.setBounds (toolbar.removeFromLeft (46));
     toolbar.removeFromLeft (4);
     inputToggle.setBounds (toolbar.removeFromLeft (50));
+    toolbar.removeFromLeft (4);
+    editAllToggle.setBounds (toolbar.removeFromLeft (40));
     toolbar.removeFromLeft (12);
     laneBox.setBounds (toolbar.removeFromLeft (140));
     toolbar.removeFromLeft (10);
@@ -1709,11 +1914,30 @@ void PianoRollView::paint (juce::Graphics& g)
 
         if (auto otherSeq = engine.getTrackSequence (other))
         {
-            g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (other), juce::Colour (0xff8a8f98)).withAlpha (0.3f));
+            const auto colour = AudioEngine::colourFromHex (engine.getTrackColour (other), juce::Colour (0xff8a8f98)).withAlpha (0.3f);
+            const auto chosen = editAll && otherSelections.count (other) ? otherSelections.at (other) : std::set<int>();
 
-            for (auto& note : otherSeq->getNotes())
+            for (int i = 0; i < (int) otherSeq->getNotes().size(); ++i)
+            {
+                auto note = otherSeq->getNotes()[(size_t) i];
+                const auto isChosen = chosen.count (i) > 0;
+
+                if (isChosen && drag == Drag::move)
+                {
+                    note.startTick += dragTickOffset;
+                    note.key = juce::jlimit (0, 127, note.key + dragKeyOffset);
+                }
+                else if (isChosen && drag == Drag::resize)
+                {
+                    note.lengthTicks = juce::jmax ((juce::int64) 1, note.lengthTicks + dragTickOffset);
+                }
+
                 if (const auto rect = noteRect (note); rect.intersects (grid))
+                {
+                    g.setColour (isChosen ? juce::Colours::white.withAlpha (0.55f) : colour);   // selected: white, still dimmed
                     g.fillRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f);
+                }
+            }
         }
     }
 

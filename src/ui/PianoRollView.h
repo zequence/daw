@@ -186,6 +186,26 @@ private:
     std::vector<std::pair<AudioEngine::TrackId, int>> editTargets;   // the dropdown: (track, region; -1 = whole track)
     juce::String targetsKey;                      // what the dropdown was built from
     std::vector<AudioEngine::TrackId> shownTracks;
+
+    // Edit one (default) or all of the shown tracks. With all, notes of every shown track can be
+    // selected and moved together; the other tracks stay dimmed, and clicking one of their notes
+    // moves the focus there (keeping every selection). The others' selections live here.
+    bool editAll = false;
+    juce::TextButton editAllToggle { "All" };
+    std::map<AudioEngine::TrackId, std::set<int>> otherSelections;
+    void focusTrack (AudioEngine::TrackId);                                   // keeps every selection
+    std::pair<AudioEngine::TrackId, int> otherNoteAt (juce::Point<int>) const;   // (0, -1) = none
+    void clearAllSelections()   { selection.clear(); otherSelections.clear(); }
+    bool anySelected() const
+    {
+        if (! selection.empty())
+            return true;
+
+        return editAll && std::any_of (otherSelections.begin(), otherSelections.end(), [] (const auto& entry) { return ! entry.second.empty(); });
+    }
+    // Runs 'edit' for each other shown track that has selected notes (edit all)
+    void forOtherSelections (const std::function<void (AudioEngine::TrackId, const MidiSequence&, std::set<int>&)>& edit);
+    static std::set<int> reselect (const MidiSequence&, const std::vector<MidiSequence::Note>& wanted);
     juce::ComboBox editTargetBox;
     void rebuildEditTargets();
     bool isEditable (const MidiSequence::Note& note) const   { return activeRegion < 0 || note.region == activeRegion; }
