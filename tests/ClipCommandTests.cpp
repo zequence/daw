@@ -189,6 +189,34 @@ public:
             expectEquals ((int) computePhraseBlocks (*engine.getTrackSequence (trackId), *map).size(), 3);
         }
 
+        beginTest ("undo of a region moved onto a track with its own region: no duplicate, from either track");
+        {
+            const auto other = engine.addTrack();
+            const auto countOn = [&engine] (AudioEngine::TrackId id)
+            {
+                auto seq = engine.getTrackSequence (id);
+                return seq != nullptr ? (int) seq->getNotes().size() : 0;
+            };
+
+            for (const bool undoOnSource : { false, true })
+            {
+                api.run ("clip.set", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var> { note (0, Q, 60) } } }));
+                api.run ("clip.set", params ({ { "trackId", (int) other }, { "notes", juce::Array<juce::var> { note (16 * Q, Q, 72) } } }));
+
+                juce::Array<juce::var> moves {
+                    params ({ { "trackId", tid }, { "start", 0 }, { "end", 4 * Q }, { "destStart", 4 * Q }, { "destTrackId", (int) other } }) };
+                expect (api.run ("clip.moveRanges", params ({ { "moves", moves } }))["ok"]);
+                expectEquals (countOn (trackId), 0);
+                expectEquals (countOn (other), 2);
+
+                expect (engine.undoTrackSequence (undoOnSource ? trackId : other));
+                expectEquals (countOn (trackId), 1);   // back on its own track...
+                expectEquals (countOn (other), 1);     // ...and gone from the other: no duplicate
+            }
+
+            engine.removeTrack (other);
+        }
+
         beginTest ("setControlRange replaces one controller's window only");
         {
             juce::Array<juce::var> controls {
