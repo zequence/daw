@@ -126,7 +126,8 @@ private:
     // moving everything inside it on every track of the folder
     struct FolderSpan { AudioEngine::FolderId folder = 0; juce::int64 start = 0, end = 0; };
     FolderSpan folderSpanAt (juce::Point<int>);
-    void fadeEmptyEnds (juce::Graphics&, juce::Rectangle<int> box, juce::int64 firstNote, juce::int64 lastEnd, juce::Colour lane) const;
+    void dimEmptyEnds (juce::Graphics&, juce::Rectangle<int> box, juce::int64 firstNote, juce::int64 lastEnd) const;
+    juce::int64 barEndOf (juce::int64 tick) const;
     FolderSpan draggingFolder;
     FolderSpan selectedFolderSpan;   // a selected folder region (selected like a region: click, then drag)
     bool isSelectedFolderSpan (const FolderSpan& span) const
