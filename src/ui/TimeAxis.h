@@ -17,9 +17,20 @@ struct TimeAxis
     bool snap = true;                        // snap to grid (the transport's Snap button); off = free positions
 
     // The grid follows the zoom (no setting): zoomed out it is bars; zooming in, half notes,
-    // quarters, eighths... down to 1/256 - the finest whose lines are at least this far apart.
-    // The same grid lines are the snap positions, in every timeline view.
+    // quarters, eighths... down to 1/256 - the finest whose lines are far enough apart. A 16th or
+    // shorter needs 24 px; longer values need more, rising evenly to three times that for a half
+    // note (an eighth 40, a quarter 56, a half 72), so the long steps hold on longer.
     static constexpr double minGridPixels = 24.0;
+
+    static double gridPixelsNeeded (juce::int64 unit)
+    {
+        const auto sixteenth = (double) (Ticks::perQuarterNote / 4);
+
+        if ((double) unit <= sixteenth)
+            return minGridPixels;
+
+        return juce::jmin (3.0 * minGridPixels, minGridPixels + 16.0 * std::log2 ((double) unit / sixteenth));
+    }
 
     juce::int64 gridStep (const TempoMap& map, juce::int64 atTick) const
     {
@@ -27,7 +38,7 @@ struct TimeAxis
 
         for (auto unit = Ticks::perQuarterNote * 2; unit >= Ticks::perQuarterNote / 64; unit /= 2)
         {
-            if ((double) unit / ticksPerPixel < minGridPixels)
+            if ((double) unit / ticksPerPixel < gridPixelsNeeded (unit))
                 break;
 
             step = juce::jmin (step, unit);
