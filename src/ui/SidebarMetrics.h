@@ -8,7 +8,7 @@
 // and the arrangement both read/write this, so scrolling one scrolls the other.
 namespace sidebar
 {
-    constexpr int trackRowHeight = 32;      // one line: buttons, then the name
+    constexpr int trackRowHeight = 26;      // one line: buttons, then the name
     constexpr int folderRowHeight = 28;      // about half a channel row
     constexpr int indentPerLevel = 10;
 

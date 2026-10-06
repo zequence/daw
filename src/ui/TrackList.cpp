@@ -17,7 +17,7 @@ public:
         nameLabel.setText (engine.getTrackName (trackId), juce::dontSendNotification);
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
-        nameLabel.setFont (juce::FontOptions (13.5f));
+        nameLabel.setFont (juce::FontOptions (15.0f));
         nameLabel.onTextChange = [this]
         {
             engine.setTrackName (trackId, nameLabel.getText());
@@ -32,11 +32,13 @@ public:
         soloButton.setTooltip ("Solo (MIDI)");
         soloButton.setClickingTogglesState (true);
         theme::setButtonRole (soloButton, "solo");
+        soloButton.setConnectedEdges (juce::Button::ConnectedOnRight);   // S|M share one border
         soloButton.onClick = [this] { engine.setTrackSoloed (trackId, soloButton.getToggleState()); };
 
         muteButton.setTooltip ("Mute (MIDI)");
         muteButton.setClickingTogglesState (true);
         theme::setButtonRole (muteButton, "mute");
+        muteButton.setConnectedEdges (juce::Button::ConnectedOnLeft);
         muteButton.onClick = [this] { engine.setTrackMuted (trackId, muteButton.getToggleState()); };
 
         for (auto* c : std::initializer_list<juce::Component*> { &armButton, &soloButton, &muteButton })
@@ -106,17 +108,15 @@ public:
 
     void resized() override
     {
-        // One line: R S M, then the name
+        // One line: R, S|M (one joined box), then the name
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).reduced (8, 0);
-        area = area.withSizeKeepingCentre (area.getWidth(), 22);
+        area = area.withSizeKeepingCentre (area.getWidth(), 20);
 
-        for (auto* b : std::initializer_list<juce::TextButton*> { &armButton, &soloButton, &muteButton })
-        {
-            b->setBounds (area.removeFromLeft (22));
-            area.removeFromLeft (2);
-        }
-
-        area.removeFromLeft (4);
+        armButton.setBounds (area.removeFromLeft (20));
+        area.removeFromLeft (3);
+        soloButton.setBounds (area.removeFromLeft (20));
+        muteButton.setBounds (area.removeFromLeft (20).expanded (1, 0).withTrimmedRight (1));   // shares S's right edge
+        area.removeFromLeft (6);
         nameLabel.setBounds (area);
     }
 
