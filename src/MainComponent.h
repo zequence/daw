@@ -102,11 +102,10 @@ private:
     // Sidebar. The track list and the arrangement share one vertical scroll
     // (same Y axis); declared before both.
     sidebar::VerticalScroll trackScroll;
-    juce::TextButton collapseButton { "<<" };
+    juce::Label sidebarHeader;   // "Midi" / "Audio" above the lists
     TrackList trackList { engine, trackScroll };
     AudioChannelList channelList { engine };
     int sidebarWidth = 0;            // 0 = not yet computed (defaults to ~15% of the window)
-    bool sidebarCollapsed = false;
 
     struct SidebarResizer final : juce::Component
     {

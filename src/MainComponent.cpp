@@ -11,7 +11,6 @@ namespace
 {
     constexpr int topbarHeight   = 44;
     constexpr int statusHeight   = 22;
-    constexpr int collapsedSidebarWidth = 26;
 
     // h:mm:ss:ms, hours only when non-zero (same convention as the timeline bar)
     juce::String formatPositionTime (double seconds)
@@ -199,14 +198,13 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     timelineBar.onOpenSettings = [this] { openSettings(); };
 
     // --- Sidebar ---
-    collapseButton.setTooltip ("Collapse/expand the track list");
-    collapseButton.onClick = [this]
-    {
-        sidebarCollapsed = ! sidebarCollapsed;
-        collapseButton.setButtonText (sidebarCollapsed ? ">>" : "<<");
-        updateViewVisibility();
-        resized();
-    };
+    // The panel's header: the domain's name in black on its colour (updateViewVisibility)
+    sidebarHeader.setFont (juce::FontOptions (15.0f, juce::Font::bold));
+    sidebarHeader.setJustificationType (juce::Justification::centredLeft);
+    sidebarHeader.setColour (juce::Label::backgroundColourId, juce::Colour (0xff1f6f86));
+    sidebarHeader.setColour (juce::Label::textColourId, juce::Colours::black);
+    sidebarHeader.setBorderSize ({ 0, 10, 0, 6 });
+    sidebarHeader.setText ("Midi", juce::dontSendNotification);
 
     trackList.onAddTrack = [this] { addTrack(); };
     trackList.onAddTrackInFolder = [this] (auto folderId)
@@ -335,7 +333,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     for (auto* c : std::initializer_list<juce::Component*> {
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &editButton, &drawButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
-             &collapseButton, &trackList, &channelList, &sidebarResizer,
+             &sidebarHeader, &trackList, &channelList, &sidebarResizer,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
              &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView, &settingsView,
              &statusLabel })
@@ -343,8 +341,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     for (auto* b : std::initializer_list<juce::Component*> { &menuButton, &midiDomainButton, &audioDomainButton,
                                                              &instrumentsButton, &historyButton, &editButton, &drawButton, &rtzButton,
-                                                             &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &perfButton,
-                                                             &collapseButton })
+                                                             &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &perfButton })
         b->setWantsKeyboardFocus (false);
 
     addChildComponent (perfPanel);
@@ -1149,8 +1146,12 @@ void MainComponent::updateViewVisibility()
     editButton.setToggleState (contentView == ContentView::midiEditor && ! pianoRollView.isDrawMode(), juce::dontSendNotification);
     drawButton.setToggleState (contentView == ContentView::midiEditor && pianoRollView.isDrawMode(), juce::dontSendNotification);
 
-    trackList.setVisible (! sidebarCollapsed && domain == Domain::midi);
-    channelList.setVisible (! sidebarCollapsed && domain == Domain::audio);
+    trackList.setVisible (domain == Domain::midi);
+    channelList.setVisible (domain == Domain::audio);
+    // Midi: dark blue/cyan; Audio: dried blood. Black text on both
+    sidebarHeader.setText (domain == Domain::midi ? "Midi" : "Audio", juce::dontSendNotification);
+    sidebarHeader.setColour (juce::Label::backgroundColourId,
+                             juce::Colour (domain == Domain::midi ? 0xff1f6f86 : 0xff7a1f1a));
 
     midiDomainButton.setToggleState (domain == Domain::midi, juce::dontSendNotification);
     audioDomainButton.setToggleState (domain == Domain::audio, juce::dontSendNotification);
@@ -1562,20 +1563,18 @@ void MainComponent::resized()
     if (sidebarWidth == 0)
         sidebarWidth = juce::jmax (180, getWidth() * 15 / 100);
 
-    const auto currentSidebarWidth = sidebarCollapsed ? collapsedSidebarWidth : sidebarWidth;
     const auto timelineHeight = timelineBar.getPreferredHeight();
-    auto sidebar = area.removeFromLeft (currentSidebarWidth);
+    auto sidebar = area.removeFromLeft (sidebarWidth);
 
     // The sidebar lists start at the same y as the content views (below the
     // timeline bar), so their rows share the arrangement's Y axis exactly.
     auto sidebarTop = sidebar.removeFromTop (timelineHeight);
-    collapseButton.setBounds (sidebarTop.removeFromTop (24).reduced (2, 1));
+    sidebarHeader.setBounds (sidebarTop);
 
     trackList.setBounds (sidebar);
     channelList.setBounds (sidebar);
 
     sidebarResizer.setBounds (area.removeFromLeft (6));
-    sidebarResizer.setVisible (! sidebarCollapsed);
 
     // Timeline bar + content container. The bar spans exactly the content area, so
     // its local x coordinates (and the shared TimeAxis gutter) line up with the
