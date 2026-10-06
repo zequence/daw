@@ -7,6 +7,7 @@
 #include "EditorSettings.h"
 #include "../model/NoteNames.h"
 #include "ThemeEditor.h"
+#include "KeyCommandsEditor.h"
 
 // Full-window settings page (replaces the whole UI; close with X or ESC).
 // Tab system (ISSUES.md "Settings Window"): a category column on the left
@@ -224,6 +225,9 @@ public:
         // --- Theming ---
         page.addChildComponent (themeEditor);
 
+        // --- Key commands ---
+        page.addChildComponent (keyCommandsEditor);
+
         for (auto* c : std::initializer_list<juce::Component*> { &scanButton, &retryButton, &rescanButton,
                                                                  &onTopToggle, &autoRecordToggle, &mcpToggle, &defaultRootToggle })
         {
@@ -311,6 +315,7 @@ private:
             c->setVisible (category == integrations);
 
         themeEditor.setVisible (category == theming);
+        keyCommandsEditor.setVisible (category == keyCommands);
 
         switch (category)
         {
@@ -390,8 +395,8 @@ private:
                 break;
 
             case keyCommands:
-                keyCommandsBounds = { 4, y, width - 8, 120 };
-                y += 126;
+                keyCommandsEditor.setTopLeftPosition (4, y);
+                y += keyCommandsEditor.layout (width - 8) + 8;
                 break;
         }
 
@@ -447,22 +452,6 @@ private:
     struct Page final : juce::Component
     {
         explicit Page (SettingsView& ownerToUse) : owner (ownerToUse) {}
-
-        void paint (juce::Graphics& g) override
-        {
-            if (owner.categories.selected != keyCommands)
-                return;
-
-            g.setColour (juce::Colours::lightgrey);
-            g.setFont (juce::FontOptions (13.0f));
-            g.drawFittedText ("Space: start/stop playback\n"
-                              "Home: back to the beginning\n"
-                              "F12: performance monitor\n"
-                              "Esc: close this page / go back\n"
-                              "Editor - S/D: select/draw mode, Ctrl+Z/Y: undo/redo,\n"
-                              "arrows: nudge selected notes",
-                              owner.keyCommandsBounds, juce::Justification::topLeft, 8);
-        }
 
         SettingsView& owner;
     };
@@ -530,7 +519,7 @@ private:
 
     ThemeEditor themeEditor { engine };
 
-    juce::Rectangle<int> keyCommandsBounds;
+    KeyCommandsEditor keyCommandsEditor;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SettingsView)
 };

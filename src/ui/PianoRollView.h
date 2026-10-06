@@ -3,6 +3,7 @@
 #include "../AudioEngine.h"
 #include "TimeAxis.h"
 #include "../model/PlayheadSteps.h"
+#include "KeyCommands.h"
 #include "CloseButton.h"
 
 class CommandDispatcher;

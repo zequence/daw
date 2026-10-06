@@ -32,6 +32,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     : engine (e), commandDispatcher (dispatcher), mcpProcess (mcp)
 {
     noteNames::middleCOctave() = editorSettings::middleCOctave (engine.getSettingsFile());   // Settings > Editor
+    keys::Bindings::get().load (engine.getSettingsFile());                                   // Settings > Key commands
 
     // Keep the window state sane when projects change through the API.
     dispatcher.onBeforeProjectChange = [safe = juce::Component::SafePointer<MainComponent> (this)]
@@ -1368,7 +1369,7 @@ void MainComponent::toggleEditor (bool draw)
 
 bool MainComponent::keyPressed (const juce::KeyPress& key)
 {
-    if (key == juce::KeyPress::escapeKey)
+    if (keys::matches ("view.back", key))
     {
         if (settingsOpen)
         {
@@ -1406,54 +1407,54 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (triggerArticulation ([&key] (const ExpressionMap& map) { return map.findByKeyCommand (key.getTextDescription()); }))
         return true;
 
-    if (key == juce::KeyPress ('e') || key == juce::KeyPress ('d'))
+    // (KeyCommands.h lists these; Settings > Key commands changes them; KEY_COMMANDS.md documents them)
+    if (keys::matches ("view.edit", key) || keys::matches ("view.draw", key))
     {
-        toggleEditor (key == juce::KeyPress ('d'));
+        toggleEditor (keys::matches ("view.draw", key));
         return true;
     }
 
-    // The selected track's plugin GUI
-    if (selectedTrack != 0 && key == juce::KeyPress ('i'))
+    if (selectedTrack != 0 && keys::matches ("track.instrumentGui", key))
     {
         openTrackPluginWindow (selectedTrack);
         return true;
     }
 
-    // Solo / mute the selected track
-    if (selectedTrack != 0 && (key == juce::KeyPress ('s') || key == juce::KeyPress ('m')))
+    if (selectedTrack != 0 && keys::matches ("track.solo", key))
     {
-        if (key == juce::KeyPress ('s'))
-            engine.setTrackSoloed (selectedTrack, ! engine.isTrackSoloed (selectedTrack));
-        else
-            engine.setTrackMuted (selectedTrack, ! engine.isTrackMuted (selectedTrack));
-
+        engine.setTrackSoloed (selectedTrack, ! engine.isTrackSoloed (selectedTrack));
         return true;
     }
 
-    if (key == juce::KeyPress::F12Key)
+    if (selectedTrack != 0 && keys::matches ("track.mute", key))
+    {
+        engine.setTrackMuted (selectedTrack, ! engine.isTrackMuted (selectedTrack));
+        return true;
+    }
+
+    if (keys::matches ("view.performance", key))
     {
         togglePerfPanel();
         return true;
     }
 
-    if (key == juce::KeyPress::spaceKey)
+    if (keys::matches ("transport.playStop", key))
     {
         engine.getTransport().togglePlayStop();
         return true;
     }
 
-    if (key == juce::KeyPress::homeKey)
+    if (keys::matches ("transport.home", key))
     {
         engine.getTransport().returnToZero();
         return true;
     }
 
     // Global clip undo/redo on the selected track (the piano roll consumes its own first)
-    if (key == juce::KeyPress ('z', juce::ModifierKeys::ctrlModifier, 0))
+    if (keys::matches ("edit.undo", key))
         return selectedTrack != 0 && engine.undoTrackSequence (selectedTrack);
 
-    if (key == juce::KeyPress ('y', juce::ModifierKeys::ctrlModifier, 0)
-        || key == juce::KeyPress ('z', juce::ModifierKeys::ctrlModifier | juce::ModifierKeys::shiftModifier, 0))
+    if (keys::matches ("edit.redo", key))
         return selectedTrack != 0 && engine.redoTrackSequence (selectedTrack);
 
     return false;

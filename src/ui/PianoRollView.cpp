@@ -1307,35 +1307,26 @@ void PianoRollView::stepPlayhead (bool forward)
 
 bool PianoRollView::noteInputKey (const juce::KeyPress& key)
 {
-    if (key == juce::KeyPress ('n'))   // toggles note input
+    if (keys::matches ("editor.noteInput", key))
     {
         inputToggle.setToggleState (! inputToggle.getToggleState(), juce::sendNotificationSync);
         return true;
     }
 
-    if (! inputToggle.getToggleState() || key.getModifiers().isCtrlDown() || key.getModifiers().isAltDown()
-         || key.getModifiers().isCommandDown())
+    if (! inputToggle.getToggleState())
         return false;
 
-    // "." toggles a dot; Shift+"." (whatever character the layout makes of it) a double dot
-    if (key.getKeyCode() == '.' && ! key.getModifiers().isCtrlDown() && ! key.getModifiers().isAltDown())
-    {
-        toggleDots (key.getModifiers().isShiftDown() ? 2 : 1);
-        return true;
-    }
+    if (keys::matches ("input.dot", key))       { toggleDots (1); return true; }
+    if (keys::matches ("input.doubleDot", key)) { toggleDots (2); return true; }
 
-    const auto c = key.getTextCharacter();
+    for (int length = 1; length <= 9; ++length)
+        if (keys::matches (("input.length" + juce::String (length)).toRawUTF8(), key))
+        {
+            lengthBox.setSelectedId (length, juce::sendNotificationSync);
+            return true;
+        }
 
-    if (key.getModifiers().isShiftDown())
-        return false;
-
-    if (c >= '1' && c <= '9')
-    {
-        lengthBox.setSelectedId (c - '0', juce::sendNotificationSync);
-        return true;
-    }
-
-    if (c == '0')
+    if (keys::matches ("input.rest", key))
     {
         auto& transport = engine.getTransport();
 
@@ -1367,26 +1358,25 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
     if (noteInputKey (key))
         return true;
 
-    if (key == juce::KeyPress::deleteKey || key == juce::KeyPress::backspaceKey)
+    if (keys::matches ("editor.delete", key))
     {
         deleteSelection();
         return true;
     }
 
-    if (key == juce::KeyPress ('z', juce::ModifierKeys::ctrlModifier, 0))
+    if (keys::matches ("edit.undo", key))
     {
         undoButton.triggerClick();
         return true;
     }
 
-    if (key == juce::KeyPress ('y', juce::ModifierKeys::ctrlModifier, 0)
-        || key == juce::KeyPress ('z', juce::ModifierKeys::ctrlModifier | juce::ModifierKeys::shiftModifier, 0))
+    if (keys::matches ("edit.redo", key))
     {
         redoButton.triggerClick();
         return true;
     }
 
-    if (key == juce::KeyPress ('a', juce::ModifierKeys::ctrlModifier, 0))
+    if (keys::matches ("editor.selectAll", key))
     {
         if (auto seq = sequence())
         {
@@ -1398,24 +1388,19 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
         return true;
     }
 
-    // Left/right move the transport line (note to note, or a grid step)
-    if (! key.getModifiers().isAltDown() && ! key.getModifiers().isCtrlDown()
-         && (key.isKeyCode (juce::KeyPress::leftKey) || key.isKeyCode (juce::KeyPress::rightKey)))
-    {
-        stepPlayhead (key.isKeyCode (juce::KeyPress::rightKey));
-        return true;
-    }
+    // The transport line: note to note, or a grid step
+    if (keys::matches ("editor.playheadLeft", key))  { stepPlayhead (false); return true; }
+    if (keys::matches ("editor.playheadRight", key)) { stepPlayhead (true);  return true; }
 
-    // Arrow keys nudge the selection: up/down transpose a half step (Ctrl = octave),
-    // Alt+left/right move by the grid division.
+    // The selected notes: transpose (half step / octave) and move by the grid division
     if (! selection.empty())
     {
-        const auto octave = key.getModifiers().isCtrlDown() ? 12 : 1;
-
-        if (key.isKeyCode (juce::KeyPress::upKey))    { nudgeSelection (0, octave);  return true; }
-        if (key.isKeyCode (juce::KeyPress::downKey))  { nudgeSelection (0, -octave); return true; }
-        if (key.isKeyCode (juce::KeyPress::leftKey))  { nudgeSelection (-gridTicks(), 0); return true; }
-        if (key.isKeyCode (juce::KeyPress::rightKey)) { nudgeSelection (gridTicks(), 0);  return true; }
+        if (keys::matches ("editor.transposeUp", key))   { nudgeSelection (0, 1);   return true; }
+        if (keys::matches ("editor.transposeDown", key)) { nudgeSelection (0, -1);  return true; }
+        if (keys::matches ("editor.octaveUp", key))      { nudgeSelection (0, 12);  return true; }
+        if (keys::matches ("editor.octaveDown", key))    { nudgeSelection (0, -12); return true; }
+        if (keys::matches ("editor.nudgeLeft", key))     { nudgeSelection (-gridTicks(), 0); return true; }
+        if (keys::matches ("editor.nudgeRight", key))    { nudgeSelection (gridTicks(), 0);  return true; }
     }
 
     return false;   // space, Home etc. bubble up to the shell
