@@ -58,8 +58,11 @@ public:
         // (Last, so positional initialisers above stay as they were.) A controller lane is a list of POINTS; each says how the value travels to the lane's next
         // point: a step (holds, then jumps) or a ramp. A ramp's bend is the curve's height at its
         // middle, as a fraction of the way (0.5 = straight; the editor's handle sits there).
+        // bendAt is WHERE along the ramp (0..1 of its time) the curve passes through that height:
+        // the handle can be moved sideways too, and the curve bends there.
         bool ramp = false;
         float bend = 0.5f;
+        float bendAt = 0.5f;
     };
 
     // allowNegativeTimes: a PLAYBACK sequence may hold events before tick 0 (shifted earlier than
@@ -206,11 +209,13 @@ public:
         return a.type == b.type && a.channel == b.channel && (a.type != ControlType::controller || a.number == b.number);
     }
 
-    // A ramp's curve: where along the way (0..1) the value is at 'x' (0..1); bend = the height at x = 0.5
-    static float rampShape (float x, float bend)
+    // A ramp's curve: how far along the way (0..1) the value is at 'x' (0..1 of the time). It passes
+    // through the handle: height 'bend' at 'bendAt' (both 0.5 = a straight line).
+    static float rampShape (float x, float bend, float bendAt = 0.5f)
     {
         const auto b = juce::jlimit (0.02f, 0.98f, bend);
-        return std::pow (juce::jlimit (0.0f, 1.0f, x), std::log (b) / std::log (0.5f));
+        const auto at = juce::jlimit (0.05f, 0.95f, bendAt);
+        return std::pow (juce::jlimit (0.0f, 1.0f, x), std::log (b) / std::log (at));
     }
 
     // The value a lane has at 'tick' from its points (-1 = none yet): the last point's, or along its ramp
@@ -228,7 +233,7 @@ public:
                 if (before != nullptr && before->ramp && c.tick > before->tick)
                 {
                     const auto x = (float) (tick - before->tick) / (float) (c.tick - before->tick);
-                    return juce::roundToInt ((float) before->value + (float) (c.value - before->value) * rampShape (x, before->bend));
+                    return juce::roundToInt ((float) before->value + (float) (c.value - before->value) * rampShape (x, before->bend, before->bendAt));
                 }
 
                 break;
@@ -280,7 +285,7 @@ public:
             for (auto tick = point.tick + step; tick < next->tick; tick += step)
             {
                 const auto x = (float) (tick - point.tick) / (float) (next->tick - point.tick);
-                const auto value = juce::roundToInt ((float) point.value + (float) (next->value - point.value) * rampShape (x, point.bend));
+                const auto value = juce::roundToInt ((float) point.value + (float) (next->value - point.value) * rampShape (x, point.bend, point.bendAt));
 
                 if (value != last)
                 {
@@ -354,6 +359,7 @@ public:
             {
                 e->setAttribute ("ramp", true);
                 e->setAttribute ("bend", (double) c.bend);
+                e->setAttribute ("bendAt", (double) c.bendAt);
             }
         }
 
@@ -390,6 +396,7 @@ public:
                                   e->getIntAttribute ("value") });
             controls.back().ramp = e->getBoolAttribute ("ramp", false);   // older projects: steps
             controls.back().bend = (float) e->getDoubleAttribute ("bend", 0.5);
+            controls.back().bendAt = (float) e->getDoubleAttribute ("bendAt", 0.5);
         }
 
         return create (std::move (notes), std::move (controls));

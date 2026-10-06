@@ -101,6 +101,16 @@ public:
             const auto bent = MidiSequence::create ({}, { point (0, 0, true, 0.2f), point (4 * Q, 100) });
             expectWithinAbsoluteError (MidiSequence::laneValueAt (bent->getControls(), point (0, 0), 2 * Q), 20, 1);
 
+            // The handle moved sideways: the curve passes through it there (a quarter of the way in, 80% up)
+            {
+                auto early = point (0, 0, true, 0.8f);
+                early.bendAt = 0.25f;
+                const auto shifted = MidiSequence::create ({}, { early, point (4 * Q, 100) });
+                expectWithinAbsoluteError (MidiSequence::laneValueAt (shifted->getControls(), point (0, 0), Q), 80, 1);
+                const auto reloaded = MidiSequence::fromXml (*shifted->toXml());
+                expect (std::abs (reloaded->getControls()[0].bendAt - 0.25f) < 0.001f);
+            }
+
             // Another CC's points are another lane
             const auto two = MidiSequence::create ({}, { point (0, 0, true), C { Q, MidiSequence::ControlType::controller, 1, 1, 90 },
                                                          point (4 * Q, 127) });

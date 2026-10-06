@@ -1389,7 +1389,9 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
             {
                 dragHandle = handle;
                 const auto seq = sequence();
-                previewBend = seq != nullptr && seq->getControls()[(size_t) handle].ramp ? seq->getControls()[(size_t) handle].bend : 0.5f;
+                const auto ramped = seq != nullptr && seq->getControls()[(size_t) handle].ramp;
+                previewBend = ramped ? seq->getControls()[(size_t) handle].bend : 0.5f;
+                previewBendAt = ramped ? seq->getControls()[(size_t) handle].bendAt : 0.5f;
                 drag = Drag::handle;
                 return;
             }
@@ -1612,10 +1614,16 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
                 const auto& from = seq->getControls()[(size_t) *at];
                 const auto& to = seq->getControls()[(size_t) *(at + 1)];
 
-                if (from.value != to.value && std::abs (position.y - dragStart.y) > 2)
+                // The handle moves both ways: up/down sets the height, left/right where the curve bends
+                if (position.getDistanceFrom (dragStart) > 2)
                 {
                     handleMoved = true;
-                    previewBend = juce::jlimit (0.02f, 0.98f, (float) (laneValueFromY (position.y) - from.value) / (float) (to.value - from.value));
+
+                    if (from.value != to.value)
+                        previewBend = juce::jlimit (0.02f, 0.98f, (float) (laneValueFromY (position.y) - from.value) / (float) (to.value - from.value));
+
+                    const auto fromX = tickToX (from.tick), toX = tickToX (to.tick);
+                    previewBendAt = juce::jlimit (0.05f, 0.95f, (float) (position.x - fromX) / (float) juce::jmax (1, toX - fromX));
                 }
             }
         }
@@ -2253,12 +2261,12 @@ juce::Point<int> PianoRollView::pointPosition (const MidiSequence::Control& c) c
     return { tickToX (c.tick), laneValueToY (c.value) };
 }
 
-juce::Point<int> PianoRollView::handlePosition (const MidiSequence::Control& from, const MidiSequence::Control& to, float bend) const
+juce::Point<int> PianoRollView::handlePosition (const MidiSequence::Control& from, const MidiSequence::Control& to) const
 {
-    const auto x = tickToX ((from.tick + to.tick) / 2);
-    const auto value = from.ramp || bend >= 0.0f ? (float) from.value + (float) (to.value - from.value) * (bend >= 0.0f ? bend : from.bend)
-                                                 : 0.5f * (float) (from.value + to.value);
-    return { x, laneValueToY (juce::roundToInt (value)) };
+    const auto at = from.ramp ? from.bendAt : 0.5f;
+    const auto height = from.ramp ? from.bend : 0.5f;
+    const auto x = tickToX (from.tick + (juce::int64) ((double) (to.tick - from.tick) * at));
+    return { x, laneValueToY (juce::roundToInt ((float) from.value + (float) (to.value - from.value) * height)) };
 }
 
 int PianoRollView::pointAt (juce::Point<int> position) const
@@ -2289,7 +2297,7 @@ int PianoRollView::handleAt (juce::Point<int> position) const
         const auto& from = seq->getControls()[(size_t) points[i]];
         const auto& to = seq->getControls()[(size_t) points[i + 1]];
 
-        if (tickToX (to.tick) - tickToX (from.tick) >= 14 && handlePosition (from, to, -1.0f).getDistanceFrom (position) <= 5)
+        if (tickToX (to.tick) - tickToX (from.tick) >= 14 && handlePosition (from, to).getDistanceFrom (position) <= 5)
             return points[i];
     }
 
@@ -2416,6 +2424,7 @@ void PianoRollView::commitHandle (bool click)
     change->setProperty ("index", dragHandle);
     change->setProperty ("ramp", true);
     change->setProperty ("bend", click ? (from.ramp ? (double) from.bend : 0.5) : (double) previewBend);
+    change->setProperty ("bendAt", click ? (from.ramp ? (double) from.bendAt : 0.5) : (double) previewBendAt);
 
     if (click && from.ramp)
         return;   // a click on a ramp's handle changes nothing (drag to bend, double-click for a step)
@@ -2545,6 +2554,7 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
                         {
                             c.ramp = true;
                             c.bend = previewBend;
+                            c.bendAt = previewBendAt;
                         }
 
                         shown.push_back (c);
@@ -2575,7 +2585,7 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
                         for (auto x = a.x + 3; x < rightX; x += 3)
                         {
                             const auto t = (float) (x - a.x) / (float) juce::jmax (1, rightX - a.x);
-                            const auto v = (float) from.value + (float) (to.value - from.value) * MidiSequence::rampShape (t, from.bend);
+                            const auto v = (float) from.value + (float) (to.value - from.value) * MidiSequence::rampShape (t, from.bend, from.bendAt);
                             path.lineTo ((float) x, (float) laneValueToY (juce::roundToInt (v)));
                         }
 
@@ -2599,7 +2609,7 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
                     // The segment's handle (click: ramp; drag: bend; double-click: step)
                     if (i + 1 < shown.size() && rightX - a.x >= 14)
                     {
-                        const auto h = handlePosition (from, shown[i + 1], from.ramp ? from.bend : -1.0f);
+                        const auto h = handlePosition (from, shown[i + 1]);
                         const auto box = juce::Rectangle<int> (6, 6).withCentre (h).toFloat();
                         g.setColour (juce::Colours::white.withAlpha (indices[i] == hoveredHandle || indices[i] == dragHandle ? 0.95f : 0.55f));
 
@@ -2689,7 +2699,7 @@ void PianoRollView::paintMinimizedLane (juce::Graphics& g, juce::Rectangle<int> 
         for (auto px = x; px < right; px += 3)
         {
             const auto t = (float) (px - startX) / (float) juce::jmax (1, endX - startX);
-            const auto v = (float) from.value + (float) (to->value - from.value) * MidiSequence::rampShape (t, from.bend);
+            const auto v = (float) from.value + (float) (to->value - from.value) * MidiSequence::rampShape (t, from.bend, from.bendAt);
             g.setColour (colourFor (juce::roundToInt (v)));
             g.fillRect (px, line.getY(), juce::jmin (3, right - px), line.getHeight());
         }

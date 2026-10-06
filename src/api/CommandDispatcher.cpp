@@ -518,6 +518,7 @@ void CommandDispatcher::registerCommands()
                      {
                          o->setProperty ("ramp", true);
                          o->setProperty ("bend", (double) c.bend);
+                         o->setProperty ("bendAt", (double) c.bendAt);
                      }
 
                      controls.add (juce::var (o.get()));
@@ -576,6 +577,7 @@ void CommandDispatcher::registerCommands()
                              (int) c.getProperty ("value", 0) });
             out.back().ramp = (bool) c.getProperty ("ramp", false);
             out.back().bend = (float) (double) c.getProperty ("bend", 0.5);
+            out.back().bendAt = (float) (double) c.getProperty ("bendAt", 0.5);
         }
 
         return {};
@@ -1190,7 +1192,7 @@ void CommandDispatcher::registerCommands()
          });
 
     add ("clip.updateControls", "Change controller points by index (indices refer to the clip before the edit)",
-         "trackId:int controls:[{index:int, tick?, value?, ramp?:bool, bend?:0..1}]",
+         "trackId:int controls:[{index:int, tick?, value?, ramp?:bool, bend?:0..1 (height), bendAt?:0..1 (where)}]",
          [this, requireTrack, editClip] (const juce::var& params, Respond respond)
          {
              int id = 0;
@@ -1216,6 +1218,7 @@ void CommandDispatcher::registerCommands()
                      if (change.hasProperty ("value")) c.value = (int) change["value"];
                      if (change.hasProperty ("ramp"))  c.ramp = (bool) change["ramp"];
                      if (change.hasProperty ("bend"))  c.bend = juce::jlimit (0.02f, 0.98f, (float) (double) change["bend"]);
+                     if (change.hasProperty ("bendAt")) c.bendAt = juce::jlimit (0.05f, 0.95f, (float) (double) change["bendAt"]);
                  }
 
                  return {};

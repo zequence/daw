@@ -112,7 +112,7 @@ private:
     int dragPoint = -1, dragHandle = -1;             // the pressed point / the segment's first point
     int pointValueDelta = 0;
     juce::int64 pointTickDelta = 0;
-    float previewBend = -1.0f;                       // while dragging a handle
+    float previewBend = -1.0f, previewBendAt = 0.5f; // while dragging a handle (its height, and where)
     bool handleMoved = false;
     int hoveredHandle = -1;
 
@@ -120,7 +120,8 @@ private:
     std::vector<int> lanePoints() const;             // the maximized lane's points, in time order
     std::set<int> effectivePoints() const;           // selected points + those under the selected notes' span
     juce::Point<int> pointPosition (const MidiSequence::Control&) const;
-    juce::Point<int> handlePosition (const MidiSequence::Control& from, const MidiSequence::Control& to, float bend) const;
+    // Where a segment's handle is: on a ramp, its bend point; on a step, the middle
+    juce::Point<int> handlePosition (const MidiSequence::Control& from, const MidiSequence::Control& to) const;
     int pointAt (juce::Point<int>) const;            // -1 = none
     int handleAt (juce::Point<int>) const;           // the segment's first point; -1 = none
     juce::int64 snapPointTick (juce::int64 tick) const;   // the grid and the notes' starts and ends
