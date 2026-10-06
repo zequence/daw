@@ -164,6 +164,10 @@ private:
         Strip (MixerView& o, Kind kindToUse, AudioEngine::AudioChannelId id, int auxNumberToUse)
             : owner (o), kind (kindToUse), channelId (id), auxNumber (auxNumberToUse)
         {
+            // The strip (with its knobs) is kept as an image: scrolling only moves pictures, and a
+            // turned knob or a moving meter redraws just its own patch of it
+            setBufferedToImage (true);
+
             const auto& style = owner.style();
             const auto placeholderTip = juce::String ("Placeholder - not working yet (MILESTONES.md \"Audio mixer\")");
 
