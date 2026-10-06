@@ -22,7 +22,8 @@
 #include "ui/MixerView.h"
 
 // The single-window shell:
-//   topbar (menu, domain buttons, transport) / sidebar + content container / status.
+//   sidebar (menu, domain buttons, tracks) + content container + side pane / the transport bar
+//   (right, top or bottom: the main menu) / status.
 // Settings overlays the whole UI; everything else swaps inside the content container.
 class CommandDispatcher;
 class McpProcess;
@@ -49,6 +50,7 @@ private:
     // Instruments and History open as a pane on the right, beside the arrangement or the editor
     enum class SidePane { none, instruments, history };
     SidePane sidePane = SidePane::none;
+    SidePane lastSidePane = SidePane::instruments;   // what the expand button opens
     void toggleSidePane (SidePane);
     void zoomTrackHeight (int direction);   // +1 taller, -1 shorter (saved in the settings)
     ContentView mainView = ContentView::midiRegions;   // where the instrument / map editors go back to
@@ -108,8 +110,12 @@ private:
     juce::TextButton rtzButton { "|<" }, playButton { "Play" }, recordButton { "Rec" }, loopButton { "Loop" },
                      perfButton { "Perf" }, snapButton { "Snap" }, returnOnStopButton { juce::String::fromUTF8 ("\xe2\x86\xa9") };   // the stop mode
     juce::Label bpmLabel, positionLabel, timeLabel;
-    juce::Rectangle<int> transportPanel;   // painted behind the unit
-    int topbarSeparators[2] = { 0, 0 };    // lines between the topbar's groups
+    enum class TransportPlace { top, bottom, right };
+    TransportPlace transportPlace = TransportPlace::right;   // where the transport bar is (the main menu; saved in the settings)
+    void setTransportPlace (TransportPlace);
+    juce::TextButton sidePaneButton;       // the right bar's top: expands the side pane (its tabs: Instruments, History)
+    juce::Rectangle<int> rightBar;         // the transport bar on the right (painted)
+    juce::Rectangle<int> paneTabs;         // the side pane's tab row (painted)
     int sidePaneEdge = -1;                 // the side pane's left edge (a line is painted there)
     int sidePaneWidth = 0;                 // 0 = the default (about a third of the window); saved in the settings
 

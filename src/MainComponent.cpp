@@ -9,7 +9,8 @@
 
 namespace
 {
-    constexpr int topbarHeight   = 44;
+    constexpr int rightBarWidth  = 60;   // one transport button wide
+    constexpr int topBarHeight   = 44;   // the transport bar along the top or bottom
     constexpr int statusHeight   = 22;
 
     // h:mm:ss:ms, hours only when non-zero (same convention as the timeline bar)
@@ -34,7 +35,8 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     noteNames::middleCOctave() = editorSettings::middleCOctave (engine.getSettingsFile());   // Settings > Editor
     keys::Bindings::get().load (engine.getSettingsFile());                                   // Settings > Key commands
     sidePaneWidth = engine.getSettingsFile().getIntValue ("sidePaneWidth", 0);              // the right pane's width
-    dockHeight = engine.getSettingsFile().getIntValue ("dockHeight", 0);                    // the docked editor's height
+    dockHeight = engine.getSettingsFile().getIntValue ("dockHeight", 0);
+    transportPlace = (TransportPlace) juce::jlimit (0, 2, engine.getSettingsFile().getIntValue ("transportBar", 2));   // 0 top, 1 bottom, 2 right                    // the docked editor's height
     sidebar::trackRowHeightSetting() = juce::jlimit (sidebar::minTrackRowHeight, sidebar::maxTrackRowHeight,
                                                      engine.getSettingsFile().getIntValue ("trackHeight", sidebar::minTrackRowHeight));
     lanes::Settings::get().load (engine.getSettingsFile());                                  // Settings > Controller lanes
@@ -90,8 +92,12 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     // domain's arrange view (ISSUES.md "Top bar").
     instrumentsButton.setTooltip ("The instrument rack (I), in a pane on the right (click again or Esc to close)");
     historyButton.setTooltip ("Global history (H), in a pane on the right: click an entry to time-travel (click again or Esc to close)");
-    instrumentsButton.onClick = [this] { toggleSidePane (SidePane::instruments); };
-    historyButton.onClick = [this] { toggleSidePane (SidePane::history); };
+    // In the side pane they're its tabs: a click switches to the other (the expand button closes the pane)
+    instrumentsButton.onClick = [this] { if (sidePane != SidePane::instruments) toggleSidePane (SidePane::instruments); };
+    historyButton.onClick = [this] { if (sidePane != SidePane::history) toggleSidePane (SidePane::history); };
+
+    sidePaneButton.setTooltip ("Expand / collapse the side pane: Instruments (I) and History (H)");
+    sidePaneButton.onClick = [this] { toggleSidePane (sidePane != SidePane::none ? sidePane : lastSidePane); };
 
     rtzButton.setTooltip ("Return to start (Home)");
     theme::setButtonRole (rtzButton, "rtz");
@@ -361,7 +367,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     statusLabel.setFont (juce::FontOptions (12.0f));
 
     for (auto* c : std::initializer_list<juce::Component*> {
-             &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
+             &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &sidePaneButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
              &sidebarHeader, &trackList, &channelList, &sidebarResizer, &sidePaneResizer, &dockHandle,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView, &mixerView,
@@ -370,7 +376,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         addAndMakeVisible (c);
 
     for (auto* b : std::initializer_list<juce::Component*> { &menuButton, &midiDomainButton, &audioDomainButton,
-                                                             &instrumentsButton, &historyButton, &rtzButton,
+                                                             &instrumentsButton, &historyButton, &sidePaneButton, &rtzButton,
                                                              &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &perfButton })
         b->setWantsKeyboardFocus (false);
 
@@ -979,6 +985,15 @@ void MainComponent::paintOverChildren (juce::Graphics& g)
     g.strokePath (border, juce::PathStrokeType (1.5f));
 }
 
+void MainComponent::setTransportPlace (TransportPlace where)
+{
+    transportPlace = where;
+    engine.getSettingsFile().setValue ("transportBar", (int) where);
+    engine.getSettingsFile().saveIfNeeded();
+    resized();
+    repaint();
+}
+
 void MainComponent::showMainMenu()
 {
     const auto safe = juce::Component::SafePointer<MainComponent> (this);
@@ -988,6 +1003,14 @@ void MainComponent::showMainMenu()
     menu.addItem ("Load project...", [safe] { if (safe != nullptr) safe->loadProjectDialog(); });
     menu.addItem ("Save project", [safe] { if (safe != nullptr) safe->saveProject (false); });
     menu.addItem ("Save project as...", [safe] { if (safe != nullptr) safe->saveProject (true); });
+    menu.addSeparator();
+
+    juce::PopupMenu place;
+
+    for (auto [name, where] : { std::pair ("Top", TransportPlace::top), std::pair ("Bottom", TransportPlace::bottom), std::pair ("Right", TransportPlace::right) })
+        place.addItem (name, true, transportPlace == where, [safe, where] { if (safe != nullptr) safe->setTransportPlace (where); });
+
+    menu.addSubMenu ("Transport bar", place);
     menu.addSeparator();
     menu.addItem ("Save as startup project", [safe]
     {
@@ -1216,6 +1239,10 @@ void MainComponent::updateViewVisibility()
     expressionMapView.setVisible (contentView == ContentView::expressionMaps);
     historyView.setVisible (sidePane == SidePane::history);
     historyButton.setToggleState (sidePane == SidePane::history, juce::dontSendNotification);
+    instrumentsButton.setVisible (sidePane != SidePane::none);   // the pane's tabs
+    historyButton.setVisible (sidePane != SidePane::none);
+    sidePaneButton.setButtonText (sidePane != SidePane::none ? juce::String::fromUTF8 ("\xc2\xbb") : juce::String::fromUTF8 ("\xc2\xab"));
+    sidePaneButton.setToggleState (sidePane != SidePane::none, juce::dontSendNotification);
 
     trackList.setVisible (domain == Domain::midi);
     channelList.setVisible (domain == Domain::audio);
@@ -1225,9 +1252,11 @@ void MainComponent::updateViewVisibility()
 
     midiDomainButton.setToggleState (domain == Domain::midi, juce::dontSendNotification);
     audioDomainButton.setToggleState (domain == Domain::audio, juce::dontSendNotification);
-    instrumentsButton.setToggleState (sidePane == SidePane::instruments
-                                        || contentView == ContentView::instrumentEditor
-                                        || contentView == ContentView::expressionMaps, juce::dontSendNotification);
+    instrumentsButton.setToggleState (sidePane == SidePane::instruments, juce::dontSendNotification);
+
+    // The domain buttons (the sidebar's top) show the domain in its colour: Midi blue, Audio red
+    for (auto [button, colour] : { std::pair (&midiDomainButton, 0xff3aa6c4u), std::pair (&audioDomainButton, 0xffc0504au) })
+        button->setColour (juce::TextButton::buttonOnColourId, juce::Colour (colour).withMultipliedBrightness (0.8f));
 
     settingsView.setVisible (settingsOpen);
 
@@ -1466,6 +1495,9 @@ void MainComponent::zoomTrackHeight (int direction)
 void MainComponent::toggleSidePane (SidePane pane)
 {
     sidePane = sidePane == pane ? SidePane::none : pane;
+
+    if (sidePane != SidePane::none)
+        lastSidePane = sidePane;
 
     if (sidePane == SidePane::instruments)
         instrumentsView.focusTrack (selectedTrack);
@@ -1759,21 +1791,16 @@ void MainComponent::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (0xff1d1f23));
 
+    // The transport bar on the right, and the side pane's tab row
     g.setColour (juce::Colour (0xff2a2d33));
-    g.fillRect (getLocalBounds().removeFromTop (topbarHeight));
-
-    // The transport unit's panel
-    g.setColour (juce::Colour (0xff1f2227));
-    g.fillRoundedRectangle (transportPanel.toFloat(), 2.0f * theme::corner);
-    g.setColour (juce::Colour (0xff43464d));
-    g.drawRoundedRectangle (transportPanel.toFloat(), 2.0f * theme::corner, 1.0f);
-
-    // Separators between the topbar's groups (hamburger | view buttons | ... | Perf)
+    g.fillRect (rightBar);
+    g.fillRect (paneTabs);
     g.setColour (juce::Colour (0xff43464d));
 
-    for (auto x : topbarSeparators)
-        if (x > 0)
-            g.fillRect (x, 10, 1, topbarHeight - 20);
+    if (transportPlace == TransportPlace::right)
+        g.fillRect (rightBar.getX(), rightBar.getY(), 1, rightBar.getHeight());
+    else
+        g.fillRect (rightBar.getX(), transportPlace == TransportPlace::top ? rightBar.getBottom() - 1 : rightBar.getY(), rightBar.getWidth(), 1);
 
     g.setColour (juce::Colour (0xff17191c));
     g.fillRect (getLocalBounds().removeFromBottom (statusHeight));
@@ -1781,7 +1808,7 @@ void MainComponent::paint (juce::Graphics& g)
     if (sidePaneEdge >= 0)   // the side pane's edge
     {
         g.setColour (juce::Colour (0xff43464d));
-        g.fillRect (sidePaneEdge, topbarHeight, 1, getHeight() - topbarHeight - statusHeight);
+        g.fillRect (sidePaneEdge, paneTabs.getY(), 1, getHeight() - statusHeight - paneTabs.getY());
     }
 }
 
@@ -1789,66 +1816,62 @@ void MainComponent::resized()
 {
     auto area = getLocalBounds();
 
-    // Topbar
-    // Topbar: four distinct groups (ISSUES.md) - hamburger | view buttons |
-    // transport unit | right-side buttons - with separators painted between them.
-    auto toolbar = area.removeFromTop (topbarHeight).reduced (8, 7);
-    menuButton.setBounds (toolbar.removeFromLeft (36));
-    topbarSeparators[0] = toolbar.getX() + 7;
-    toolbar.removeFromLeft (14);
-    midiDomainButton.setBounds (toolbar.removeFromLeft (52));
-    toolbar.removeFromLeft (4);
-    audioDomainButton.setBounds (toolbar.removeFromLeft (56));
-    toolbar.removeFromLeft (4);
-    toolbar.removeFromLeft (14);
-
-    // Right side: Instruments and History (the side pane), the divider, Perf
-    perfButton.setBounds (getWidth() - 8 - 50, toolbar.getY(), 50, toolbar.getHeight());
-    topbarSeparators[1] = perfButton.getX() - 8;
-    historyButton.setBounds (topbarSeparators[1] - 8 - 62, toolbar.getY(), 62, toolbar.getHeight());
-    instrumentsButton.setBounds (historyButton.getX() - 4 - 94, toolbar.getY(), 94, toolbar.getHeight());
-
-    // The transport unit: buttons + position readout + tempo, PERFECTLY centered
-    // in the window. If it would collide, it shifts right of the view buttons and
-    // the Perf button hides - the window's minimum width normally prevents both.
-    constexpr auto unitWidth = 34 + 4 + 54 + 4 + 46 + 4 + 48 + 4 + 28 + 4 + 48 + 14 + 76 + 6 + 92 + 10 + 56;
-    auto unit = juce::Rectangle<int> ((getWidth() - unitWidth) / 2, toolbar.getY(),
-                                      unitWidth, toolbar.getHeight());
-
-    if (unit.getX() < toolbar.getX())
-        unit.setX (toolbar.getX());
-
-    const auto perfVisible = unit.getRight() + 12 <= perfButton.getX();
-    perfButton.setVisible (perfVisible);
-
-    const auto rightEdge = perfVisible ? perfButton.getX() - 8 : getWidth() - 8;
-
-    if (unit.getRight() > rightEdge)
-        unit.setX (juce::jmax (toolbar.getX(), rightEdge - unitWidth));
-
-    transportPanel = unit.expanded (8, 4)
-                         .getIntersection (getLocalBounds().removeFromTop (topbarHeight).reduced (0, 2));
-
-    rtzButton.setBounds (unit.removeFromLeft (34));
-    unit.removeFromLeft (4);
-    playButton.setBounds (unit.removeFromLeft (54));
-    unit.removeFromLeft (4);
-    recordButton.setBounds (unit.removeFromLeft (46));
-    unit.removeFromLeft (4);
-    loopButton.setBounds (unit.removeFromLeft (48));
-    unit.removeFromLeft (4);
-    returnOnStopButton.setBounds (unit.removeFromLeft (28));
-    unit.removeFromLeft (4);
-    snapButton.setBounds (unit.removeFromLeft (48));
-    unit.removeFromLeft (14);
-    positionLabel.setBounds (unit.removeFromLeft (76));
-    unit.removeFromLeft (6);
-    timeLabel.setBounds (unit.removeFromLeft (92));
-    unit.removeFromLeft (10);
-    bpmLabel.setBounds (unit.removeFromLeft (56));
-
     // Bottom
     statusLabel.setBounds (area.removeFromBottom (statusHeight).reduced (8, 1));
+
+    // The transport bar: on the right (one button wide, stacked) or along the top or bottom. The
+    // transport buttons are all one size; the expand button (the side pane) and Perf at its ends.
+    const auto vertical = transportPlace == TransportPlace::right;
+    rightBar = vertical ? area.removeFromRight (rightBarWidth)
+                        : (transportPlace == TransportPlace::top ? area.removeFromTop (topBarHeight) : area.removeFromBottom (topBarHeight));
+    const std::initializer_list<juce::Component*> transportButtons { &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton };
+
+    if (vertical)
+    {
+        auto bar = rightBar.reduced (5, 6).withTrimmedLeft (1);
+        sidePaneButton.setBounds (bar.removeFromTop (24));
+        bar.removeFromTop (12);
+
+        for (auto* b : transportButtons)
+        {
+            b->setBounds (bar.removeFromTop (30));
+            bar.removeFromTop (4);
+        }
+
+        bar.removeFromTop (8);
+        positionLabel.setBounds (bar.removeFromTop (22));
+        timeLabel.setBounds (bar.removeFromTop (16));
+        bar.removeFromTop (4);
+        bpmLabel.setBounds (bar.removeFromTop (22));
+        perfButton.setBounds (bar.removeFromBottom (24));
+    }
+    else
+    {
+        auto bar = rightBar.reduced (8, 7);
+        sidePaneButton.setBounds (bar.removeFromRight (36));
+        bar.removeFromRight (8);
+        perfButton.setBounds (bar.removeFromRight (50));
+
+        for (auto* b : transportButtons)
+        {
+            b->setBounds (bar.removeFromLeft (50));
+            bar.removeFromLeft (4);
+        }
+
+        bar.removeFromLeft (10);
+        positionLabel.setBounds (bar.removeFromLeft (76));
+        bar.removeFromLeft (6);
+        timeLabel.setBounds (bar.removeFromLeft (92));
+        bar.removeFromLeft (10);
+        bpmLabel.setBounds (bar.removeFromLeft (56));
+    }
+
+    positionLabel.setFont (juce::FontOptions (vertical ? 14.0f : 18.0f, juce::Font::bold));
+    positionLabel.setJustificationType (vertical ? juce::Justification::centred : juce::Justification::centredRight);
+    timeLabel.setFont (juce::FontOptions (vertical ? 10.5f : 14.0f));
+    timeLabel.setJustificationType (vertical ? juce::Justification::centred : juce::Justification::centredLeft);
+    timeLabel.setMinimumHorizontalScale (0.7f);
+
 
     // The side pane (Instruments / History) on the right, beside everything else
     if (sidePane != SidePane::none)
@@ -1858,6 +1881,11 @@ void MainComponent::resized()
         sidePaneResizer.setBounds (pane.removeFromLeft (5));   // drag to resize
         sidePaneResizer.setVisible (true);
         sidePaneResizer.toFront (false);
+
+        paneTabs = pane.removeFromTop (30);   // the tabs: Instruments | History
+        auto tabs = paneTabs.reduced (6, 4);
+        instrumentsButton.setBounds (tabs.removeFromLeft (tabs.getWidth() / 2).withTrimmedRight (2));
+        historyButton.setBounds (tabs.withTrimmedLeft (2));
         instrumentsView.setBounds (pane);
         historyView.setBounds (pane);
     }
@@ -1865,6 +1893,7 @@ void MainComponent::resized()
     {
         sidePaneEdge = -1;
         sidePaneResizer.setVisible (false);
+        paneTabs = {};
     }
 
     if (perfPanel.isVisible())
@@ -1880,8 +1909,14 @@ void MainComponent::resized()
 
     // The sidebar lists start at the same y as the content views (below the
     // timeline bar), so their rows share the arrangement's Y axis exactly.
-    auto sidebarTop = sidebar.removeFromTop (timelineHeight);
-    sidebarHeader.setBounds (sidebarTop);
+    // Its top (the timeline bar's height): Menu, then the Midi / Audio buttons (the domain in its colour)
+    auto sidebarTop = sidebar.removeFromTop (timelineHeight).reduced (6, 0);
+    sidebarTop = sidebarTop.withSizeKeepingCentre (sidebarTop.getWidth(), juce::jmin (28, sidebarTop.getHeight() - 4));
+    sidebarHeader.setVisible (false);
+    menuButton.setBounds (sidebarTop.removeFromLeft (40));
+    sidebarTop.removeFromLeft (6);
+    midiDomainButton.setBounds (sidebarTop.removeFromLeft (sidebarTop.getWidth() / 2).withTrimmedRight (2));
+    audioDomainButton.setBounds (sidebarTop.withTrimmedLeft (2));
 
     trackList.setBounds (sidebar);
     channelList.setBounds (sidebar);
