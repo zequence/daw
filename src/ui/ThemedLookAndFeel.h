@@ -89,6 +89,14 @@ public:
         g.strokePath (arrow, juce::PathStrokeType (2.0f));
     }
 
+    // Flat menu: the background and a hairline border
+    void drawPopupMenuBackground (juce::Graphics& g, int width, int height) override
+    {
+        g.fillAll (findColour (juce::PopupMenu::backgroundColourId));
+        g.setColour (theme::colour (theme::Token::menuBorder));
+        g.drawRect (0, 0, width, height, 1);
+    }
+
 private:
     // The widgets without roles take their colors from the LookAndFeel's table
     void applyTheme()
@@ -108,6 +116,13 @@ private:
         setColour (juce::ComboBox::buttonColourId, border);
         setColour (juce::ComboBox::textColourId, text);
         setColour (juce::ComboBox::arrowColourId, text);
+
+        // Popup menus (the hamburger menu, right-click menus, combo box lists)
+        setColour (juce::PopupMenu::backgroundColourId, theme::colour (T::menuBg));
+        setColour (juce::PopupMenu::textColourId, theme::colour (T::menuText));
+        setColour (juce::PopupMenu::headerTextColourId, theme::colour (T::menuHeaderText));
+        setColour (juce::PopupMenu::highlightedBackgroundColourId, theme::colour (T::menuHighlightBg));
+        setColour (juce::PopupMenu::highlightedTextColourId, theme::colour (T::menuHighlightText));
     }
 
     void changeListenerCallback (juce::ChangeBroadcaster*) override
