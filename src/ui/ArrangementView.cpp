@@ -228,10 +228,19 @@ void ArrangementView::mouseUp (const juce::MouseEvent& event)
 {
     if (marquee)
     {
-        // A click is a 1-pixel rectangle: it selects the block under it (or clears)
-        auto area = juce::Rectangle<int> (dragStart, dragNow);
-        area.setSize (juce::jmax (1, area.getWidth()), juce::jmax (1, area.getHeight()));
-        const auto touched = blocksTouching (area);
+        // A click selects the block under it - where regions overlap, only the top one (or clears);
+        // a dragged rectangle selects everything it touches
+        std::vector<BlockRef> touched;
+
+        if (! didDrag)
+        {
+            if (const auto hit = blockAt (dragStart); hit.valid())
+                touched.push_back (hit);
+        }
+        else
+        {
+            touched = blocksTouching (juce::Rectangle<int> (dragStart, dragNow));
+        }
 
         if (! marqueeAdds)
             selection.clear();
@@ -715,10 +724,10 @@ void ArrangementView::paint (juce::Graphics& g)
                     const auto band = juce::Rectangle<int> (from, y + 4, to - from, height - 8);
                     juce::Graphics::ScopedSaveState state (g);
                     g.reduceClipRegion (band);
-                    g.setColour (juce::Colours::white.withAlpha (0.18f));
+                    g.setColour (juce::Colours::white.withAlpha (0.32f));
 
-                    for (int x = band.getX() - band.getHeight(); x < band.getRight(); x += 7)
-                        g.drawLine ((float) x, (float) band.getBottom(), (float) (x + band.getHeight()), (float) band.getY(), 1.0f);
+                    for (int x = band.getX() - band.getHeight(); x < band.getRight(); x += 6)
+                        g.drawLine ((float) x, (float) band.getBottom(), (float) (x + band.getHeight()), (float) band.getY(), 1.3f);
                 }
 
             y += height;
