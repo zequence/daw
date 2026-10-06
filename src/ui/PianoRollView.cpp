@@ -2438,8 +2438,8 @@ void PianoRollView::paint (juce::Graphics& g)
             else if (slotColours)
                 g.setColour (slot != nullptr && slot->colour.isNotEmpty() ? AudioEngine::colourFromHex (slot->colour, juce::Colours::grey)
                                                                          : juce::Colour (0xff8a8d93));
-            else   // velocity: soft = yellow, through orange, loud = red
-                g.setColour (juce::Colour::fromHSV ((1.0f / 6.0f) * (1.0f - (float) velocity / 127.0f), 0.8f, 0.95f, 1.0f));
+            else   // velocity: soft = blue, loud = cyan (lanes::valueColour)
+                g.setColour (lanes::valueColour (lanes::Kind::velocity, (float) velocity / 127.0f));
 
             if (! isEditable (note))
                 g.setOpacity (0.25f);   // another region's note (the region tabs)
