@@ -85,7 +85,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     // The Instruments and History buttons toggle: clicking again returns to the
     // domain's arrange view (ISSUES.md "Top bar").
     instrumentsButton.setTooltip ("The instrument rack, in a pane on the right (click again or Esc to close)");
-    historyButton.setTooltip ("Global history, in a pane on the right: click an entry to time-travel (click again or Esc to close)");
+    historyButton.setTooltip ("Global history (H), in a pane on the right: click an entry to time-travel (click again or Esc to close)");
     instrumentsButton.onClick = [this] { toggleSidePane (SidePane::instruments); };
     historyButton.onClick = [this] { toggleSidePane (SidePane::history); };
 
@@ -1549,6 +1549,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (selectedTrack != 0 && keys::matches ("track.mute", key))
     {
         engine.setTrackMuted (selectedTrack, ! engine.isTrackMuted (selectedTrack));
+        return true;
+    }
+
+    if (keys::matches ("view.history", key))
+    {
+        toggleSidePane (SidePane::history);
         return true;
     }
 

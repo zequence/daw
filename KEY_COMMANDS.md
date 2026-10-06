@@ -29,6 +29,7 @@ A key that is typed into a text field goes to the field.
 | MIDI editor with the select pointer (toggle) | E | `view.edit` |
 | MIDI editor with the pen (toggle) | D | `view.draw` |
 | Performance monitor | F12 | `view.performance` |
+| History pane on / off | H | `view.history` |
 | Solo the selected track | S | `track.solo` |
 | Mute the selected track | M | `track.mute` |
 | Show / hide the selected track's instrument GUI | I | `track.instrumentGui` |

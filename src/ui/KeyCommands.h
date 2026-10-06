@@ -32,6 +32,7 @@ namespace keys
             { "view.edit",            "Global", "MIDI editor with the select pointer (toggle)", { K ('e') } },
             { "view.draw",            "Global", "MIDI editor with the pen (toggle)",           { K ('d') } },
             { "view.performance",     "Global", "Performance monitor",                         { K (K::F12Key) } },
+            { "view.history",         "Global", "History pane on / off",                       { K ('h') } },
             { "track.solo",           "Global", "Solo the selected track",                     { K ('s') } },
             { "track.mute",           "Global", "Mute the selected track",                     { K ('m') } },
             { "track.instrumentGui",  "Global", "Show / hide the selected track's instrument GUI", { K ('i') } },
