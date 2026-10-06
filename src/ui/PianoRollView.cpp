@@ -188,10 +188,19 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
 
     undoButton.onClick = [this]
     {
+        const auto before = sequence();
         auto params = new juce::DynamicObject();
         params->setProperty ("trackId", trackId);
         runCommand ("clip.undo", params);
         selection.clear();
+
+        // Undoing a note written by note input: the line goes back to where it was written
+        for (auto& step : inputSteps)
+            if (before != nullptr && step.result == before && sequence() != before)
+            {
+                engine.getTransport().locate (step.lineBefore);
+                chordTick = -1;
+            }
     };
     addAndMakeVisible (undoButton);
 
@@ -201,6 +210,13 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
         params->setProperty ("trackId", trackId);
         runCommand ("clip.redo", params);
         selection.clear();
+
+        for (auto& step : inputSteps)
+            if (step.result != nullptr && step.result == sequence())
+            {
+                engine.getTransport().locate (step.lineAfter);
+                chordTick = -1;
+            }
     };
     addAndMakeVisible (redoButton);
 
@@ -236,6 +252,8 @@ void PianoRollView::noteInput (const juce::MidiMessage& message, double received
     const auto length = newNoteTicks();
     const auto joinsChord = chordTick >= 0 && receivedMs - chordStartMs <= chordWindowMs;
 
+    const auto lineBefore = transport.getPositionTicks();
+
     if (! joinsChord)
     {
         chordTick = transport.getPositionTicks();
@@ -260,6 +278,12 @@ void PianoRollView::noteInput (const juce::MidiMessage& message, double received
     params->setProperty ("trackId", trackId);
     params->setProperty ("notes", notes);
     runCommand ("clip.addNotes", params);
+
+    inputSteps.push_back ({ sequence(), lineBefore, transport.getPositionTicks() });
+
+    if (inputSteps.size() > 500)
+        inputSteps.erase (inputSteps.begin());
+
     repaint();
 }
 

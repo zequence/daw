@@ -169,6 +169,11 @@ private:
     static constexpr double chordWindowMs = 60.0;
     juce::int64 chordTick = -1;            // where the current chord is written (-1: none yet)
     double chordStartMs = 0.0;             // when its first note arrived
+
+    // Undo/redo of a note written by note input also puts the transport line back: each
+    // written note remembers the clip it produced and the line before and after it
+    struct InputStep { MidiSequence::Ptr result; juce::int64 lineBefore = 0, lineAfter = 0; };
+    std::vector<InputStep> inputSteps;
     void noteInput (const juce::MidiMessage&, double receivedMs);
     bool drawMode = false;   // the top bar's Draw (pen) vs Edit (select)
     juce::ComboBox snapBox, lengthBox, laneBox, colourBox;
