@@ -519,6 +519,28 @@ juce::int64 PianoRollView::snapTicksOrZero() const
     return axis.snap ? gridTicks() : 0;
 }
 
+// Where a dragged note's edge snaps: the nearest of the zoom's grid line and the other notes' starts
+// and ends (the selected ones move with it, so they don't count)
+juce::int64 PianoRollView::snapNoteEnd (juce::int64 tick) const
+{
+    auto best = axis.snapToGrid (*engine.getTransport().getTempoMap(), tick);
+
+    if (auto seq = sequence())
+        for (int i = 0; i < (int) seq->getNotes().size(); ++i)
+        {
+            if (selection.count (i))
+                continue;
+
+            const auto& note = seq->getNotes()[(size_t) i];
+
+            for (auto edge : { note.startTick, note.startTick + note.lengthTicks })
+                if (std::abs (edge - tick) < std::abs (best - tick))
+                    best = edge;
+        }
+
+    return best;
+}
+
 juce::int64 PianoRollView::snapTick (juce::int64 tick) const
 {
     return axis.snapToGrid (*engine.getTransport().getTempoMap(), tick);
@@ -1487,6 +1509,7 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
             auditionNote (seq->getNotes()[(size_t) hit].key, seq->getNotes()[(size_t) hit].velocity);
 
         drag = onRightEdge ? Drag::resize : Drag::move;
+        pressedNote = hit;
 
         // Draw mode: drawing on a note resizes it - its end jumps to the pen and follows the drag
         if (drawMode && ! event.mods.isShiftDown())
@@ -1565,7 +1588,31 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
     {
         const auto rawTicks = (juce::int64) ((position.x - dragStart.x) * axis.ticksPerPixel);
         const auto grid = snapTicksOrZero();
-        dragTickOffset = grid > 0 ? (rawTicks / juce::jmax ((juce::int64) 1, grid)) * grid : rawTicks;
+        const auto seq = sequence();
+
+        if (drag == Drag::resize && axis.snap && seq != nullptr && pressedNote >= 0 && pressedNote < (int) seq->getNotes().size())
+        {
+            // The pressed note's end goes to the nearest grid line or other note's start/end; the
+            // selection's other notes change length by the same amount
+            const auto& note = seq->getNotes()[(size_t) pressedNote];
+            const auto end = note.startTick + note.lengthTicks;
+            const auto snapped = juce::jmax (note.startTick + 1, snapNoteEnd (end + rawTicks));
+            dragTickOffset = snapped - end;
+        }
+        else if (drag == Drag::move && axis.snap && seq != nullptr && pressedNote >= 0 && pressedNote < (int) seq->getNotes().size())
+        {
+            // The pressed note lands with its start - or its end, whichever needs the smaller nudge - on
+            // the nearest grid line or other note's start/end; the selection moves with it
+            const auto& note = seq->getNotes()[(size_t) pressedNote];
+            const auto start = note.startTick + rawTicks, end = start + note.lengthTicks;
+            const auto byStart = snapNoteEnd (start) - start;
+            const auto byEnd = snapNoteEnd (end) - end;
+            dragTickOffset = juce::jmax (-note.startTick, rawTicks + (std::abs (byEnd) < std::abs (byStart) ? byEnd : byStart));
+        }
+        else
+        {
+            dragTickOffset = grid > 0 ? (rawTicks / juce::jmax ((juce::int64) 1, grid)) * grid : rawTicks;
+        }
         dragKeyOffset = drag == Drag::move ? (dragStart.y - position.y) / keyHeight : 0;
         dragChangedSomething = true;
         repaint();
