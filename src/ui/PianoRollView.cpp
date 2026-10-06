@@ -2214,7 +2214,7 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
     }
 }
 
-// A minimized lane: the background, and a line coloured by the values where there are any
+// A minimized lane: the background, and a line (60% opaque) coloured by the values where there are any
 // (velocity yellow -> red per note; controllers blue -> magenta, held until the next event)
 void PianoRollView::paintMinimizedLane (juce::Graphics& g, juce::Rectangle<int> strip, const lanes::Lane& lane,
                                         const MidiSequence* seq)
@@ -2236,7 +2236,7 @@ void PianoRollView::paintMinimizedLane (juce::Graphics& g, juce::Rectangle<int> 
 
             if (right > x)
             {
-                g.setColour (lanes::valueColour (lane.kind, (float) note.velocity / 127.0f));
+                g.setColour (lanes::valueColour (lane.kind, (float) note.velocity / 127.0f).withAlpha (0.6f));
                 g.fillRect (x, line.getY(), juce::jmax (1, right - x), line.getHeight());
             }
         }
@@ -2253,7 +2253,7 @@ void PianoRollView::paintMinimizedLane (juce::Graphics& g, juce::Rectangle<int> 
 
         if (right > x)
         {
-            g.setColour (lanes::valueColour (lane.kind, (float) from.value / (float) lane.maxValue()));
+            g.setColour (lanes::valueColour (lane.kind, (float) from.value / (float) lane.maxValue()).withAlpha (0.6f));
             g.fillRect (x, line.getY(), right - x, line.getHeight());
         }
     };
