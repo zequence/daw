@@ -34,6 +34,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     noteNames::middleCOctave() = editorSettings::middleCOctave (engine.getSettingsFile());   // Settings > Editor
     keys::Bindings::get().load (engine.getSettingsFile());                                   // Settings > Key commands
     sidePaneWidth = engine.getSettingsFile().getIntValue ("sidePaneWidth", 0);              // the right pane's width
+    dockHeight = engine.getSettingsFile().getIntValue ("dockHeight", 0);                    // the docked editor's height
     sidebar::trackRowHeightSetting() = juce::jlimit (sidebar::minTrackRowHeight, sidebar::maxTrackRowHeight,
                                                      engine.getSettingsFile().getIntValue ("trackHeight", sidebar::minTrackRowHeight));
     lanes::Settings::get().load (engine.getSettingsFile());                                  // Settings > Controller lanes
@@ -203,7 +204,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         lastSelectionInArrangement = false;
 
         // While editing, Ctrl-selected tracks join the editor; the edited track stays edited
-        if (contentView == ContentView::midiEditor && selection.size() > 1)
+        if (isEditorShowing() && selection.size() > 1)
             pianoRollView.setTracks (inSidebarOrder (selection), pianoRollView.getTrack());
 
         if (! engine.getSettingsFile().getBoolValue (SettingsView::autoRecordOnSelectKey, true))
@@ -222,6 +223,14 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     for (auto* close : { &pianoRollView.closeButton, &instrumentsView.closeButton, &instrumentEditorView.closeButton,
                          &expressionMapView.closeButton, &historyView.closeButton })
         close->onClick = [this] { showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions); };
+
+    pianoRollView.closeButton.onClick = [this]
+    {
+        if (isEditorDockedShowing())
+            setEditorDocked (false);
+        else
+            showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
+    };
 
     instrumentsView.closeButton.onClick = [this] { toggleSidePane (SidePane::instruments); };
     historyView.closeButton.onClick = [this] { toggleSidePane (SidePane::history); };
@@ -352,7 +361,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     for (auto* c : std::initializer_list<juce::Component*> {
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
-             &sidebarHeader, &trackList, &channelList, &sidebarResizer, &sidePaneResizer,
+             &sidebarHeader, &trackList, &channelList, &sidebarResizer, &sidePaneResizer, &dockHandle,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
              &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView, &settingsView,
              &statusLabel })
@@ -620,8 +629,8 @@ void MainComponent::selectTrack (AudioEngine::TrackId id, bool forceArm)
     if (sidePane == SidePane::instruments)
         instrumentsView.focusTrack (id);
 
-    if (contentView == ContentView::midiEditor)
-        pianoRollView.setTrack (id);   // the editor follows the selected track
+    if (isEditorShowing())
+        pianoRollView.setTrack (id);   // the editor (full or docked) follows the selected track
 
     lap ("views");
 
@@ -930,9 +939,42 @@ void MainComponent::showContent (ContentView view)
 
     updatePlaceholders();
     updateViewVisibility();
+    resized();   // the arrangement shares its area with the docked editor
 
     if (view == ContentView::midiEditor)
         pianoRollView.grabKeyboardFocus();
+}
+
+// The MIDI editor docked under the arrangement (the handle opens, closes and sizes it)
+void MainComponent::setEditorDocked (bool docked)
+{
+    if (docked && ! editorDocked)
+        pianoRollView.setTrack (selectedTrack);   // it shows the selected track, as the full editor does
+
+    editorDocked = docked;
+    updateViewVisibility();
+    resized();
+    repaint();
+    dockHandle.repaint();
+}
+
+// The docked editor's border: rounded at the top, down both sides
+void MainComponent::paintOverChildren (juce::Graphics& g)
+{
+    if (! isEditorDockedShowing() || ! pianoRollView.isVisible())
+        return;
+
+    const auto box = pianoRollView.getBounds().expanded (2, 0).withTop (pianoRollView.getY() - 2).toFloat().reduced (0.5f);
+    constexpr float radius = 7.0f;
+    juce::Path border;
+    border.startNewSubPath (box.getX(), box.getBottom());
+    border.lineTo (box.getX(), box.getY() + radius);
+    border.quadraticTo (box.getX(), box.getY(), box.getX() + radius, box.getY());
+    border.lineTo (box.getRight() - radius, box.getY());
+    border.quadraticTo (box.getRight(), box.getY(), box.getRight(), box.getY() + radius);
+    border.lineTo (box.getRight(), box.getBottom());
+    g.setColour (juce::Colour (0xff6c7380));
+    g.strokePath (border, juce::PathStrokeType (1.5f));
 }
 
 void MainComponent::showMainMenu()
@@ -1163,7 +1205,8 @@ void MainComponent::closeSettings()
 void MainComponent::updateViewVisibility()
 {
     arrangementView.setVisible (contentView == ContentView::midiRegions);
-    pianoRollView.setVisible (contentView == ContentView::midiEditor);
+    pianoRollView.setVisible (isEditorShowing());
+    dockHandle.setVisible (contentView == ContentView::midiRegions);
     audioRegionsView.setVisible (contentView == ContentView::audioRegions);
     instrumentsView.setVisible (sidePane == SidePane::instruments);
     instrumentEditorView.setVisible (contentView == ContentView::instrumentEditor);
@@ -1276,8 +1319,8 @@ void MainComponent::timerCallback()
     engine.pollRecording();
 
 
-    // The side list marks the editor's tracks (none when it is closed)
-    if (contentView == ContentView::midiEditor)
+    // The side list marks the editor's tracks (none when it is closed), full or docked
+    if (isEditorShowing())
         trackList.setEditedTracks (pianoRollView.getTracks(), pianoRollView.getTrack());
     else
         trackList.setEditedTracks ({}, 0);
@@ -1532,7 +1575,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         }
 
         // The MIDI editor: Esc first deselects the notes, then closes
-        if (contentView == ContentView::midiEditor && pianoRollView.deselectNotes())
+        if (isEditorShowing() && pianoRollView.deselectNotes())
             return true;
 
         if (contentView == ContentView::midiEditor)
@@ -1797,6 +1840,23 @@ void MainComponent::resized()
     for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView, &audioRegionsView,
                                                                 &instrumentEditorView, &expressionMapView })
         view->setBounds (area);
+
+    // The arrangement: the editor handle along its bottom, the docked editor under it when open
+    contentAreaHeight = area.getHeight();
+
+    if (contentView == ContentView::midiRegions)
+    {
+        auto arrangeArea = area;
+
+        if (editorDocked)
+        {
+            auto editorArea = arrangeArea.removeFromBottom (currentDockHeight());
+            pianoRollView.setBounds (editorArea.withTrimmedLeft (2).withTrimmedRight (2).withTrimmedTop (2));   // inside its border
+        }
+
+        dockHandle.setBounds (arrangeArea.removeFromBottom (dockHandleHeight));
+        arrangementView.setBounds (arrangeArea);
+    }
 
     // Settings replaces the whole UI; the busy overlay covers everything
     settingsView.setBounds (getLocalBounds());

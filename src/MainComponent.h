@@ -35,6 +35,7 @@ public:
     ~MainComponent() override;
 
     void paint (juce::Graphics&) override;
+    void paintOverChildren (juce::Graphics&) override;   // the docked editor's border
     void resized() override;
     bool keyPressed (const juce::KeyPress&) override;
 
@@ -110,6 +111,79 @@ private:
     int topbarSeparators[2] = { 0, 0 };    // lines between the topbar's groups
     int sidePaneEdge = -1;                 // the side pane's left edge (a line is painted there)
     int sidePaneWidth = 0;                 // 0 = the default (about a third of the window); saved in the settings
+
+    // The MIDI editor docked under the arrangement: a thin handle at the bottom - click to open or
+    // close it, drag to set its height - so the arrangement and the editor show together
+    bool editorDocked = false;
+    int dockHeight = 0;                    // 0 = the default (about 40% of the content); saved in the settings
+    static constexpr int dockHandleHeight = 7;
+    bool isEditorDockedShowing() const      { return editorDocked && contentView == ContentView::midiRegions; }
+    bool isEditorShowing() const            { return contentView == ContentView::midiEditor || isEditorDockedShowing(); }
+    void setEditorDocked (bool);
+
+    struct DockHandle final : juce::Component, juce::SettableTooltipClient
+    {
+        explicit DockHandle (MainComponent& o) : owner (o)
+        {
+            setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
+            setTooltip ("MIDI editor: click to open or close it here, drag to set its height");
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            g.fillAll (juce::Colour (isMouseOver() ? 0xff2c3036 : 0xff24272c));
+            const auto grip = juce::Rectangle<float> (36.0f, 3.0f).withCentre (getLocalBounds().toFloat().getCentre());
+            g.setColour (juce::Colours::white.withAlpha (owner.editorDocked ? 0.5f : 0.35f));
+            g.fillRoundedRectangle (grip, 1.5f);
+        }
+
+        void mouseEnter (const juce::MouseEvent&) override { repaint(); }
+        void mouseExit (const juce::MouseEvent&) override  { repaint(); }
+
+        void mouseDown (const juce::MouseEvent&) override
+        {
+            startHeight = owner.editorDocked ? owner.currentDockHeight() : 0;
+            dragged = false;
+        }
+
+        void mouseDrag (const juce::MouseEvent& event) override
+        {
+            if (std::abs (event.getDistanceFromDragStartY()) < 3 && ! dragged)
+                return;
+
+            dragged = true;
+            const auto wanted = startHeight - event.getDistanceFromDragStartY();
+
+            if (wanted < 80)   // dragged (nearly) shut
+            {
+                owner.setEditorDocked (false);
+                return;
+            }
+
+            owner.dockHeight = juce::jlimit (80, juce::jmax (100, owner.maxDockHeight()), wanted);
+            owner.setEditorDocked (true);
+        }
+
+        void mouseUp (const juce::MouseEvent&) override
+        {
+            if (! dragged)
+                owner.setEditorDocked (! owner.editorDocked);   // a click opens / closes it
+
+            owner.engine.getSettingsFile().setValue ("dockHeight", owner.dockHeight);
+            owner.engine.getSettingsFile().saveIfNeeded();
+        }
+
+        MainComponent& owner;
+        int startHeight = 0;
+        bool dragged = false;
+    } dockHandle { *this };
+
+    int contentAreaHeight = 0;             // the arrangement + docked editor area (set in resized)
+    int maxDockHeight() const              { return contentAreaHeight - dockHandleHeight - 60; }
+    int currentDockHeight() const
+    {
+        return juce::jlimit (80, juce::jmax (100, maxDockHeight()), dockHeight > 0 ? dockHeight : contentAreaHeight * 2 / 5);
+    }
 
     // Dragging the side pane's left edge resizes it
     struct SidePaneResizer final : juce::Component
