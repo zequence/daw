@@ -33,23 +33,29 @@ public:
             expectEquals (blocks[0].noteCount, 3);
         }
 
-        beginTest ("a gap of at least a bar splits blocks");
+        beginTest ("two bars of silence split blocks; the next one starts at its bar");
         {
             const auto blocks = computePhraseBlocks (
                 *sequenceOf ({ { 0, Q, 1, 60, 100 },            // ends at Q
-                               { Q + 4 * Q, Q, 1, 62, 100 } }), // exactly one bar later
+                               { Q + 8 * Q, Q, 1, 62, 100 } }), // exactly two bars later
                 *map);
 
             expectEquals ((int) blocks.size(), 2);
-            expectEquals (blocks[1].startTick, 5 * Q);
+            expectEquals (blocks[1].startTick, 8 * Q);   // the bar of the note at 9Q
         }
 
-        beginTest ("a gap just under a bar does not split");
+        beginTest ("silence just under two bars does not split");
         {
             const auto blocks = computePhraseBlocks (
-                *sequenceOf ({ { 0, Q, 1, 60, 100 }, { Q + 4 * Q - 1, Q, 1, 62, 100 } }), *map);
+                *sequenceOf ({ { 0, Q, 1, 60, 100 }, { Q + 8 * Q - 1, Q, 1, 62, 100 } }), *map);
 
             expectEquals ((int) blocks.size(), 1);
+        }
+
+        beginTest ("a block starts at the beginning of its first note's bar");
+        {
+            const auto blocks = computePhraseBlocks (*sequenceOf ({ { 6 * Q + 1, Q, 1, 60, 100 } }), *map);
+            expectEquals (blocks[0].startTick, 4 * Q);
         }
 
         beginTest ("overlapping long notes extend the block end");
@@ -69,7 +75,7 @@ public:
                                    { 8 * Q, MidiSequence::ControlType::controller, 1, 1, 90 } }), *map);
 
             expectEquals ((int) blocks.size(), 1);
-            expectEquals (blocks[0].startTick, Q);
+            expectEquals (blocks[0].startTick, (juce::int64) 0);   // the bar of the first controller
             expectEquals (blocks[0].noteCount, 0);
         }
 

@@ -6,6 +6,8 @@
 // Meta-regions (DESIGN.md): a track's stream is visually divided into phrase blocks
 // wherever there's enough silence. Blocks are computed, never stored - they can't
 // desynchronize from the content. Notes define phrases; CC data rides along.
+// A block starts at the beginning of the bar its first note is in; two bars or
+// more of silence separate blocks.
 struct PhraseBlock
 {
     juce::int64 startTick = 0, endTick = 0;
@@ -13,7 +15,7 @@ struct PhraseBlock
 };
 
 inline std::vector<PhraseBlock> computePhraseBlocks (const MidiSequence& sequence, const TempoMap& map,
-                                                     double gapBars = 1.0)
+                                                     double gapBars = 2.0)
 {
     std::vector<PhraseBlock> blocks;
     const auto& notes = sequence.getNotes();
@@ -22,12 +24,13 @@ inline std::vector<PhraseBlock> computePhraseBlocks (const MidiSequence& sequenc
     {
         // A controller-only stream (e.g. a CC pass) still deserves a visible block.
         if (! sequence.getControls().empty())
-            blocks.push_back ({ sequence.getControls().front().tick, sequence.getLengthTicks(), 0 });
+            blocks.push_back ({ map.getBarStart (sequence.getControls().front().tick), sequence.getLengthTicks(), 0 });
 
         return blocks;
     }
 
-    PhraseBlock current { notes[0].startTick, notes[0].startTick + notes[0].lengthTicks, 1 };
+    const auto barStart = [&map] (juce::int64 tick) { return map.getBarStart (juce::jmax ((juce::int64) 0, tick)); };
+    PhraseBlock current { barStart (notes[0].startTick), notes[0].startTick + notes[0].lengthTicks, 1 };
 
     for (size_t i = 1; i < notes.size(); ++i)
     {
@@ -37,7 +40,7 @@ inline std::vector<PhraseBlock> computePhraseBlocks (const MidiSequence& sequenc
         if (note.startTick - current.endTick >= gapTicks)
         {
             blocks.push_back (current);
-            current = { note.startTick, note.startTick + note.lengthTicks, 1 };
+            current = { barStart (note.startTick), note.startTick + note.lengthTicks, 1 };
         }
         else
         {
