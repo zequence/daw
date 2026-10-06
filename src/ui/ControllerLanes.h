@@ -220,7 +220,7 @@ namespace lanes
         std::map<juce::String, juce::String> names;
     };
 
-    // The colour of a value: velocity blue (soft) -> cyan (loud), as the notes; controllers dark purple,
+    // The colour of a value: velocity purple, darker (soft) -> cyan, light (loud), as the notes; controllers dark purple,
     // almost blue (low) -> fairly bright magenta (high)
     inline juce::Colour valueColour (Kind kind, float normalized)
     {
@@ -228,10 +228,10 @@ namespace lanes
 
         if (kind == Kind::velocity)
         {
-            // Purple-blue 252deg (soft, still well visible) -> cyan 180deg (loud). The hue moves most
-            // near the top: cyans look alike, so the loud velocities need the bigger steps
-            const auto t = std::pow (normalized, 1.6f);
-            return juce::Colour::fromHSV (0.70f - 0.20f * t, 0.62f - 0.07f * normalized, 0.8f + 0.2f * normalized, 1.0f);
+            // Purple 280deg, darker (soft) -> cyan 180deg, light (loud). The hue moves more near the
+            // top: cyans look alike, so the loud velocities need the bigger steps
+            const auto t = std::pow (normalized, 1.4f);
+            return juce::Colour::fromHSV (0.78f - 0.28f * t, 0.65f - 0.1f * normalized, 0.58f + 0.42f * normalized, 1.0f);
         }
 
         // dark purple, almost blue (250deg, dim) -> bright magenta (305deg), not too saturated
