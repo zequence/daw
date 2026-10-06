@@ -203,6 +203,51 @@ private:
     int keyHeight = 12;
     int topKey = 84;                       // highest visible key (C5)
     int hoveredKey = -1;                   // the key under the pointer (lit on the keyboard), -1 = none
+    juce::Point<int> hoverPosition { -1, -1 };   // the pointer over the grid (the draw mode's ghost note)
+
+    // The velocity of new notes (drawn, double-clicked): a box by Input. Press and drag up/down to
+    // change it - a slider shows under the box while dragging; the mouse wheel steps it too
+    int newNoteVelocity = 96;
+    bool velocityDragging = false;
+
+    struct VelocityBox final : juce::Component, juce::SettableTooltipClient
+    {
+        explicit VelocityBox (PianoRollView& o) : owner (o) { setMouseCursor (juce::MouseCursor::UpDownResizeCursor); }
+
+        void paint (juce::Graphics& g) override
+        {
+            const auto area = getLocalBounds().toFloat().reduced (0.5f);
+            g.setColour (theme::colour (theme::Token::buttonBg).brighter (isMouseOver() ? 0.15f : 0.0f));
+            g.fillRoundedRectangle (area, theme::corner);
+            g.setColour (theme::colour (theme::Token::buttonBorder));
+            g.drawRoundedRectangle (area, theme::corner, 1.0f);
+            g.setColour (theme::colour (theme::Token::buttonText));
+            g.setFont (juce::FontOptions (13.0f));
+            g.drawText ("Vel " + juce::String (owner.newNoteVelocity), getLocalBounds(), juce::Justification::centred, false);
+        }
+
+        void mouseEnter (const juce::MouseEvent&) override { repaint(); }
+        void mouseExit (const juce::MouseEvent&) override  { repaint(); }
+        void mouseDown (const juce::MouseEvent&) override  { startValue = owner.newNoteVelocity; owner.velocityDragging = true; owner.repaint(); }
+
+        void mouseDrag (const juce::MouseEvent& event) override
+        {
+            owner.setNewNoteVelocity (startValue - event.getDistanceFromDragStartY() / 2);   // up = louder
+        }
+
+        void mouseUp (const juce::MouseEvent&) override    { owner.velocityDragging = false; owner.repaint(); }
+
+        void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel) override
+        {
+            owner.setNewNoteVelocity (owner.newNoteVelocity + (wheel.deltaY > 0 ? 1 : -1));
+        }
+
+        PianoRollView& owner;
+        int startValue = 96;
+    } velocityBox { *this };
+
+    void setNewNoteVelocity (int);
+    void paintOverChildren (juce::Graphics&) override;   // the velocity slider while dragging the box
     int keyboardKey = -1;                  // the key being played by clicking the keyboard, -1 = none
 
     void playKey (int key, int x);

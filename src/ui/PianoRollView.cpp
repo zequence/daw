@@ -116,6 +116,12 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     };
     addAndMakeVisible (inputToggle);
 
+    velocityBox.setTooltip ("Velocity of new notes (drawn or double-clicked): press and drag up/down, or use the mouse wheel. "
+                            "Notes played in with note input keep the velocity they are played with.");
+    velocityBox.setWantsKeyboardFocus (false);
+    setNewNoteVelocity (96);
+    addAndMakeVisible (velocityBox);
+
     editAllToggle.setTooltip ("Edit all the shown tracks: select and move notes of every track at once (the others stay "
                               "dimmed; clicking one of their notes focuses that track). Off: only the focused track is edited.");
     editAllToggle.setClickingTogglesState (true);
@@ -885,8 +891,8 @@ void PianoRollView::commitNewNote (const MidiSequence::Note& newNote)
 
 void PianoRollView::addNoteAt (juce::int64 tick, int key)
 {
-    auditionNote (key, 96);
-    commitNewNote ({ snapTick (tick), newNoteTicks(), 1, key, 96 });
+    auditionNote (key, newNoteVelocity);
+    commitNewNote ({ snapTick (tick), newNoteTicks(), 1, key, newNoteVelocity });
 }
 
 void PianoRollView::deleteSelection()
@@ -1499,7 +1505,7 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
     {
         // Draw mode: preview a note here; stretch while dragging; ONE event on mouse up.
         pendingNote = { snapTick (xToTick (position.x)), newNoteTicks(), 1,
-                        juce::jlimit (0, 127, yToKey (position.y)), 96 };
+                        juce::jlimit (0, 127, yToKey (position.y)), newNoteVelocity };
         auditionNote (pendingNote.key, pendingNote.velocity);
         selection.clear();
         drag = Drag::draw;
@@ -1824,8 +1830,10 @@ void PianoRollView::mouseMove (const juce::MouseEvent& event)
 void PianoRollView::updateHoveredKey (juce::Point<int> position)
 {
     const auto key = (gridArea().contains (position) || keysArea().contains (position)) ? yToKey (position.y) : -1;
+    const auto ghostMoved = drawMode && position != hoverPosition;
+    hoverPosition = gridArea().contains (position) ? position : juce::Point<int> { -1, -1 };
 
-    if (key != hoveredKey)
+    if (key != hoveredKey || ghostMoved)
     {
         hoveredKey = key;
         repaint();
@@ -1841,9 +1849,10 @@ void PianoRollView::mouseExit (const juce::MouseEvent&)
         repaint();
     }
 
-    if (hoveredKey >= 0)
+    if (hoveredKey >= 0 || hoverPosition.x >= 0)
     {
         hoveredKey = -1;
+        hoverPosition = { -1, -1 };
         repaint();
     }
 }
@@ -1967,6 +1976,36 @@ bool PianoRollView::noteInputKey (const juce::KeyPress& key)
     }
 
     return false;
+}
+
+void PianoRollView::setNewNoteVelocity (int velocity)
+{
+    newNoteVelocity = juce::jlimit (1, 127, velocity);
+    velocityBox.repaint();
+    repaint();   // the ghost note's colour, the slider
+}
+
+// While the velocity box is dragged: a slider under it, filled to the value in its colour, with the number
+void PianoRollView::paintOverChildren (juce::Graphics& g)
+{
+    if (! velocityDragging)
+        return;
+
+    const auto box = velocityBox.getBounds();
+    const auto track = juce::Rectangle<int> (box.getCentreX() - 14, box.getBottom() + 4, 28, 140).toFloat();
+    g.setColour (juce::Colour (0xf0101113));
+    g.fillRoundedRectangle (track.expanded (3.0f), theme::corner);
+
+    const auto filled = track.withTop (track.getBottom() - track.getHeight() * (float) newNoteVelocity / 127.0f);
+    g.setColour (lanes::valueColour (lanes::Kind::velocity, (float) newNoteVelocity / 127.0f));
+    g.fillRoundedRectangle (filled, theme::corner);
+    g.setColour (juce::Colours::white.withAlpha (0.4f));
+    g.drawRoundedRectangle (track, theme::corner, 1.0f);
+
+    g.setColour (juce::Colours::white);
+    g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+    g.drawText (juce::String (newNoteVelocity), track.withHeight (18.0f).translated (0.0f, -1.0f).toNearestInt(),
+                juce::Justification::centred, false);
 }
 
 void PianoRollView::setNoteDots (int dots)
@@ -2202,6 +2241,8 @@ void PianoRollView::resized()
     inputToggle.setBounds (toolbar.removeFromLeft (50));
     toolbar.removeFromLeft (4);
     editAllToggle.setBounds (toolbar.removeFromLeft (40));
+    toolbar.removeFromLeft (4);
+    velocityBox.setBounds (toolbar.removeFromLeft (56));
     toolbar.removeFromLeft (12);
     toolbar.removeFromLeft (10);
     articulationButton.setBounds (toolbar.removeFromLeft (170));
@@ -2769,9 +2810,9 @@ void PianoRollView::paint (juce::Graphics& g)
             g.setColour (isBlackKey (key) ? juce::Colour (0xff202327) : juce::Colour (0xff25282d));
         g.fillRect (grid.getX(), y, grid.getWidth(), keyHeight);
 
-        if (key == hoveredKey)   // the row under the pointer
+        if (key == hoveredKey)   // the row under the pointer (fainter in draw mode: the ghost note shows it)
         {
-            g.setColour (juce::Colours::white.withAlpha (0.06f));
+            g.setColour (juce::Colours::white.withAlpha (drawMode ? 0.03f : 0.06f));
             g.fillRect (grid.getX(), y, grid.getWidth(), keyHeight);
         }
 
@@ -2844,6 +2885,23 @@ void PianoRollView::paint (juce::Graphics& g)
                     g.fillRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f);
                 }
             }
+        }
+    }
+
+    // --- The ghost note (draw mode): where a click puts a note, its length and velocity colour ---
+    if (drawMode && drag == Drag::none && hoverPosition.x >= 0 && grid.contains (hoverPosition))
+    {
+        bool onRightEdge = false;
+
+        if (noteIndexAt (hoverPosition, onRightEdge) < 0)
+        {
+            const MidiSequence::Note ghost { snapTick (xToTick (hoverPosition.x)), newNoteTicks(), 1,
+                                             juce::jlimit (0, 127, yToKey (hoverPosition.y)), newNoteVelocity };
+            const auto rect = noteRect (ghost).toFloat().reduced (0.5f);
+            g.setColour (lanes::valueColour (lanes::Kind::velocity, (float) newNoteVelocity / 127.0f).withAlpha (0.4f));
+            g.fillRoundedRectangle (rect, 2.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.35f));
+            g.drawRoundedRectangle (rect, 2.0f, 1.0f);
         }
     }
 
