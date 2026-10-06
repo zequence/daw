@@ -633,6 +633,22 @@ ArrangementView::FolderSpan ArrangementView::folderSpanAt (juce::Point<int> posi
     return {};
 }
 
+// Inside a region's box: the stretch before its first note and after its last one, darker
+void ArrangementView::dimEmptyEnds (juce::Graphics& g, juce::Rectangle<int> box, juce::int64 firstNote, juce::int64 lastEnd) const
+{
+    if (firstNote == std::numeric_limits<juce::int64>::max())
+        return;
+
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
+    const auto inner = box.reduced (1);
+
+    if (const auto x = juce::jmin (inner.getRight(), tickToX (firstNote)); x > inner.getX())
+        g.fillRect (inner.withRight (x));
+
+    if (const auto x = juce::jmax (inner.getX(), tickToX (lastEnd)); x < inner.getRight())
+        g.fillRect (inner.withLeft (x));
+}
+
 void ArrangementView::mouseDoubleClick (const juce::MouseEvent& event)
 {
     // A folder's region: the editor on the folder's tracks
@@ -876,6 +892,22 @@ void ArrangementView::paint (juce::Graphics& g)
                     g.setColour (look.border);
                     g.drawRoundedRectangle (rect.toFloat(), theme::corner, 1.2f);
 
+                    // The empty beginning and end of the folder's stretch: dimmed (as in the tracks' regions)
+                    {
+                        auto first = std::numeric_limits<juce::int64>::max(), last = (juce::int64) 0;
+
+                        for (auto track : folderTracks)
+                            if (auto folderSeq = engine.getTrackSequence (track))
+                                for (auto& note : folderSeq->getNotes())
+                                    if (note.startTick >= originalStart && note.startTick < originalStart + (end - start))
+                                    {
+                                        first = juce::jmin (first, note.startTick);
+                                        last = juce::jmax (last, note.startTick + note.lengthTicks);
+                                    }
+
+                        dimEmptyEnds (g, rect, first + noteShift, last + noteShift);
+                    }
+
                     // The combined notes of the folder's tracks (a mini preview, as in the tracks' regions)
                     g.setColour (juce::Colours::black.withAlpha (0.45f));
 
@@ -940,6 +972,22 @@ void ArrangementView::paint (juce::Graphics& g)
 
                 g.setColour (style.fill);
                 g.fillRoundedRectangle (rect.toFloat(), theme::corner);
+
+                // The empty beginning (from the bar line to the first note) and end (after the last note): dimmed
+                if (sequence != nullptr && block.noteCount > 0)
+                {
+                    auto first = std::numeric_limits<juce::int64>::max(), last = (juce::int64) 0;
+
+                    for (auto& note : sequence->getNotes())
+                        if (note.region == block.region && note.startTick >= block.startTick && note.startTick < block.endTick)
+                        {
+                            first = juce::jmin (first, note.startTick);
+                            last = juce::jmax (last, note.startTick + note.lengthTicks);
+                        }
+
+                    const auto shiftBy = ref.startTick - block.startTick;   // a dragged block's preview offset
+                    dimEmptyEnds (g, rect, first + shiftBy, last + shiftBy);
+                }
 
                 g.setColour (style.border);
                 g.drawRoundedRectangle (rect.toFloat(), theme::corner, 1.8f);
