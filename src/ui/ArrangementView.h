@@ -87,6 +87,7 @@ private:
     BlockRef selected, dragging;
     juce::Point<int> dragStart;
     juce::int64 dragDeltaTicks = 0;
+    AudioEngine::TrackId dragTargetTrack = 0;   // the track under the mouse (up/down moves to it)
     bool dragIsCopy = false, didDrag = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ArrangementView)

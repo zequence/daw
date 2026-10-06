@@ -118,6 +118,7 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
     dragDeltaTicks = 0;
     didDrag = false;
     dragging = {};
+    dragTargetTrack = 0;
 
     const auto hit = blockAt (position);
 
@@ -137,6 +138,7 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
     if (hit.valid())
     {
         dragging = hit;
+        dragTargetTrack = hit.trackId;
         dragIsCopy = event.mods.isCtrlDown();
 
         if (onSelectTrack)
@@ -163,13 +165,22 @@ void ArrangementView::mouseDrag (const juce::MouseEvent& event)
     const auto target = axis.snap ? nearestBar (dragging.startTick + rawDelta)
                                   : juce::jmax ((juce::int64) 0, dragging.startTick + rawDelta);
     dragDeltaTicks = target - dragging.startTick;
+
+    // Up/down: to the track under the mouse (folders and empty space keep the last one)
+    const auto items = itemsNow();
+
+    if (const auto index = itemIndexAt (items, event.y); index >= 0 && items[(size_t) index].member != 0)
+        dragTargetTrack = items[(size_t) index].member;
+
     didDrag = true;
     repaint();
 }
 
 void ArrangementView::mouseUp (const juce::MouseEvent&)
 {
-    if (dragging.valid() && didDrag && dragDeltaTicks != 0)
+    const auto toTrack = dragTargetTrack != 0 ? dragTargetTrack : dragging.trackId;
+
+    if (dragging.valid() && didDrag && (dragDeltaTicks != 0 || toTrack != dragging.trackId))
     {
         const auto destStart = juce::jmax ((juce::int64) 0, dragging.startTick + dragDeltaTicks);
 
@@ -178,13 +189,18 @@ void ArrangementView::mouseUp (const juce::MouseEvent&)
         params->setProperty ("start", dragging.startTick);
         params->setProperty ("end", dragging.endTick);
         params->setProperty ("destStart", destStart);
+        params->setProperty ("destTrackId", toTrack);
         runCommand (dragIsCopy ? "clip.copyRange" : "clip.moveRange", params);
 
-        selected = { dragging.trackId, destStart, destStart + (dragging.endTick - dragging.startTick) };
+        if (toTrack != dragging.trackId && onSelectTrack)
+            onSelectTrack (toTrack);
+
+        selected = { toTrack, destStart, destStart + (dragging.endTick - dragging.startTick) };
     }
 
     dragging = {};
     dragDeltaTicks = 0;
+    dragTargetTrack = 0;
     repaint();
 }
 
@@ -361,6 +377,13 @@ void ArrangementView::paint (juce::Graphics& g)
 
     // --- Phrase blocks ---
     {
+        // A block dragged up/down is drawn in the target track's lane
+        int targetLaneTop = 0;
+
+        for (size_t i = 0; i < items.size(); ++i)
+            if (items[i].member != 0 && items[i].member == dragTargetTrack)
+                targetLaneTop = rowTop (items, i);
+
         int y = -vscroll.y;
 
         for (auto& item : items)
@@ -395,7 +418,7 @@ void ArrangementView::paint (juce::Graphics& g)
                     ref.endTick += dragDeltaTicks;
                 }
 
-                const auto rect = blockRect (ref, y);
+                const auto rect = blockRect (ref, isDragged && dragTargetTrack != 0 ? targetLaneTop : y);
 
                 if (rect.getRight() < TimeAxis::gutter || rect.getX() > getWidth())
                     continue;

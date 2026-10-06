@@ -113,6 +113,25 @@ public:
             expectEquals (notesOf()[7].startTick, 9 * Q);
         }
 
+        beginTest ("moveRange to another track (a region dragged up/down)");
+        {
+            juce::Array<juce::var> notes { note (0, Q, 60), note (4 * Q, Q, 62) };
+            api.run ("clip.set", params ({ { "trackId", tid }, { "notes", notes } }));
+            const auto other = engine.addTrack();
+
+            expect (api.run ("clip.moveRange",
+                             params ({ { "trackId", tid }, { "start", 0 }, { "end", 2 * Q },
+                                       { "destStart", 8 * Q }, { "destTrackId", (int) other } }))["ok"]);
+            expectEquals ((int) notesOf().size(), 1);                 // the region left this track
+            const auto moved = engine.getTrackSequence (other);
+            expect (moved != nullptr && moved->getNotes().size() == 1 && moved->getNotes()[0].startTick == 8 * Q);
+
+            expect (! api.run ("clip.moveRange",
+                               params ({ { "trackId", tid }, { "start", 0 }, { "end", Q },
+                                         { "destStart", 0 }, { "destTrackId", 99999 } }))["ok"]);
+            engine.removeTrack (other);
+        }
+
         beginTest ("setControlRange replaces one controller's window only");
         {
             juce::Array<juce::var> controls {

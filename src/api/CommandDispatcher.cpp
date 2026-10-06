@@ -864,9 +864,9 @@ void CommandDispatcher::registerCommands()
              }, respond);
          });
 
-    auto rangeCopier = [requireTrack, editClip] (bool removeSource)
+    auto rangeCopier = [this, requireTrack, editClip] (bool removeSource)
     {
-        return [requireTrack, editClip, removeSource] (const juce::var& params, Respond respond)
+        return [this, requireTrack, editClip, removeSource] (const juce::var& params, Respond respond)
         {
             int id = 0;
             if (! requireTrack (params, respond, id)) return;
@@ -879,6 +879,71 @@ void CommandDispatcher::registerCommands()
 
             if (end <= start)
                 return respond (fail ("'end' must be greater than 'start'"));
+
+            // To another track: take the range from this one, write it into that one
+            const auto destTrack = (int) params.getProperty ("destTrackId", id);
+
+            if (destTrack != id)
+            {
+                const auto ids = engine.getTrackIds();
+
+                if (std::find (ids.begin(), ids.end(), (AudioEngine::TrackId) destTrack) == ids.end())
+                    return respond (fail ("unknown destTrackId " + juce::String (destTrack)));
+
+                const auto inRange = [start, end] (juce::int64 tick) { return tick >= start && tick < end; };
+                const auto withEdit = [this] (int track, auto edit)
+                {
+                    std::vector<MidiSequence::Note> notes;
+                    std::vector<MidiSequence::Control> controls;
+
+                    if (auto sequence = engine.getTrackSequence (track))
+                    {
+                        notes = sequence->getNotes();
+                        controls = sequence->getControls();
+                    }
+
+                    edit (notes, controls);
+                    engine.setTrackSequence (track, notes.empty() && controls.empty()
+                                                       ? nullptr : MidiSequence::create (std::move (notes), std::move (controls)));
+                };
+
+                std::vector<MidiSequence::Note> sourceNotes;
+                std::vector<MidiSequence::Control> sourceControls;
+
+                withEdit (id, [&] (auto& notes, auto& controls)
+                {
+                    for (auto& note : notes)
+                        if (inRange (note.startTick)) sourceNotes.push_back (note);
+
+                    if (includeControls)
+                        for (auto& control : controls)
+                            if (inRange (control.tick)) sourceControls.push_back (control);
+
+                    if (removeSource)
+                    {
+                        std::erase_if (notes, [&] (const auto& n) { return inRange (n.startTick); });
+
+                        if (includeControls)
+                            std::erase_if (controls, [&] (const auto& c) { return inRange (c.tick); });
+                    }
+                });
+
+                withEdit (destTrack, [&] (auto& notes, auto& controls)
+                {
+                    for (int repeat = 0; repeat < times; ++repeat)
+                    {
+                        const auto offset = destStart + (juce::int64) repeat * (end - start) - start;
+
+                        for (auto note : sourceNotes)    { note.startTick += offset; notes.push_back (note); }
+                        for (auto control : sourceControls) { control.tick += offset; controls.push_back (control); }
+                    }
+                });
+
+                auto result = object();
+                result->setProperty ("noteCount", (int) sourceNotes.size());
+                result->setProperty ("controlCount", (int) sourceControls.size());
+                return respond (ok (juce::var (result.get())));
+            }
 
             editClip (id, [=] (auto& notes, auto& controls) -> juce::String
             {
@@ -929,11 +994,11 @@ void CommandDispatcher::registerCommands()
     };
 
     add ("clip.copyRange", "Copy [start,end) to destStart, optionally repeated (ostinato)",
-         "trackId:int start:int64 end:int64 destStart:int64 [times:int=1] [includeControls:bool=true]",
+         "trackId:int start:int64 end:int64 destStart:int64 [destTrackId:int=trackId] [times:int=1] [includeControls:bool=true]",
          rangeCopier (false));
 
-    add ("clip.moveRange", "Move [start,end) to destStart",
-         "trackId:int start:int64 end:int64 destStart:int64 [includeControls:bool=true]",
+    add ("clip.moveRange", "Move [start,end) to destStart (on destTrackId: to another track)",
+         "trackId:int start:int64 end:int64 destStart:int64 [destTrackId:int=trackId] [includeControls:bool=true]",
          rangeCopier (true));
 
     add ("clip.setControlRange",
