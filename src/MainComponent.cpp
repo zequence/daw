@@ -1553,6 +1553,27 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         return true;
     }
 
+    // The track above / below (as the side list shows them; collapsed folders' tracks are skipped)
+    if (keys::matches ("track.previous", key) || keys::matches ("track.next", key))
+    {
+        std::vector<AudioEngine::TrackId> visible;
+
+        for (auto& item : engine.getSidebarItems (true, true))
+            if (item.member != 0)
+                visible.push_back ((AudioEngine::TrackId) item.member);
+
+        if (! visible.empty())
+        {
+            const auto at = std::find (visible.begin(), visible.end(), selectedTrack);
+            const auto step = keys::matches ("track.next", key) ? 1 : -1;
+            const auto index = at == visible.end() ? 0 : juce::jlimit (0, (int) visible.size() - 1, (int) (at - visible.begin()) + step);
+            lastSelectionInArrangement = false;
+            selectTrack (visible[(size_t) index], false);
+        }
+
+        return true;
+    }
+
     if (selectedTrack != 0 && keys::matches ("track.solo", key))
     {
         engine.setTrackSoloed (selectedTrack, ! engine.isTrackSoloed (selectedTrack));

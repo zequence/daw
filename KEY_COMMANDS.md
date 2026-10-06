@@ -31,6 +31,8 @@ A key that is typed into a text field goes to the field.
 | Performance monitor | F12 | `view.performance` |
 | History pane on / off | H | `view.history` |
 | Instruments pane on / off | I | `view.instruments` |
+| Select the track above | Page Up | `track.previous` |
+| Select the track below | Page Down | `track.next` |
 | Solo the selected track | S | `track.solo` |
 | Mute the selected track | M | `track.mute` |
 | Open / close the selected track's instrument GUI | G | `track.instrumentGui` |

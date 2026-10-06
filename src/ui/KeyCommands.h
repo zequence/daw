@@ -34,6 +34,8 @@ namespace keys
             { "view.performance",     "Global", "Performance monitor",                         { K (K::F12Key) } },
             { "view.history",         "Global", "History pane on / off",                       { K ('h') } },
             { "view.instruments",     "Global", "Instruments pane on / off",                   { K ('i') } },
+            { "track.previous",       "Global", "Select the track above",                      { K (K::pageUpKey) } },
+            { "track.next",           "Global", "Select the track below",                      { K (K::pageDownKey) } },
             { "track.solo",           "Global", "Solo the selected track",                     { K ('s') } },
             { "track.mute",           "Global", "Mute the selected track",                     { K ('m') } },
             { "track.instrumentGui",  "Global", "Open / close the selected track's instrument GUI", { K ('g') } },
