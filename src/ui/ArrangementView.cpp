@@ -2,6 +2,7 @@
 #include "../api/CommandDispatcher.h"
 #include "ColorPalette.h"
 #include "Theme.h"
+#include "EditorSettings.h"
 
 ArrangementView::ArrangementView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a, sidebar::VerticalScroll& v)
     : engine (e), dispatcher (d), axis (a), vscroll (v)
@@ -127,8 +128,17 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
 
     // A selected folder region: dragged sideways, with everything inside it (an unselected one is
     // selected on release, like a region)
-    if (const auto span = folderSpanAt (position); isSelectedFolderSpan (span) && ! event.mods.isPopupMenu())
+    const auto moveDirectly = editorSettings::moveRegionsDirectly (engine.getSettingsFile());
+
+    if (const auto span = folderSpanAt (position); span.folder != 0 && ! event.mods.isPopupMenu()
+                                                     && (isSelectedFolderSpan (span) || moveDirectly))
     {
+        if (moveDirectly && ! isSelectedFolderSpan (span))   // select and move in one go
+        {
+            selection.clear();
+            selectedFolderSpan = span;
+        }
+
         draggingFolder = span;
         draggingFolderTracks = tracksInFolder (span.folder);
         return;
@@ -162,6 +172,19 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
 
         repaint();
         return;
+    }
+
+    // Select and move in one go (Settings > Editor): pressing a region selects it (Ctrl adds it)
+    if (hit.valid() && moveDirectly && ! isSelected (hit))
+    {
+        if (! event.mods.isCtrlDown())
+            selection.clear();
+
+        selectedFolderSpan = {};
+        selection.push_back (hit);
+
+        if (onSelectTrack)
+            onSelectTrack (hit.trackId);
     }
 
     if (hit.valid() && isSelected (hit))
@@ -441,15 +464,18 @@ void ArrangementView::mouseMove (const juce::MouseEvent& event)
         return;
     }
 
-    if (isSelectedFolderSpan (folderSpanAt (event.getPosition())))   // a selected folder region drags sideways
+    const auto moveDirectly = editorSettings::moveRegionsDirectly (engine.getSettingsFile());
+
+    if (const auto span = folderSpanAt (event.getPosition());   // a (selected) folder region drags sideways
+        isSelectedFolderSpan (span) || (moveDirectly && span.folder != 0))
     {
         setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
         return;
     }
 
     const auto hit = blockAt (event.getPosition());
-    setMouseCursor (hit.valid() && isSelected (hit) ? juce::MouseCursor::DraggingHandCursor
-                                                    : juce::MouseCursor::NormalCursor);
+    setMouseCursor (hit.valid() && (isSelected (hit) || moveDirectly) ? juce::MouseCursor::DraggingHandCursor
+                                                                      : juce::MouseCursor::NormalCursor);
 }
 
 ArrangementView::GluePoint ArrangementView::gluePointAt (juce::Point<int> position)

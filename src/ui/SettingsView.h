@@ -135,6 +135,23 @@ public:
             engine.refreshAllPlayback();
         };
 
+        moveModeLabel.setText ("Moving regions in the arrangement", juce::dontSendNotification);
+        moveModeLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
+        page.addAndMakeVisible (moveModeLabel);
+
+        moveModeBox.addItem ("Select first, then move", 1);
+        moveModeBox.addItem ("Select and move in one go", 2);
+        moveModeBox.setTooltip ("Select first: a click selects, and a selected region drags. In one go: pressing any region "
+                                "drags it straight away (a selection rectangle then starts on empty space).");
+        moveModeBox.setSelectedId (editorSettings::moveRegionsDirectly (settings) ? 2 : 1, juce::dontSendNotification);
+        moveModeBox.setWantsKeyboardFocus (false);
+        moveModeBox.onChange = [this]
+        {
+            engine.getSettingsFile().setValue (editorSettings::moveRegionsDirectlyKey, moveModeBox.getSelectedId() == 2);
+            engine.getSettingsFile().saveIfNeeded();
+        };
+        page.addAndMakeVisible (moveModeBox);
+
         middleCLabel.setText ("Middle C (MIDI note 60) is called", juce::dontSendNotification);
         middleCLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
         page.addAndMakeVisible (middleCLabel);
@@ -319,7 +336,8 @@ private:
         autoRecordToggle.setVisible (category == tracks);
 
         for (auto* c : std::initializer_list<juce::Component*> { &editorMidiHeading, &dropLabel, &dropBox, &defaultRootToggle,
-                                                                 &cutOverlapsToggle, &middleCLabel, &middleCBox })
+                                                                 &cutOverlapsToggle, &middleCLabel, &middleCBox,
+                                                                 &moveModeLabel, &moveModeBox })
             c->setVisible (category == editor);
 
         for (auto* c : std::initializer_list<juce::Component*> { &mcpToggle, &mcpStatus, &mcpRegisterHint })
@@ -382,6 +400,9 @@ private:
                 y += 36;
                 middleCLabel.setBounds (4, y, 230, 24);
                 middleCBox.setBounds (238, y, 170, 24);
+                y += 32;
+                moveModeLabel.setBounds (4, y, 230, 24);
+                moveModeBox.setBounds (238, y, 220, 24);
                 y += 32;
                 break;
 
@@ -532,7 +553,8 @@ private:
     juce::ToggleButton autoRecordToggle { "Arm track on select (auto-record)" };
     juce::Label editorMidiHeading, dropLabel;
     juce::ComboBox dropBox, middleCBox;
-    juce::Label middleCLabel;
+    juce::Label middleCLabel, moveModeLabel;
+    juce::ComboBox moveModeBox;
     juce::ToggleButton defaultRootToggle { "Use the first root articulation as the default (notes with no articulation behave as if it were chosen)" };
     juce::ToggleButton cutOverlapsToggle { "Overlapping regions: a note started over another on the same key cuts it (playback; glue makes it permanent)" };
     juce::ToggleButton mcpToggle { "Run the MCP server for AI agents (starts with the app)" };

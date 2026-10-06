@@ -32,6 +32,11 @@ namespace editorSettings
     constexpr auto cutOverlappedNotesKey = "editorCutOverlappedNotes";
     inline bool cutOverlappedNotes (juce::PropertiesFile& settings)   { return settings.getBoolValue (cutOverlappedNotesKey, true); }
 
+    // Moving regions in the arrangement: select first, then move (false, the default), or select
+    // and move in one go - pressing any region drags it; a selection rectangle starts on empty space
+    constexpr auto moveRegionsDirectlyKey = "arrangeMoveRegionsDirectly";
+    inline bool moveRegionsDirectly (juce::PropertiesFile& settings)   { return settings.getBoolValue (moveRegionsDirectlyKey, false); }
+
     inline bool askBeforeDropping (juce::PropertiesFile& settings)    { return settings.getBoolValue (askBeforeDroppingKey, true); }
     inline bool firstRootIsDefault (juce::PropertiesFile& settings)   { return settings.getBoolValue (firstRootIsDefaultKey, false); }
 }
