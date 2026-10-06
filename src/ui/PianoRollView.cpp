@@ -980,6 +980,19 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
             auditionNote (seq->getNotes()[(size_t) hit].key, seq->getNotes()[(size_t) hit].velocity);
 
         drag = onRightEdge ? Drag::resize : Drag::move;
+
+        // Draw mode: drawing on a note resizes it - its end jumps to the pen and follows the drag
+        if (drawMode && ! event.mods.isShiftDown())
+        {
+            if (auto seq = sequence(); seq != nullptr && hit < (int) seq->getNotes().size())
+            {
+                const auto& note = seq->getNotes()[(size_t) hit];
+                selection = { hit };
+                dragStart.x = tickToX (note.startTick + note.lengthTicks);
+                drag = Drag::resize;
+                mouseDrag (event);
+            }
+        }
     }
     else if (drawMode)
     {
