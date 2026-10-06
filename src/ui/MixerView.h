@@ -419,7 +419,7 @@ private:
                     {
                         if (y >= streakEnd)
                         {
-                            streak = 0.6f * lineBias + 0.4f * (random.nextFloat() * 2.0f - 1.0f);
+                            streak = 0.3f * lineBias + 0.7f * (random.nextFloat() * 2.0f - 1.0f);
                             streakEnd = y + 10 + random.nextInt (90);
                         }
 
@@ -430,7 +430,7 @@ private:
 
                         const auto noise = random.nextFloat() * 2.0f - 1.0f;
                         const auto v = juce::jlimit (-1.0f, 1.0f, (streak * 0.85f + noise * 0.12f) * juce::jmax (0.2f, contrast));
-                        const auto alpha = std::abs (v) * (v > 0.0f ? 0.055f : 0.035f);   // the dark streaks lighter than the bright ones
+                        const auto alpha = std::abs (v) * (v > 0.0f ? 0.032f : 0.018f);   // the dark streaks lighter than the bright ones
                         pixels.setPixelColour (x, y, (v > 0.0f ? juce::Colours::white : juce::Colours::black).withAlpha (alpha));
                     }
                 }
