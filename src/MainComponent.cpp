@@ -1472,9 +1472,7 @@ void MainComponent::openEditorOn (std::vector<AudioEngine::TrackId> tracks)
         return;
 
     const auto edited = tracks.front();
-
-    if (selectedTrack != edited)
-        selectTrack (edited, false);
+    selectTrack (edited, false);   // the top track is the selected one (a folder: its first track)
 
     showContent (ContentView::midiEditor);
     pianoRollView.setTracks (std::move (tracks), edited);

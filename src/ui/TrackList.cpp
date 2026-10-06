@@ -281,6 +281,10 @@ TrackList::~TrackList() = default;
 void TrackList::setSelectedTrack (AudioEngine::TrackId id)
 {
     selectedTrack = id;
+
+    if (id != 0)
+        selectedFolder = 0;   // a track chosen (e.g. a folder opened in the editor: its first track) ends the folder selection
+
     refresh();
 }
 
