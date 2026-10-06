@@ -1617,15 +1617,17 @@ void PianoRollView::paint (juce::Graphics& g)
                                  ? articulationMap->findSlot (articulations::effective (*articulationMap, note.articulation, useFirstRoot))
                                  : nullptr;
 
-            if (slotColours)
+            if (selected)   // selected notes are white, whatever colours the others
+                g.setColour (juce::Colours::white);
+            else if (slotColours)
                 g.setColour (slot != nullptr && slot->colour.isNotEmpty() ? AudioEngine::colourFromHex (slot->colour, juce::Colours::grey)
                                                                          : juce::Colour (0xff8a8d93));
-            else   // velocity around the colour wheel: soft = blue, through cyan, green and yellow, loud = red
-                g.setColour (juce::Colour::fromHSV (0.6667f * (1.0f - (float) velocity / 127.0f), 0.62f, 0.9f, 1.0f));
+            else   // velocity: soft = yellow, through orange, loud = red
+                g.setColour (juce::Colour::fromHSV ((1.0f / 6.0f) * (1.0f - (float) velocity / 127.0f), 0.8f, 0.95f, 1.0f));
 
             g.fillRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f);
-            g.setColour (selected ? juce::Colours::white : juce::Colours::black.withAlpha (0.4f));   // the colour is taken: selection = outline
-            g.drawRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f, selected ? 2.0f : 1.0f);
+            g.setColour (juce::Colours::black.withAlpha (selected ? 0.7f : 0.4f));
+            g.drawRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f, 1.0f);
 
             // Articulation: its symbol on the note; one the map doesn't have is an error mark
             if (articulationMap != nullptr)
@@ -1641,7 +1643,7 @@ void PianoRollView::paint (juce::Graphics& g)
                         // Symbols (SMuFL glyphs or text); a map without any shows the names' starts
                         const auto parts = articulations::symbolParts (*articulationMap, shown);
                         const auto textHeight = juce::jmin (11.0f, (float) rect.getHeight() - 2.0f);
-                        g.setColour ((slotColours ? juce::Colours::black : juce::Colours::white).withAlpha (implicit ? 0.5f : 0.9f));
+                        g.setColour (juce::Colours::black.withAlpha (implicit ? 0.5f : 0.9f));
                         const juce::Graphics::ScopedSaveState clip (g);
                         g.reduceClipRegion (rect.reduced (2, 0));
 
