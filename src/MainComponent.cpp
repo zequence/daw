@@ -890,6 +890,10 @@ void MainComponent::openPluginWindow (AudioEngine::InstrumentId instrumentId)
     const auto onTop = engine.getSettingsFile().getBoolValue (SettingsView::pluginWindowsOnTopKey, true);
 
     window = std::make_unique<PluginWindow> (*plugin, engine.getInstrumentName (instrumentId), onTop);
+    window->onKey = [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::KeyPress& key)
+    {
+        return safe != nullptr && safe->keyPressed (key);   // the main window's keys, from the plugin window too
+    };
     window->onClose = [safe = juce::Component::SafePointer<MainComponent> (this), instrumentId]
     {
         // Defer deletion: we're inside the window's own callback.
@@ -1350,7 +1354,11 @@ void MainComponent::openTrackPluginWindow (AudioEngine::TrackId id)
     if (const auto it = pluginWindows.find (instrument); it != pluginWindows.end() && it->second != nullptr
                                                            && it->second->isVisible())
     {
+        // Hidden now, deleted a moment later: the key may have come from this very window
+        auto* closing = it->second.release();
         pluginWindows.erase (it);
+        closing->setVisible (false);
+        juce::MessageManager::callAsync ([closing] { delete closing; });
         return;
     }
 

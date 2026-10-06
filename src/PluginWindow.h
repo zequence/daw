@@ -100,6 +100,15 @@ public:
 
     std::function<void()> onClose;
 
+    // Keys the plugin's editor doesn't use go to the main window (G closes the GUI, Space plays...)
+    // even while the plugin window has the focus. Some plugins catch every key themselves.
+    std::function<bool (const juce::KeyPress&)> onKey;
+
+    bool keyPressed (const juce::KeyPress& key) override
+    {
+        return onKey != nullptr && onKey (key);
+    }
+
 private:
     SystemTitleBar titleBar { *this };
     bool placementCheckPending = false;
