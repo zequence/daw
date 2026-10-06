@@ -84,7 +84,7 @@ public:
 
 private:
     enum class Kind { channel, aux, master };
-    static constexpr int stripWidth = 84, stripHeight = 960;
+    static constexpr int stripWidth = 100, stripHeight = 1040;
 
     const mixer::ConsoleStyle& style() const   { return mixer::ConsoleStyle::ssl(); }
 
@@ -130,7 +130,17 @@ private:
             addAndMakeVisible (name);
 
             inserts.setTooltip (placeholderTip);
-            addAndMakeVisible (inserts);
+            inserts.slots = kind == Kind::channel ? 16 : 8;   // channels 16 inserts, Aux buses and the master 8
+            addChildComponent (inserts);
+
+            // The inserts sit behind the EQ and dynamics: this flips between them
+            flip.setTooltip ("Show the inserts (in place of the EQ and dynamics) - click again for the EQ");
+            flip.onClick = [this] { showInserts (flip.getToggleState()); };
+
+            if (kind != Kind::master)
+                addAndMakeVisible (flip);
+            else
+                inserts.setVisible (true);   // the master has no EQ or dynamics: its inserts always show
 
             // --- EQ (SSL 4000 E) and dynamics: placeholders (channels and Aux buses) ---
             if (kind != Kind::master)
@@ -199,6 +209,15 @@ private:
 
                 addAndMakeVisible (aux);
             }
+
+            // --- Drive (by the level): a placeholder ---
+            drive.setRange (0.0, 10.0, 0.05);
+            drive.setDoubleClickReturnValue (true, 0.0);
+            drive.format = [] (double v) { return juce::String (v, 1); };
+            drive.setTooltip ("Drive - " + placeholderTip);
+
+            if (kind != Kind::master)
+                addAndMakeVisible (drive);
 
             // --- Pan, fader, meter, solo, mute: working on channels and the master ---
             pan.setRange (-1.0, 1.0, 0.01);
@@ -276,6 +295,13 @@ private:
             updateLevelText();
         }
 
+        void showInserts (bool insertsShown)
+        {
+            inserts.setVisible (insertsShown || kind == Kind::master);
+            eq.setVisible (! insertsShown && kind != Kind::master);
+            dynamics.setVisible (! insertsShown && kind != Kind::master);
+        }
+
         // The engine's strip (none for the Aux buses yet)
         AudioChannelProcessor* processor() const
         {
@@ -344,9 +370,18 @@ private:
         {
             auto area = getLocalBounds().reduced (4);
             name.setBounds (area.removeFromTop (22));
-            area.removeFromTop (5);
-            inserts.setBounds (area.removeFromTop (76));
-            area.removeFromTop (5);
+            area.removeFromTop (4);
+
+            if (kind == Kind::master)
+            {
+                inserts.setBounds (area.removeFromTop (150));
+                area.removeFromTop (5);
+            }
+            else
+            {
+                flip.setBounds (area.removeFromTop (16).withSizeKeepingCentre (64, 15));
+                area.removeFromTop (4);
+            }
 
             // Two knobs side by side per row
             const auto row = [] (juce::Rectangle<int>& inside, int height, juce::Component* left, juce::Component* right)
@@ -362,23 +397,25 @@ private:
                 left->setBounds (line.removeFromLeft (line.getWidth() / 2));
                 right->setBounds (line);
             };
-            constexpr int knobRow = 34, buttonRow = 15;
+            constexpr int knobRow = 48, buttonRow = 16;
 
             if (kind != Kind::master)
             {
+                // The EQ and dynamics - or, flipped, the inserts in the same space
+                const auto pageTop = area.getY();
                 auto e = area.removeFromTop (12 + 6 * knobRow + knobRow + 3 * buttonRow + 8);
                 eq.setBounds (e);
                 auto inside = eq.getLocalBounds().reduced (2).withTrimmedTop (12);
                 row (inside, knobRow, &hpf, &lpf);
                 row (inside, knobRow, &hfGain, &hfFreq);
-                hfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (40, buttonRow - 2));
+                hfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (44, buttonRow - 2));
                 row (inside, knobRow, &hmfGain, &hmfFreq);
                 row (inside, knobRow, &hmfQ, nullptr);
                 row (inside, knobRow, &lmfGain, &lmfFreq);
                 row (inside, knobRow, &lmfQ, nullptr);
                 row (inside, knobRow, &lfGain, &lfFreq);
-                lfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (40, buttonRow - 2));
-                eqIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (40, buttonRow - 1));
+                lfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (44, buttonRow - 2));
+                eqIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (48, buttonRow - 1));
                 area.removeFromTop (5);
 
                 auto d = area.removeFromTop (12 + 3 * knobRow + buttonRow + 6);
@@ -387,7 +424,8 @@ private:
                 row (inside, knobRow, &threshold, &ratio);
                 row (inside, knobRow, &attack, &release);
                 row (inside, knobRow, &makeup, nullptr);
-                dynamicsIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (40, buttonRow - 1));
+                dynamicsIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (48, buttonRow - 1));
+                inserts.setBounds (getLocalBounds().reduced (4).withTop (pageTop).withBottom (dynamics.getBottom()));
                 area.removeFromTop (5);
             }
 
@@ -411,10 +449,15 @@ private:
             area.removeFromBottom (4);
             level.setBounds (area.removeFromBottom (16));
 
-            if (kind != Kind::master)
-                pan.setBounds (area.removeFromTop (44).withSizeKeepingCentre (44, 44));
+            if (kind != Kind::master)   // drive and pan, side by side, by the level
+            {
+                auto knobs = area.removeFromTop (knobRow);
+                drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2));
+                pan.setBounds (knobs);
+                area.removeFromTop (4);
+            }
 
-            auto faderArea = area.reduced (0, 2);
+            auto faderArea = area.withHeight (juce::jmin (area.getHeight(), 150)).reduced (0, 2);   // a shorter fader
             meter.setBounds (faderArea.removeFromRight (12));
             faderArea.removeFromRight (4);
             fader.setBounds (faderArea);
@@ -425,7 +468,9 @@ private:
         const AudioEngine::AudioChannelId channelId;   // channels
         const int auxNumber;                           // Aux buses: 1-6
         juce::Label name, level, output;
-        mixer::Placeholder inserts { "Inserts", 4 };
+        mixer::Placeholder inserts { "Inserts", 8 };
+        mixer::LitButton flip { "INSERTS", juce::Colour (0xff9fb3c8) };
+        mixer::Knob drive { "DRIVE", owner.style().driveCap, false };
 
         Section eq { "EQ" }, dynamics { "DYNAMICS" }, aux { "AUX" };
         mixer::Knob hpf { "HPF", owner.style().filterCap, false }, lpf { "LPF", owner.style().filterCap, false },

@@ -12,7 +12,7 @@ struct ConsoleStyle
 {
     juce::String name;
     juce::Colour panel, section, sectionText, sectionLine;
-    juce::Colour filterCap, hfCap, hmfCap, lmfCap, lfCap, dynamicsCap, auxCap, panCap;
+    juce::Colour filterCap, hfCap, hmfCap, lmfCap, lfCap, dynamicsCap, auxCap, panCap, driveCap;
     juce::Colour eqLit, dynamicsLit, bellLit;
 
     static const ConsoleStyle& ssl()
@@ -31,6 +31,7 @@ struct ConsoleStyle
             juce::Colour (0xffd8d4c8),   // dynamics: light grey
             juce::Colour (0xffe0b43a),   // aux: yellow
             juce::Colour (0xff6b6f75),   // pan: grey
+            juce::Colour (0xffd9772e),   // drive: orange
             juce::Colour (0xff62d26f),   // EQ in: green light
             juce::Colour (0xffeec34a),   // dynamics in: yellow light
             juce::Colour (0xffe0564c)    // bell: red light
@@ -58,7 +59,7 @@ struct Knob : juce::Slider
     void paint (juce::Graphics& g) override
     {
         auto area = getLocalBounds().toFloat();
-        const auto legendArea = legend.isNotEmpty() ? area.removeFromBottom (9.0f) : juce::Rectangle<float>();
+        const auto legendArea = legend.isNotEmpty() ? area.removeFromBottom (11.0f) : juce::Rectangle<float>();
         const auto size = juce::jmin (area.getWidth(), area.getHeight()) - 2.0f;
         const auto circle = juce::Rectangle<float> (size, size).withCentre (area.getCentre());
         const auto centre = circle.getCentre();
@@ -69,30 +70,60 @@ struct Knob : juce::Slider
         const auto from = bipolar ? (params.startAngleRadians + params.endAngleRadians) * 0.5f : params.startAngleRadians;
 
         juce::Path track, arc;
-        track.addCentredArc (centre.x, centre.y, radius - 1.0f, radius - 1.0f, 0.0f, params.startAngleRadians, params.endAngleRadians, true);
+        track.addCentredArc (centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f, params.startAngleRadians, params.endAngleRadians, true);
         g.setColour (juce::Colour (0xff141619));
-        g.strokePath (track, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        g.strokePath (track, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
         if (std::abs (angle - from) > 0.01f)
         {
-            arc.addCentredArc (centre.x, centre.y, radius - 1.0f, radius - 1.0f, 0.0f, juce::jmin (from, angle), juce::jmax (from, angle), true);
+            arc.addCentredArc (centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f, juce::jmin (from, angle), juce::jmax (from, angle), true);
             g.setColour (cap.brighter (0.4f).withSaturation (juce::jmin (1.0f, cap.getSaturation() + 0.1f)));
-            g.strokePath (arc, juce::PathStrokeType (2.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+            g.strokePath (arc, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
 
-        // The cap: its colour, lit softly from above
-        const auto body = circle.reduced (4.0f);
-        g.setGradientFill (juce::ColourGradient (cap.brighter (0.35f), body.getCentreX(), body.getY(),
-                                                 cap.darker (0.45f), body.getCentreX(), body.getBottom(), false));
+        // The knob, like a real one: a soft shadow on the panel, a dark ridged skirt (it turns with
+        // the knob), and the coloured cap on top - domed, lit from above, with a shine
+        const auto skirt = circle.reduced (5.0f);
+        const auto body = skirt.reduced (skirt.getWidth() * 0.16f);
+
+        g.setColour (juce::Colours::black.withAlpha (0.45f));
+        g.fillEllipse (skirt.translated (0.8f, 1.8f).expanded (0.6f));
+
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xff4a4d52), skirt.getCentreX(), skirt.getY(),
+                                                 juce::Colour (0xff141518), skirt.getCentreX(), skirt.getBottom(), false));
+        g.fillEllipse (skirt);
+
+        const auto skirtRadius = skirt.getWidth() * 0.5f, capRadius = body.getWidth() * 0.5f;
+
+        for (int i = 0; i < 28; ++i)   // the knurling
+        {
+            const auto a = angle + (float) i * juce::MathConstants<float>::twoPi / 28.0f;
+            const auto lightSide = std::cos (a) < 0.0f;   // ridges catch the light on top
+            g.setColour (lightSide ? juce::Colours::white.withAlpha (0.16f) : juce::Colours::black.withAlpha (0.35f));
+            g.drawLine ({ centre.getPointOnCircumference (capRadius + 0.6f, a), centre.getPointOnCircumference (skirtRadius - 0.6f, a) }, 1.0f);
+        }
+
+        g.setColour (juce::Colours::black.withAlpha (0.7f));
+        g.drawEllipse (skirt, 1.0f);
+
+        juce::ColourGradient dome (cap.brighter (0.5f), body.getCentreX() - capRadius * 0.3f, body.getY() + capRadius * 0.25f,
+                                   cap.darker (0.55f), body.getCentreX() + capRadius * 0.4f, body.getBottom(), true);
+        dome.addColour (0.45, cap);
+        g.setGradientFill (dome);
         g.fillEllipse (body);
-        g.setColour (juce::Colours::black.withAlpha (0.65f));
-        g.drawEllipse (body, 1.0f);
+
+        g.setGradientFill (juce::ColourGradient (juce::Colours::white.withAlpha (0.38f), body.getCentreX(), body.getY(),
+                                                 juce::Colours::white.withAlpha (0.0f), body.getCentreX(), body.getCentreY(), false));
+        g.fillEllipse (body.reduced (body.getWidth() * 0.12f, 0.0f).withHeight (body.getHeight() * 0.48f).translated (0.0f, 1.0f));
+
+        g.setColour (juce::Colours::black.withAlpha (0.55f));
+        g.drawEllipse (body, 0.8f);
 
         // The pointer: white with a dark outline, from the rim inwards
-        const auto inner = body.getWidth() * 0.5f;
+        const auto inner = skirt.getWidth() * 0.5f;
         juce::Path pointer;
-        pointer.startNewSubPath (centre.getPointOnCircumference (inner * 0.35f, angle));
-        pointer.lineTo (centre.getPointOnCircumference (inner + 0.5f, angle));
+        pointer.startNewSubPath (centre.getPointOnCircumference (capRadius * 0.3f, angle));
+        pointer.lineTo (centre.getPointOnCircumference (inner - 0.5f, angle));
         g.setColour (juce::Colours::black.withAlpha (0.8f));
         g.strokePath (pointer, juce::PathStrokeType (3.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         g.setColour (juce::Colours::white);
@@ -101,14 +132,14 @@ struct Knob : juce::Slider
         if (alwaysShowValue || isMouseButtonDown())
         {
             g.setColour (juce::Colours::white.withAlpha (isMouseButtonDown() ? 0.95f : 0.4f));
-            g.setFont (juce::FontOptions (alwaysShowValue ? 9.5f : 8.5f, juce::Font::bold));
-            g.drawText (format (getValue()), body.expanded (6.0f).toNearestInt(), juce::Justification::centred, false);
+            g.setFont (juce::FontOptions (alwaysShowValue ? 10.5f : 10.0f, juce::Font::bold));
+            g.drawText (format (getValue()), skirt.expanded (6.0f).toNearestInt(), juce::Justification::centred, false);
         }
 
         if (! legendArea.isEmpty())
         {
-            g.setColour (juce::Colours::white.withAlpha (0.6f));
-            g.setFont (juce::FontOptions (8.0f));
+            g.setColour (juce::Colours::white.withAlpha (0.65f));
+            g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
             g.drawText (legend, legendArea.toNearestInt(), juce::Justification::centred, false);
         }
     }
@@ -144,7 +175,7 @@ struct LitButton : juce::Button
         }
 
         g.setColour (on ? juce::Colours::black.withAlpha (0.85f) : juce::Colours::white.withAlpha (0.55f));
-        g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
+        g.setFont (juce::FontOptions (9.0f, juce::Font::bold));
         g.drawText (getButtonText(), getLocalBounds(), juce::Justification::centred, false);
     }
 
