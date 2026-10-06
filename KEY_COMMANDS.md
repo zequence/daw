@@ -48,8 +48,9 @@ A key that is typed into a text field goes to the field.
 
 Esc steps back one level: the expression map editor goes back to the instrument
 editor, the instrument editor to the instrument list, and other views to the
-arrangement. It also closes Settings. In the MIDI editor, Esc first deselects the
-selected notes and closes the editor only when nothing is selected. In the arrangement
+arrangement. It also closes Settings. In the MIDI editor, Esc steps back one layer at a
+time: first it deselects the selected notes, then draw mode goes back to edit mode, and
+only then does the editor close. In the arrangement
 it clears the region selection.
 
 ## Mouse in the arrangement

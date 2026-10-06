@@ -1597,6 +1597,14 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         if (isEditorShowing() && pianoRollView.deselectNotes())
             return true;
 
+        // Then draw mode steps back to edit mode, before the editor closes
+        if (isEditorShowing() && pianoRollView.isDrawMode())
+        {
+            pianoRollView.setDrawMode (false);
+            updateViewVisibility();
+            return true;
+        }
+
         if (contentView == ContentView::midiEditor)
         {
             showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
