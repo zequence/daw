@@ -69,21 +69,32 @@ struct Knob : juce::Slider
                              + (float) valueToProportionOfLength (getValue()) * (params.endAngleRadians - params.startAngleRadians);
         const auto from = bipolar ? (params.startAngleRadians + params.endAngleRadians) * 0.5f : params.startAngleRadians;
 
+        // The printed scale on the panel: 11 ticks, the ends (and a bipolar knob's centre) longer
+        for (int i = 0; i <= 10; ++i)
+        {
+            const auto a = params.startAngleRadians + (float) i / 10.0f * (params.endAngleRadians - params.startAngleRadians);
+            const auto major = i == 0 || i == 10 || (bipolar && i == 5);
+            g.setColour (juce::Colours::white.withAlpha (major ? 0.7f : 0.38f));
+            g.drawLine ({ centre.getPointOnCircumference (radius - (major ? 4.5f : 3.2f), a),
+                          centre.getPointOnCircumference (radius - 0.3f, a) }, major ? 1.3f : 1.0f);
+        }
+
+        const auto arcRadius = radius - 7.0f;
         juce::Path track, arc;
-        track.addCentredArc (centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f, params.startAngleRadians, params.endAngleRadians, true);
+        track.addCentredArc (centre.x, centre.y, arcRadius, arcRadius, 0.0f, params.startAngleRadians, params.endAngleRadians, true);
         g.setColour (juce::Colour (0xff141619));
         g.strokePath (track, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 
         if (std::abs (angle - from) > 0.01f)
         {
-            arc.addCentredArc (centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f, juce::jmin (from, angle), juce::jmax (from, angle), true);
+            arc.addCentredArc (centre.x, centre.y, arcRadius, arcRadius, 0.0f, juce::jmin (from, angle), juce::jmax (from, angle), true);
             g.setColour (cap.brighter (0.4f).withSaturation (juce::jmin (1.0f, cap.getSaturation() + 0.1f)));
             g.strokePath (arc, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
         }
 
         // The knob, like a real one: a soft shadow on the panel, a dark ridged skirt (it turns with
         // the knob), and the coloured cap on top - domed, lit from above, with a shine
-        const auto skirt = circle.reduced (5.0f);
+        const auto skirt = circle.reduced (10.5f);
         const auto body = skirt.reduced (skirt.getWidth() * 0.16f);
 
         g.setColour (juce::Colours::black.withAlpha (0.45f));
@@ -106,6 +117,12 @@ struct Knob : juce::Slider
         g.setColour (juce::Colours::black.withAlpha (0.7f));
         g.drawEllipse (skirt, 1.0f);
 
+        juce::Path bevel;   // the skirt's rim catching the light from above
+        bevel.addCentredArc (centre.x, centre.y, skirtRadius - 1.2f, skirtRadius - 1.2f, 0.0f,
+                             -juce::MathConstants<float>::pi * 0.4f, juce::MathConstants<float>::pi * 0.4f, true);
+        g.setColour (juce::Colours::white.withAlpha (0.22f));
+        g.strokePath (bevel, juce::PathStrokeType (1.0f));
+
         juce::ColourGradient dome (cap.brighter (0.5f), body.getCentreX() - capRadius * 0.3f, body.getY() + capRadius * 0.25f,
                                    cap.darker (0.55f), body.getCentreX() + capRadius * 0.4f, body.getBottom(), true);
         dome.addColour (0.45, cap);
@@ -118,6 +135,13 @@ struct Knob : juce::Slider
 
         g.setColour (juce::Colours::black.withAlpha (0.55f));
         g.drawEllipse (body, 0.8f);
+
+        // A machined ring on the cap's top: a dark groove with a light edge under it
+        const auto ring = body.reduced (body.getWidth() * 0.2f);
+        g.setColour (juce::Colours::black.withAlpha (0.28f));
+        g.drawEllipse (ring, 1.0f);
+        g.setColour (juce::Colours::white.withAlpha (0.14f));
+        g.drawEllipse (ring.translated (0.0f, 0.8f), 0.8f);
 
         // The pointer: white with a dark outline, from the rim inwards
         const auto inner = skirt.getWidth() * 0.5f;

@@ -84,7 +84,7 @@ public:
 
 private:
     enum class Kind { channel, aux, master };
-    static constexpr int stripWidth = 100, stripHeight = 1040;
+    static constexpr int stripWidth = 180, stripHeight = 1040;
 
     const mixer::ConsoleStyle& style() const   { return mixer::ConsoleStyle::ssl(); }
 
@@ -99,8 +99,13 @@ private:
             const auto& style = mixer::ConsoleStyle::ssl();
             g.setColour (style.section);
             g.fillRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
+            g.setGradientFill (juce::ColourGradient (juce::Colours::black.withAlpha (0.18f), 0.0f, 0.0f,
+                                                     juce::Colours::transparentBlack, 0.0f, 6.0f, false));   // recessed: shade under the top edge
+            g.fillRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
             g.setColour (style.sectionLine);
             g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 3.0f, 1.0f);
+            g.setColour (juce::Colours::white.withAlpha (0.07f));   // the bottom edge catching the light
+            g.drawHorizontalLine (getHeight() - 1, 3.0f, (float) getWidth() - 3.0f);
             g.setColour (style.sectionText);
             g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
             g.drawText (legend, getLocalBounds().removeFromTop (12), juce::Justification::centred, false);
@@ -359,12 +364,58 @@ private:
             g.setColour (isHighlighted ? owner.style().panel.brighter (0.25f) : owner.style().panel);
             g.fillRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
 
+            if (texture.getWidth() != getWidth() || texture.getHeight() != getHeight())
+                texture = makeTexture (getWidth(), getHeight());
+
+            g.drawImageAt (texture, 0, 0);
+
             if (kind != Kind::channel)   // Aux and master: a coloured band under the name
             {
                 g.setColour (kind == Kind::master ? juce::Colour (0xffc23b33) : owner.style().auxCap);
                 g.fillRect (getLocalBounds().reduced (4, 0).withTop (27).withHeight (2));
             }
         }
+
+        // Brushed metal: fine vertical grain, a lit left edge, a shaded right edge and four screws
+        static juce::Image makeTexture (int w, int h)
+        {
+            juce::Image image (juce::Image::ARGB, juce::jmax (1, w), juce::jmax (1, h), true);
+            juce::Graphics g (image);
+            juce::Random random (1234);
+
+            for (int x = 1; x < w - 1; ++x)
+            {
+                const auto light = random.nextFloat();
+                g.setColour ((light > 0.5f ? juce::Colours::white : juce::Colours::black).withAlpha (0.02f + 0.05f * std::abs (light - 0.5f)));
+                g.fillRect (x, 0, 1, h);
+            }
+
+            for (int i = 0; i < h / 3; ++i)   // speckles
+            {
+                g.setColour ((random.nextBool() ? juce::Colours::white : juce::Colours::black).withAlpha (0.06f));
+                g.fillRect (random.nextInt (juce::jmax (1, w)), random.nextInt (juce::jmax (1, h)), 1, 1);
+            }
+
+            g.setColour (juce::Colours::white.withAlpha (0.12f));
+            g.fillRect (0, 2, 1, h - 4);
+            g.setColour (juce::Colours::black.withAlpha (0.35f));
+            g.fillRect (w - 1, 2, 1, h - 4);
+
+            for (auto p : { juce::Point<float> (5.0f, 5.0f), { (float) w - 5.0f, 5.0f }, { 5.0f, (float) h - 5.0f }, { (float) w - 5.0f, (float) h - 5.0f } })
+            {
+                const auto screw = juce::Rectangle<float> (5.0f, 5.0f).withCentre (p);
+                g.setGradientFill (juce::ColourGradient (juce::Colour (0xffb8bcc2), screw.getX(), screw.getY(),
+                                                         juce::Colour (0xff4a4e54), screw.getRight(), screw.getBottom(), false));
+                g.fillEllipse (screw);
+                g.setColour (juce::Colours::black.withAlpha (0.6f));
+                g.drawEllipse (screw, 0.6f);
+                g.drawLine (p.x - 1.8f, p.y + 1.0f, p.x + 1.8f, p.y - 1.0f, 0.9f);
+            }
+
+            return image;
+        }
+
+        juce::Image texture;
 
         void resized() override
         {
@@ -384,46 +435,42 @@ private:
             }
 
             // Two knobs side by side per row
-            const auto row = [] (juce::Rectangle<int>& inside, int height, juce::Component* left, juce::Component* right)
+            // A row of up to three knobs, each a third of the width, centred together
+            const auto row = [] (juce::Rectangle<int>& inside, int height, juce::Component* a, juce::Component* b, juce::Component* c = nullptr)
             {
                 auto line = inside.removeFromTop (height);
+                const auto column = line.getWidth() / 3;
+                const auto count = c != nullptr ? 3 : (b != nullptr ? 2 : 1);
+                line = line.withSizeKeepingCentre (column * count, height);
 
-                if (right == nullptr)
-                {
-                    left->setBounds (line.withSizeKeepingCentre (line.getWidth() / 2, height));
-                    return;
-                }
-
-                left->setBounds (line.removeFromLeft (line.getWidth() / 2));
-                right->setBounds (line);
+                for (auto* knob : { a, b, c })
+                    if (knob != nullptr)
+                        knob->setBounds (line.removeFromLeft (column));
             };
-            constexpr int knobRow = 48, buttonRow = 16;
+            constexpr int knobRow = 66, buttonRow = 16;
 
             if (kind != Kind::master)
             {
                 // The EQ and dynamics - or, flipped, the inserts in the same space
                 const auto pageTop = area.getY();
-                auto e = area.removeFromTop (12 + 6 * knobRow + knobRow + 3 * buttonRow + 8);
+                auto e = area.removeFromTop (12 + 5 * knobRow + 3 * buttonRow + 8);
                 eq.setBounds (e);
                 auto inside = eq.getLocalBounds().reduced (2).withTrimmedTop (12);
                 row (inside, knobRow, &hpf, &lpf);
                 row (inside, knobRow, &hfGain, &hfFreq);
                 hfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (44, buttonRow - 2));
-                row (inside, knobRow, &hmfGain, &hmfFreq);
-                row (inside, knobRow, &hmfQ, nullptr);
-                row (inside, knobRow, &lmfGain, &lmfFreq);
-                row (inside, knobRow, &lmfQ, nullptr);
+                row (inside, knobRow, &hmfGain, &hmfFreq, &hmfQ);
+                row (inside, knobRow, &lmfGain, &lmfFreq, &lmfQ);
                 row (inside, knobRow, &lfGain, &lfFreq);
                 lfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (44, buttonRow - 2));
                 eqIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (48, buttonRow - 1));
                 area.removeFromTop (5);
 
-                auto d = area.removeFromTop (12 + 3 * knobRow + buttonRow + 6);
+                auto d = area.removeFromTop (12 + 2 * knobRow + buttonRow + 6);
                 dynamics.setBounds (d);
                 inside = dynamics.getLocalBounds().reduced (2).withTrimmedTop (12);
-                row (inside, knobRow, &threshold, &ratio);
+                row (inside, knobRow, &threshold, &ratio, &makeup);
                 row (inside, knobRow, &attack, &release);
-                row (inside, knobRow, &makeup, nullptr);
                 dynamicsIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (48, buttonRow - 1));
                 inserts.setBounds (getLocalBounds().reduced (4).withTop (pageTop).withBottom (dynamics.getBottom()));
                 area.removeFromTop (5);
@@ -431,12 +478,12 @@ private:
 
             if (kind == Kind::channel)
             {
-                auto a = area.removeFromTop (12 + 3 * knobRow + 4);
+                auto a = area.removeFromTop (12 + 2 * knobRow + 4);
                 aux.setBounds (a);
                 auto inside = aux.getLocalBounds().reduced (2).withTrimmedTop (12);
 
-                for (size_t i = 0; i + 1 < auxKnobs.size(); i += 2)
-                    row (inside, knobRow, auxKnobs[i].get(), auxKnobs[i + 1].get());
+                for (size_t i = 0; i + 2 < auxKnobs.size(); i += 3)
+                    row (inside, knobRow, auxKnobs[i].get(), auxKnobs[i + 1].get(), auxKnobs[i + 2].get());
 
                 area.removeFromTop (5);
             }
@@ -451,7 +498,7 @@ private:
 
             if (kind != Kind::master)   // drive and pan, side by side, by the level
             {
-                auto knobs = area.removeFromTop (knobRow);
+                auto knobs = area.removeFromTop (48);   // the big knobs keep their size
                 drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2));
                 pan.setBounds (knobs);
                 area.removeFromTop (4);
