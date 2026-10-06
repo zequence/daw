@@ -16,6 +16,42 @@ struct TimeAxis
     int revision = 0;                        // bumped on every change; views repaint when it moves
     bool snap = true;                        // snap to grid (the transport's Snap button); off = free positions
 
+    // The grid follows the zoom (no setting): zoomed out it is bars; zooming in, half notes,
+    // quarters, eighths... down to 1/256 - the finest whose lines are at least this far apart.
+    // The same grid lines are the snap positions, in every timeline view.
+    static constexpr double minGridPixels = 14.0;
+
+    juce::int64 gridStep (const TempoMap& map, juce::int64 atTick) const
+    {
+        auto step = map.getTicksPerBar (juce::jmax ((juce::int64) 0, atTick));   // the coarsest: a bar, whatever the meter
+
+        for (auto unit = Ticks::perQuarterNote * 2; unit >= Ticks::perQuarterNote / 64; unit /= 2)
+        {
+            if ((double) unit / ticksPerPixel < minGridPixels)
+                break;
+
+            step = juce::jmin (step, unit);
+        }
+
+        return step;
+    }
+
+    // The nearest grid line (counted from the bar's start); the tick itself with snap off
+    juce::int64 snapToGrid (const TempoMap& map, juce::int64 tick) const
+    {
+        tick = juce::jmax ((juce::int64) 0, tick);
+
+        if (! snap)
+            return tick;
+
+        const auto bar = map.getBarStart (tick);
+        const auto barLength = map.getTicksPerBar (tick);
+        const auto step = gridStep (map, tick);
+        const auto lines = (tick - bar + step / 2) / step;
+        const auto nextBar = map.getBarStart (bar + barLength);
+        return juce::jmin (nextBar, bar + lines * step);
+    }
+
     juce::int64 xToTick (int x) const noexcept
     {
         return scrollTick + (juce::int64) juce::jmax (0.0, (x - gutter) * ticksPerPixel);

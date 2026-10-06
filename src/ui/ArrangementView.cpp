@@ -187,8 +187,7 @@ void ArrangementView::mouseDrag (const juce::MouseEvent& event)
         return;
 
     const auto rawDelta = (juce::int64) ((event.x - dragStart.x) * axis.ticksPerPixel);
-    const auto target = axis.snap ? nearestBar (dragging.startTick + rawDelta)
-                                  : juce::jmax ((juce::int64) 0, dragging.startTick + rawDelta);
+    const auto target = axis.snapToGrid (*engine.getTransport().getTempoMap(), dragging.startTick + rawDelta);   // the zoom's grid
     dragDeltaTicks = target - dragging.startTick;
 
     // Up/down: to the track under the mouse (folders and empty space keep the last one)
@@ -607,6 +606,7 @@ void ArrangementView::paint (juce::Graphics& g)
     while (barTick < endTick && ++barCounter < 3000)
     {
         const auto x = tickToX (barTick);
+        const auto ticksPerBar = map->getTicksPerBar (barTick);
 
         if (x >= TimeAxis::gutter)
         {
@@ -614,7 +614,15 @@ void ArrangementView::paint (juce::Graphics& g)
             g.fillRect (x, 0, 1, getHeight());
         }
 
-        barTick += map->getTicksPerBar (barTick);
+        // Zoomed in: the finer grid lines (= where regions snap), fainter than the bars
+        const auto step = axis.gridStep (*map, barTick);
+        g.setColour (theme::colour (theme::Token::arrangeBarline).withMultipliedAlpha (0.45f));
+
+        for (auto lineTick = barTick + step; lineTick < barTick + ticksPerBar && lineTick < endTick; lineTick += step)
+            if (const auto lineX = tickToX (lineTick); lineX >= TimeAxis::gutter)
+                g.fillRect (lineX, 0, 1, getHeight());
+
+        barTick += ticksPerBar;
     }
 
     // --- Marker lines (names and menus live in the timeline bar) ---

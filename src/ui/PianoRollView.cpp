@@ -74,10 +74,6 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     setWantsKeyboardFocus (true);
 
 
-    snapBox.setTooltip ("Grid division (snapping and quantize)");
-    addDivisionItems (snapBox);
-    snapBox.setSelectedId (4, juce::dontSendNotification);     // 1/8
-    addAndMakeVisible (snapBox);
 
     lengthBox.setTooltip ("Length of newly added notes");
     addDivisionItems (lengthBox);
@@ -158,7 +154,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
             safe->noteInput (message, receivedMs);
     };
 
-    quantizeButton.setTooltip ("Quantize selected notes (or all) to the grid division");
+    quantizeButton.setTooltip ("Quantize selected notes (or all) to the grid (it follows the zoom)");
     quantizeButton.onClick = [this]
     {
         const auto grid = gridTicks();
@@ -257,7 +253,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     };
     addAndMakeVisible (editTargetBox);
 
-    for (auto* c : std::initializer_list<juce::Component*> { &auditionToggle, &inputToggle, &snapBox,
+    for (auto* c : std::initializer_list<juce::Component*> { &auditionToggle, &inputToggle,
                                                              &lengthBox, &dotButton, &laneBox, &quantizeButton, &undoButton,
                                                              &redoButton, &articulationButton, &colourBox })
         c->setWantsKeyboardFocus (false);
@@ -403,9 +399,10 @@ juce::Rectangle<int> PianoRollView::noteRect (const MidiSequence::Note& note) co
     return { x, keyToY (note.key), juce::jmax (3, right - x), keyHeight };
 }
 
+// The grid follows the zoom (TimeAxis::gridStep), where the view starts
 juce::int64 PianoRollView::gridTicks() const
 {
-    return divisionToTicks (snapBox.getSelectedId());
+    return axis.gridStep (*engine.getTransport().getTempoMap(), axis.scrollTick);
 }
 
 juce::int64 PianoRollView::newNoteTicks() const
@@ -421,8 +418,7 @@ juce::int64 PianoRollView::snapTicksOrZero() const
 
 juce::int64 PianoRollView::snapTick (juce::int64 tick) const
 {
-    const auto grid = snapTicksOrZero();
-    return grid > 0 ? ((tick + grid / 2) / grid) * grid : tick;
+    return axis.snapToGrid (*engine.getTransport().getTempoMap(), tick);
 }
 
 //==============================================================================
@@ -1790,8 +1786,6 @@ void PianoRollView::resized()
     auto toolbar = juce::Rectangle<int> (0, 0, getWidth(), toolbarHeight).reduced (6, 3);
     closeButton.setBounds (toolbar.removeFromRight (toolbar.getHeight() + 4));
     toolbar.removeFromRight (8);
-    snapBox.setBounds (toolbar.removeFromLeft (68));
-    toolbar.removeFromLeft (10);
     lengthBox.setBounds (toolbar.removeFromLeft (68));
     toolbar.removeFromLeft (2);
     dotButton.setBounds (toolbar.removeFromLeft (28));
@@ -1888,18 +1882,21 @@ void PianoRollView::paint (juce::Graphics& g)
 
     while (barTick < endTick && ++guard < 3000)
     {
-        const auto ticksPerBeat = map->getTicksPerBeat (barTick);
+        // The grid (= the snap positions) follows the zoom: bars, then halves, quarters...
         const auto ticksPerBar = map->getTicksPerBar (barTick);
+        const auto step = axis.gridStep (*map, barTick);
+        const auto ticksPerBeat = map->getTicksPerBeat (barTick);
 
-        for (auto beatTick = barTick; beatTick < barTick + ticksPerBar && beatTick < endTick; beatTick += ticksPerBeat)
+        for (auto lineTick = barTick; lineTick < barTick + ticksPerBar && lineTick < endTick; lineTick += step)
         {
-            const auto x = tickToX (beatTick);
+            const auto x = tickToX (lineTick);
 
             if (x < grid.getX())
                 continue;
 
-            const auto isBar = beatTick == barTick;
-            g.setColour (isBar ? juce::Colour (0xff45494f) : juce::Colour (0xff2e3136));
+            const auto isBar = lineTick == barTick;
+            const auto isBeat = (lineTick - barTick) % ticksPerBeat == 0;
+            g.setColour (isBar ? juce::Colour (0xff45494f) : isBeat ? juce::Colour (0xff33373d) : juce::Colour (0xff2a2d32));
             g.fillRect (x, grid.getY(), 1, grid.getHeight());
             g.fillRect (x, lane.getY(), 1, lane.getHeight());
         }

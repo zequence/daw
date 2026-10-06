@@ -87,7 +87,7 @@ private:
     juce::int64 snapTick (juce::int64 tick) const;
     void updateCursorAt (juce::Point<int>);   // resize edge, pen (Draw) or the normal pointer
     juce::int64 snapTicksOrZero() const;      // 0 when snapping is off (the transport's Snap button)
-    juce::int64 gridTicks() const;            // the grid dropdown, regardless of the toggle
+    juce::int64 gridTicks() const;            // the grid step at this zoom, regardless of the toggle
     void stepPlayhead (bool forward);         // Left/Right: note to note, or a grid step
     juce::int64 newNoteTicks() const;         // the note-length dropdown
 
@@ -216,7 +216,7 @@ private:
     std::vector<InputStep> inputSteps;
     void noteInput (const juce::MidiMessage&, double receivedMs);
     bool drawMode = false;   // the top bar's Draw (pen) vs Edit (select)
-    juce::ComboBox snapBox, lengthBox, laneBox, colourBox;
+    juce::ComboBox lengthBox, laneBox, colourBox;
     juce::TextButton quantizeButton { "Q" }, undoButton { "Undo" }, redoButton { "Redo" };
     juce::TextButton articulationButton { "Articulation" };
     ExpressionMap::Selection newNoteArticulation;   // what new notes are drawn with (nothing selected)

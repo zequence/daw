@@ -57,7 +57,9 @@ selection.
 | Transpose the selected notes an octave down | Ctrl+Down | `editor.octaveDown` |
 
 With parallel notes, Left and Right stop at the closest start or end first. With no note
-that way, they move to the next grid line of the editor's division.
+that way, they move to the next grid line. The grid follows the zoom: bars when zoomed
+out, then half notes, quarters and so on as you zoom in. Moving notes with Alt+Left/Right
+uses the same grid step.
 
 ## Note input
 
