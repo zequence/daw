@@ -85,8 +85,9 @@ namespace
     {
         juce::File result (path);
 
+        // A hidden folder named ".vst3" (~/.vst3 on Linux) is a search root, not a bundle
         for (auto f = result.getParentDirectory(); f != f.getParentDirectory(); f = f.getParentDirectory())
-            if (f.hasFileExtension ("vst3"))
+            if (f.hasFileExtension ("vst3") && ! f.getFileName().startsWithChar ('.'))
                 result = f;
 
         return result.getFullPathName().toLowerCase();
@@ -334,7 +335,9 @@ namespace
                     return exitRunawayAborted;
                 }
 
-                const auto lowMemory = snapshot.systemAvailableBytes < juce::jmax ((juce::int64) 2 << 30,
+                // Memory figures are 0 where PerformanceMonitor can't measure them (non-Windows)
+                const auto lowMemory = snapshot.systemTotalBytes > 0
+                                       && snapshot.systemAvailableBytes < juce::jmax ((juce::int64) 2 << 30,
                                                                                   snapshot.systemTotalBytes / 10);
                 const auto busyCpu = snapshot.systemCpuPercent > 90.0;
                 const auto shouldThrottle = lowMemory || busyCpu;
