@@ -54,6 +54,12 @@ public:
         juce::int64 sourceTick = noSource;   // as for Note: where it was written (switch events inherit their note's)
 
         juce::int64 written() const noexcept    { return sourceTick == noSource ? tick : sourceTick; }
+
+        // (Last, so positional initialisers above stay as they were.) A controller lane is a list of POINTS; each says how the value travels to the lane's next
+        // point: a step (holds, then jumps) or a ramp. A ramp's bend is the curve's height at its
+        // middle, as a fraction of the way (0.5 = straight; the editor's handle sits there).
+        bool ramp = false;
+        float bend = 0.5f;
     };
 
     // allowNegativeTimes: a PLAYBACK sequence may hold events before tick 0 (shifted earlier than
@@ -194,6 +200,103 @@ public:
             notes.erase (notes.begin() + (std::ptrdiff_t) *it);
     }
 
+    // Two controls are on the same lane: the same kind (and CC number) on the same channel
+    static bool sameLane (const Control& a, const Control& b)
+    {
+        return a.type == b.type && a.channel == b.channel && (a.type != ControlType::controller || a.number == b.number);
+    }
+
+    // A ramp's curve: where along the way (0..1) the value is at 'x' (0..1); bend = the height at x = 0.5
+    static float rampShape (float x, float bend)
+    {
+        const auto b = juce::jlimit (0.02f, 0.98f, bend);
+        return std::pow (juce::jlimit (0.0f, 1.0f, x), std::log (b) / std::log (0.5f));
+    }
+
+    // The value a lane has at 'tick' from its points (-1 = none yet): the last point's, or along its ramp
+    static int laneValueAt (const std::vector<Control>& controls, const Control& lane, juce::int64 tick)
+    {
+        const Control* before = nullptr;
+
+        for (auto& c : controls)
+        {
+            if (! sameLane (c, lane))
+                continue;
+
+            if (c.tick > tick)
+            {
+                if (before != nullptr && before->ramp && c.tick > before->tick)
+                {
+                    const auto x = (float) (tick - before->tick) / (float) (c.tick - before->tick);
+                    return juce::roundToInt ((float) before->value + (float) (c.value - before->value) * rampShape (x, before->bend));
+                }
+
+                break;
+            }
+
+            before = &c;
+        }
+
+        return before != nullptr ? before->value : -1;
+    }
+
+    // Playback: every ramp becomes the controller messages along it - one where the value changes,
+    // at most every 1/256 note (a slow ramp stays light). The same sequence when there are no ramps.
+    static Ptr withRampsRendered (const Ptr& sequence)
+    {
+        if (sequence == nullptr)
+            return sequence;
+
+        const auto& source = sequence->getControls();
+
+        if (std::none_of (source.begin(), source.end(), [] (const Control& c) { return c.ramp; }))
+            return sequence;
+
+        constexpr auto step = Ticks::perQuarterNote / 64;
+        std::vector<Control> controls;
+
+        for (size_t i = 0; i < source.size(); ++i)
+        {
+            auto point = source[i];
+            controls.push_back (point);
+
+            if (! point.ramp)
+                continue;
+
+            controls.back().ramp = false;
+
+            // The lane's next point
+            const Control* next = nullptr;
+
+            for (auto j = i + 1; j < source.size() && next == nullptr; ++j)
+                if (sameLane (source[j], point))
+                    next = &source[j];
+
+            if (next == nullptr || next->tick <= point.tick)
+                continue;
+
+            auto last = point.value;
+
+            for (auto tick = point.tick + step; tick < next->tick; tick += step)
+            {
+                const auto x = (float) (tick - point.tick) / (float) (next->tick - point.tick);
+                const auto value = juce::roundToInt ((float) point.value + (float) (next->value - point.value) * rampShape (x, point.bend));
+
+                if (value != last)
+                {
+                    auto between = point;
+                    between.tick = tick;
+                    between.value = value;
+                    between.ramp = false;
+                    controls.push_back (between);
+                    last = value;
+                }
+            }
+        }
+
+        return create (sequence->getNotes(), std::move (controls), true);
+    }
+
     // Only where notes of different regions overlap (overlapping regions)
     static bool acrossRegions (const Note& earlier, const Note& later)   { return earlier.region != later.region; }
 
@@ -246,6 +349,12 @@ public:
             e->setAttribute ("channel", c.channel);
             e->setAttribute ("number", c.number);
             e->setAttribute ("value", c.value);
+
+            if (c.ramp)
+            {
+                e->setAttribute ("ramp", true);
+                e->setAttribute ("bend", (double) c.bend);
+            }
         }
 
         return xml;
@@ -273,11 +382,15 @@ public:
         }
 
         for (auto* e : xml.getChildWithTagNameIterator ("CONTROL"))
+        {
             controls.push_back ({ e->getStringAttribute ("tick").getLargeIntValue(),
                                   (ControlType) juce::jlimit (0, 3, e->getIntAttribute ("type")),
                                   e->getIntAttribute ("channel", 1),
                                   e->getIntAttribute ("number"),
                                   e->getIntAttribute ("value") });
+            controls.back().ramp = e->getBoolAttribute ("ramp", false);   // older projects: steps
+            controls.back().bend = (float) e->getDoubleAttribute ("bend", 0.5);
+        }
 
         return create (std::move (notes), std::move (controls));
     }

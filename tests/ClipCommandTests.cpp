@@ -281,6 +281,29 @@ public:
             engine.removeTrack (other);
         }
 
+        beginTest ("controller points: add, change (ramp, bend), remove - and playback renders the ramp");
+        {
+            api.run ("clip.set", params ({ { "trackId", tid }, { "notes", juce::Array<juce::var> { note (0, Q, 60) } } }));
+            const auto controlsOf = [&engine, trackId] { return engine.getTrackSequence (trackId)->getControls(); };
+
+            juce::Array<juce::var> points {
+                params ({ { "tick", 0 },     { "type", 0 }, { "number", 1 }, { "value", 10 } }),
+                params ({ { "tick", 4 * Q }, { "type", 0 }, { "number", 1 }, { "value", 110 } }) };
+            expect (api.run ("clip.addControls", params ({ { "trackId", tid }, { "controls", points } }))["ok"]);
+            expectEquals ((int) controlsOf().size(), 2);
+
+            juce::Array<juce::var> change { params ({ { "index", 0 }, { "ramp", true }, { "bend", 0.3 } }) };
+            expect (api.run ("clip.updateControls", params ({ { "trackId", tid }, { "controls", change } }))["ok"]);
+            expect (controlsOf()[0].ramp);
+
+            // Playback has the ramp's messages; the written clip keeps two points
+            expect (engine.getTrackPlaybackSequence (trackId)->getControls().size() > 50);
+            expectEquals ((int) controlsOf().size(), 2);
+
+            expect (api.run ("clip.removeControls", params ({ { "trackId", tid }, { "indices", juce::Array<juce::var> { 1 } } }))["ok"]);
+            expectEquals ((int) controlsOf().size(), 1);
+        }
+
         beginTest ("setControlRange replaces one controller's window only");
         {
             juce::Array<juce::var> controls {

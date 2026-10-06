@@ -64,6 +64,54 @@ public:
             expect (lanes::perceivedLuminance (lanes::valueColour (lanes::Kind::velocity, 1.0f)) > 0.55f);   // light
         }
 
+        beginTest ("CC points: steps hold, ramps render for playback, bends shape them, files keep them");
+        {
+            constexpr auto Q = Ticks::perQuarterNote;
+            using C = MidiSequence::Control;
+            auto point = [] (juce::int64 tick, int value, bool ramp = false, float bend = 0.5f)
+            {
+                C c { tick, MidiSequence::ControlType::controller, 1, 11, value };
+                c.ramp = ramp;
+                c.bend = bend;
+                return c;
+            };
+
+            // A step: nothing is added between the points
+            const auto steps = MidiSequence::create ({}, { point (0, 0), point (4 * Q, 127) });
+            expect (MidiSequence::withRampsRendered (steps) == steps);
+
+            // A straight ramp: messages along it, rising, half way at the middle
+            const auto ramp = MidiSequence::create ({}, { point (0, 0, true), point (4 * Q, 127) });
+            const auto rendered = MidiSequence::withRampsRendered (ramp);
+            expect (rendered->getControls().size() > 100);
+            int previous = -1;
+            bool rising = true;
+
+            for (auto& c : rendered->getControls())
+            {
+                rising = rising && c.value >= previous;
+                previous = c.value;
+                expect (! c.ramp);
+            }
+
+            expect (rising);
+            expectWithinAbsoluteError (MidiSequence::laneValueAt (ramp->getControls(), point (0, 0), 2 * Q), 64, 1);
+
+            // Bent: the handle's height is the value at the middle
+            const auto bent = MidiSequence::create ({}, { point (0, 0, true, 0.2f), point (4 * Q, 100) });
+            expectWithinAbsoluteError (MidiSequence::laneValueAt (bent->getControls(), point (0, 0), 2 * Q), 20, 1);
+
+            // Another CC's points are another lane
+            const auto two = MidiSequence::create ({}, { point (0, 0, true), C { Q, MidiSequence::ControlType::controller, 1, 1, 90 },
+                                                         point (4 * Q, 127) });
+            expectWithinAbsoluteError (MidiSequence::laneValueAt (two->getControls(), point (0, 0), 2 * Q), 64, 1);
+
+            // Project files keep the ramp and its bend; old ones (none) load as steps
+            const auto loaded = MidiSequence::fromXml (*bent->toXml());
+            expect (loaded->getControls()[0].ramp && std::abs (loaded->getControls()[0].bend - 0.2f) < 0.001f);
+            expect (! loaded->getControls()[1].ramp);
+        }
+
         beginTest ("aftertouch is kept in the clip (project files) and shown by its lane");
         {
             const auto seq = MidiSequence::create ({}, { { 0, MidiSequence::ControlType::aftertouch, 1, 0, 90 } });

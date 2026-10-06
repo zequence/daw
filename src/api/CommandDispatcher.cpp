@@ -513,6 +513,13 @@ void CommandDispatcher::registerCommands()
                      o->setProperty ("number", c.number);
                      o->setProperty ("value", c.value);
                      o->setProperty ("channel", c.channel);
+
+                     if (c.ramp)
+                     {
+                         o->setProperty ("ramp", true);
+                         o->setProperty ("bend", (double) c.bend);
+                     }
+
                      controls.add (juce::var (o.get()));
                  }
 
@@ -562,10 +569,14 @@ void CommandDispatcher::registerCommands()
             return "'controls' must be an array of {tick,type,number,value[,channel]}";
 
         for (auto& c : *array)
+        {
             out.push_back ({ (juce::int64) c["tick"],
                              (MidiSequence::ControlType) juce::jlimit (0, 3, (int) c.getProperty ("type", 0)),
                              (int) c.getProperty ("channel", 1), (int) c.getProperty ("number", 1),
                              (int) c.getProperty ("value", 0) });
+            out.back().ramp = (bool) c.getProperty ("ramp", false);
+            out.back().bend = (float) (double) c.getProperty ("bend", 0.5);
+        }
 
         return {};
     };
@@ -1156,6 +1167,88 @@ void CommandDispatcher::registerCommands()
              auto reply = object();
              reply->setProperty ("tracks", (int) result.size());
              respond (ok (juce::var (reply.get())));
+         });
+
+    // Controller points (the lanes): add, change by index, remove by index - one undo step each
+    add ("clip.addControls", "Add controller points (CC, pitch bend, aftertouch) to a track's clip",
+         "trackId:int controls:[{tick,type(0=cc,1=pitchBend,3=aftertouch),number,value,channel?,ramp?:bool,bend?:0..1}]",
+         [this, requireTrack, parseControls, editClip] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             std::vector<MidiSequence::Control> added;
+
+             if (auto error = parseControls (params["controls"], added); error.isNotEmpty())
+                 return respond (fail (error));
+
+             editClip (id, [&added] (auto&, auto& controls) -> juce::String
+             {
+                 controls.insert (controls.end(), added.begin(), added.end());
+                 return {};
+             }, respond);
+         });
+
+    add ("clip.updateControls", "Change controller points by index (indices refer to the clip before the edit)",
+         "trackId:int controls:[{index:int, tick?, value?, ramp?:bool, bend?:0..1}]",
+         [this, requireTrack, editClip] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             const auto* changes = params["controls"].getArray();
+
+             if (changes == nullptr)
+                 return respond (fail ("'controls' must be an array of {index, ...}"));
+
+             editClip (id, [changes] (auto&, auto& controls) -> juce::String
+             {
+                 for (auto& change : *changes)
+                 {
+                     const int index = change.getProperty ("index", -1);
+
+                     if (index < 0 || index >= (int) controls.size())
+                         return "no control at index " + juce::String (index);
+
+                     auto& c = controls[(size_t) index];
+
+                     if (change.hasProperty ("tick"))  c.tick = juce::jmax ((juce::int64) 0, (juce::int64) change["tick"]);
+                     if (change.hasProperty ("value")) c.value = (int) change["value"];
+                     if (change.hasProperty ("ramp"))  c.ramp = (bool) change["ramp"];
+                     if (change.hasProperty ("bend"))  c.bend = juce::jlimit (0.02f, 0.98f, (float) (double) change["bend"]);
+                 }
+
+                 return {};
+             }, respond);
+         });
+
+    add ("clip.removeControls", "Remove controller points by index", "trackId:int indices:[int]",
+         [this, requireTrack, editClip] (const juce::var& params, Respond respond)
+         {
+             int id = 0;
+             if (! requireTrack (params, respond, id)) return;
+
+             const auto* list = params["indices"].getArray();
+
+             if (list == nullptr)
+                 return respond (fail ("'indices' must be an array"));
+
+             std::set<int> indices;
+
+             for (auto& index : *list)
+                 indices.insert ((int) index);
+
+             editClip (id, [&indices] (auto&, auto& controls) -> juce::String
+             {
+                 std::vector<MidiSequence::Control> kept;
+
+                 for (int i = 0; i < (int) controls.size(); ++i)
+                     if (indices.count (i) == 0)
+                         kept.push_back (controls[(size_t) i]);
+
+                 controls = std::move (kept);
+                 return {};
+             }, respond);
          });
 
     add ("clip.setControlRange",

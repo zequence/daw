@@ -1236,8 +1236,9 @@ void AudioEngine::refreshPlayback (Track& track)
 {
     const auto map = mapForTrack (track);
     // Overlapping regions: the overlapped notes are cut for playback only (Settings > Editor)
-    const auto written = editorSettings::cutOverlappedNotes (settings) ? MidiSequence::withRegionOverlapsCut (track.sequence)
-                                                                       : track.sequence;
+    const auto overlapsCut = editorSettings::cutOverlappedNotes (settings) ? MidiSequence::withRegionOverlapsCut (track.sequence)
+                                                                           : track.sequence;
+    const auto written = MidiSequence::withRampsRendered (overlapsCut);   // CC ramps become messages
     const auto built = playback::build (written, map.has_value() ? &*map : nullptr, *masterTempoMap,
                                         editorSettings::firstRootIsDefault (settings));
     track.preRollNeededMs = -built.earliestOffsetMs;
