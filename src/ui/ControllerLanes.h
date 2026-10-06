@@ -2,6 +2,8 @@
 
 #include <juce_gui_basics/juce_gui_basics.h>
 #include "../model/MidiSequence.h"
+#include <array>
+#include <cmath>
 
 // Controller lanes (Settings > Controller lanes): what the MIDI editor's lower pane can show -
 // velocity, pitch bend, aftertouch and every CC. Each has a name (standard ones for the common
@@ -220,18 +222,53 @@ namespace lanes
         std::map<juce::String, juce::String> names;
     };
 
-    // The colour of a value: velocity purple, darker (soft) -> cyan, light (loud), as the notes; controllers dark purple,
+    // The colour of a value: velocity violet, dark (soft) -> cyan, light (loud), evenly, as the notes; controllers dark purple,
     // almost blue (low) -> fairly bright magenta (high)
+    // How bright a colour looks (relative luminance of sRGB, 0..1): blue looks dark, cyan bright
+    inline float perceivedLuminance (juce::Colour c)
+    {
+        const auto linear = [] (float v) { return v <= 0.04045f ? v / 12.92f : std::pow ((v + 0.055f) / 1.055f, 2.4f); };
+        return 0.2126f * linear (c.getFloatRed()) + 0.7152f * linear (c.getFloatGreen()) + 0.0722f * linear (c.getFloatBlue());
+    }
+
+    // The hue and saturation, at the brightness that LOOKS like 'luminance' (as near as the hue allows)
+    inline juce::Colour withLuminance (float hue, float saturation, float luminance)
+    {
+        float low = 0.0f, high = 1.0f;
+
+        for (int i = 0; i < 20; ++i)
+        {
+            const auto mid = 0.5f * (low + high);
+            (perceivedLuminance (juce::Colour::fromHSV (hue, saturation, mid, 1.0f)) < luminance ? low : high) = mid;
+        }
+
+        return juce::Colour::fromHSV (hue, saturation, high, 1.0f);
+    }
+
     inline juce::Colour valueColour (Kind kind, float normalized)
     {
         normalized = juce::jlimit (0.0f, 1.0f, normalized);
 
         if (kind == Kind::velocity)
         {
-            // Purple 280deg, darker (soft) -> cyan 180deg, light (loud). The hue moves more near the
-            // top: cyans look alike, so the loud velocities need the bigger steps
-            const auto t = std::pow (normalized, 1.4f);
-            return juce::Colour::fromHSV (0.78f - 0.28f * t, 0.65f - 0.1f * normalized, 0.58f + 0.42f * normalized, 1.0f);
+            // Violet 262deg (soft) -> cyan 180deg (loud), the hue moving more near the top (cyans look
+            // alike). The brightness is set by how bright each hue LOOKS, so the ramp goes evenly
+            // from dark to light - purple doesn't outshine the blue after it, nor cyan jump out
+            static const auto table = []
+            {
+                std::array<juce::Colour, 128> colours;
+
+                for (int v = 0; v < 128; ++v)
+                {
+                    const auto n = (float) v / 127.0f;
+                    const auto t = std::pow (n, 1.4f);
+                    colours[(size_t) v] = withLuminance (0.728f - 0.228f * t, 0.62f - 0.1f * n, 0.07f + 0.43f * n);
+                }
+
+                return colours;
+            }();
+
+            return table[(size_t) juce::roundToInt (normalized * 127.0f)];
         }
 
         // dark purple, almost blue (250deg, dim) -> bright magenta (305deg), not too saturated

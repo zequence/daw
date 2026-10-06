@@ -44,6 +44,26 @@ public:
             lanesSettings.load (empty);   // defaults for the other tests
         }
 
+        beginTest ("velocity colours get evenly lighter from soft to loud (no hue outshines the next)");
+        {
+            auto previous = -1.0f;
+            bool rising = true;
+
+            for (int v = 0; v < 128; v += 4)
+            {
+                const auto luminance = lanes::perceivedLuminance (lanes::valueColour (lanes::Kind::velocity, (float) v / 127.0f));
+
+                if (luminance < previous - 0.005f)
+                    rising = false;
+
+                previous = luminance;
+            }
+
+            expect (rising, "a softer velocity looks brighter than a louder one");
+            expect (lanes::perceivedLuminance (lanes::valueColour (lanes::Kind::velocity, 0.0f)) < 0.12f);   // dark
+            expect (lanes::perceivedLuminance (lanes::valueColour (lanes::Kind::velocity, 1.0f)) > 0.4f);    // light
+        }
+
         beginTest ("aftertouch is kept in the clip (project files) and shown by its lane");
         {
             const auto seq = MidiSequence::create ({}, { { 0, MidiSequence::ControlType::aftertouch, 1, 0, 90 } });
