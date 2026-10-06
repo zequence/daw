@@ -108,12 +108,12 @@ public:
 
     void resized() override
     {
-        // One line: R, S|M (one joined box), then the name
+        // One line: S|M (one joined box), the name, and R at the right edge
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).reduced (8, 0);
         area = area.withSizeKeepingCentre (area.getWidth(), 20);
 
-        armButton.setBounds (area.removeFromLeft (20));
-        area.removeFromLeft (3);
+        armButton.setBounds (area.removeFromRight (20));
+        area.removeFromRight (6);
         soloButton.setBounds (area.removeFromLeft (20));
         muteButton.setBounds (area.removeFromLeft (20).expanded (1, 0).withTrimmedRight (1));   // shares S's right edge
         area.removeFromLeft (6);
