@@ -76,9 +76,10 @@ const std::vector<PhraseBlock>& ArrangementView::blocksFor (AudioEngine::TrackId
 
 juce::Rectangle<int> ArrangementView::blockRect (const BlockRef& block, int laneTop) const
 {
-    const auto x = tickToX (block.startTick);
-    const auto right = tickToX (barEndOf (block.endTick));   // drawn to the end of its last bar
-    return { x, laneTop + 4, juce::jmax (8, right - x), sidebar::trackRowHeight() - 8 };   // overlapping ones share it (hatched)
+    // Drawn to the end of its last bar, one pixel short at both ends so the grid line shows through
+    const auto x = tickToX (block.startTick) + 1;
+    const auto right = tickToX (barEndOf (block.endTick));
+    return { x, laneTop + 4, juce::jmax (6, right - x), sidebar::trackRowHeight() - 8 };   // overlapping ones share it (hatched)
 }
 
 ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)
@@ -641,7 +642,7 @@ void ArrangementView::dimEmptyEnds (juce::Graphics& g, juce::Rectangle<int> box,
         return;
 
     g.setColour (juce::Colours::black.withAlpha (0.35f));
-    const auto inner = box.reduced (1);
+    const auto inner = box;   // no side borders: dim edge to edge
 
     if (const auto x = juce::jmin (inner.getRight(), tickToX (firstNote)); x > inner.getX())
         g.fillRect (inner.withRight (x));
@@ -901,13 +902,14 @@ void ArrangementView::paint (juce::Graphics& g)
                     if (right < TimeAxis::gutter || x > getWidth())
                         continue;
 
-                    const auto rect = juce::Rectangle<int> (x, y + 3, juce::jmax (8, right - x), height - 6);
+                    const auto rect = juce::Rectangle<int> (x + 1, y + 3, juce::jmax (6, right - x - 1), height - 6);   // the grid lines show at its ends
                     const auto isSelectedSpan = isSelectedFolderSpan ({ item.folder, originalStart, 0 });
                     const auto look = isSelectedSpan ? theme::regionStyle (base, true) : style;
                     g.setColour (look.fill.withMultipliedAlpha (0.8f));
-                    g.fillRoundedRectangle (rect.toFloat(), theme::corner);
+                    g.fillRect (rect);
                     g.setColour (look.border);
-                    g.drawRoundedRectangle (rect.toFloat(), theme::corner, 1.2f);
+                    g.fillRect (rect.withHeight (1));                       // top and bottom edges only (no sides)
+                    g.fillRect (rect.withTop (rect.getBottom() - 1));
 
                     // The empty beginning and end of the folder's stretch: dimmed (as in the tracks' regions)
                     {
@@ -988,7 +990,7 @@ void ArrangementView::paint (juce::Graphics& g)
                 const auto style = theme::regionStyle (base, selectedBlock || isDragged);
 
                 g.setColour (style.fill);
-                g.fillRoundedRectangle (rect.toFloat(), theme::corner);
+                g.fillRect (rect);
 
                 // The empty beginning (from the bar line to the first note) and end (to the bar's end): dimmed
                 if (sequence != nullptr && block.noteCount > 0)
@@ -1007,7 +1009,8 @@ void ArrangementView::paint (juce::Graphics& g)
                 }
 
                 g.setColour (style.border);
-                g.drawRoundedRectangle (rect.toFloat(), theme::corner, 1.8f);
+                g.fillRect (rect.withHeight (2));                           // top and bottom edges only (no sides)
+                g.fillRect (rect.withTop (rect.getBottom() - 2));
 
                 // Mini note preview
                 if (sequence != nullptr && block.noteCount > 0)
