@@ -13,6 +13,12 @@ namespace theme
     {
         button.getProperties().set ("themeRole", role);
     }
+
+    // A combo box whose list always opens downwards from it (not centred on the chosen item)
+    inline void setPopupDownwards (juce::ComboBox& box)
+    {
+        box.getProperties().set ("popupDownwards", true);
+    }
 }
 
 class ThemedLookAndFeel final : public juce::LookAndFeel_V4,
@@ -87,6 +93,19 @@ public:
         arrow.lineTo (arrowZone.getRight() - 3.0f, arrowZone.getCentreY() - 2.0f);
         g.setColour (box.findColour (juce::ComboBox::arrowColourId).withAlpha (box.isEnabled() ? 0.9f : 0.2f));
         g.strokePath (arrow, juce::PathStrokeType (2.0f));
+    }
+
+    juce::PopupMenu::Options getOptionsForComboBoxPopupMenu (juce::ComboBox& box, juce::Label& label) override
+    {
+        if (! (bool) box.getProperties()["popupDownwards"])
+            return juce::LookAndFeel_V4::getOptionsForComboBoxPopupMenu (box, label);
+
+        return juce::PopupMenu::Options().withTargetComponent (&box)
+                                         .withInitiallySelectedItem (box.getSelectedId())
+                                         .withMinimumWidth (box.getWidth())
+                                         .withMaximumNumColumns (1)
+                                         .withStandardItemHeight (label.getHeight())
+                                         .withPreferredPopupDirection (juce::PopupMenu::Options::PopupDirection::downwards);
     }
 
     // Flat menu: the background and a hairline border

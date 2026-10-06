@@ -237,6 +237,7 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
 
     editTargetBox.setTooltip ("What is edited: the track - and where its regions overlap, which clip (the others are dimmed)");
     editTargetBox.setWantsKeyboardFocus (false);
+    theme::setPopupDownwards (editTargetBox);   // the list always opens below it
     editTargetBox.onChange = [this]
     {
         const auto index = editTargetBox.getSelectedId() - 1;
