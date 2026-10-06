@@ -220,8 +220,8 @@ namespace lanes
         std::map<juce::String, juce::String> names;
     };
 
-    // The colour of a value in a minimized lane: velocity yellow -> red (as the notes),
-    // controllers blue -> magenta (a blue light enough to see on the dark background)
+    // The colour of a value: velocity yellow -> red (as the notes); controllers purple (low)
+    // -> magenta (high), bright enough to see on the dark background
     inline juce::Colour valueColour (Kind kind, float normalized)
     {
         normalized = juce::jlimit (0.0f, 1.0f, normalized);
@@ -229,6 +229,7 @@ namespace lanes
         if (kind == Kind::velocity)
             return juce::Colour::fromHSV ((1.0f / 6.0f) * (1.0f - normalized), 0.8f, 0.95f, 1.0f);
 
-        return juce::Colour::fromHSV (0.60f + 0.24f * normalized, 0.65f, 0.95f, 1.0f);   // 216deg -> 302deg
+        return juce::Colour::fromHSV (0.74f + 0.11f * normalized, 0.5f + 0.35f * normalized,
+                                      0.8f + 0.2f * normalized, 1.0f);   // purple 266deg -> magenta 306deg
     }
 }

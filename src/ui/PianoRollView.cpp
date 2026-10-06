@@ -422,11 +422,24 @@ juce::String PianoRollView::laneValueAt (juce::Point<int> position) const
     const auto index = laneIndexAt (position);
     const auto seq = sequence();
 
-    if (index < 0 || seq == nullptr || position.x < keysWidth)
+    if (index < 0 || position.x < keysWidth)
         return {};
+
+    if (seq == nullptr)
+        return laneArea().contains (position) ? lanes::Settings::get().displayName (shownLanes()[index]) + ": "
+                                                    + juce::String (laneValueFromY (position.y))
+                                              : juce::String();
 
     const auto lane = lanes::parse (shownLanes()[index]);
     const auto tick = xToTick (position.x);
+
+    const auto inMaximized = laneArea().contains (position);
+    const auto atHeight = [&]
+    {
+        const auto v = laneValueFromY (position.y);
+        return lanes::Settings::get().displayName (shownLanes()[index]) + ": "
+                 + (lane.kind == lanes::Kind::pitchBend ? juce::String (v - 8192) : juce::String (v));
+    };
 
     if (lane.kind == lanes::Kind::velocity)
     {
@@ -434,7 +447,7 @@ juce::String PianoRollView::laneValueAt (juce::Point<int> position) const
             if (tick >= note.startTick && tick < note.startTick + note.lengthTicks)
                 return "Velocity " + juce::String (note.velocity);
 
-        return {};
+        return inMaximized ? atHeight() : juce::String();
     }
 
     int value = -1;
@@ -449,7 +462,7 @@ juce::String PianoRollView::laneValueAt (juce::Point<int> position) const
     }
 
     if (value < 0)
-        return {};
+        return inMaximized ? atHeight() : juce::String();
 
     const auto name = lanes::Settings::get().displayName (shownLanes()[index]);
     return name + ": " + (lane.kind == lanes::Kind::pitchBend ? juce::String (value - 8192) : juce::String (value));
@@ -1663,6 +1676,18 @@ void PianoRollView::mouseMove (const juce::MouseEvent& event)
     updateCursorAt (event.getPosition());
     updateHoveredKey (event.getPosition());
 
+    // A minimized lane under the mouse is lit subtly
+    {
+        const auto index = laneIndexAt (event.getPosition());
+        const auto hovered = index >= 0 && shownLanes()[index] != maximizedLaneId() ? index : -1;
+
+        if (hovered != hoveredLane)
+        {
+            hoveredLane = hovered;
+            repaint();
+        }
+    }
+
     // The value under the mouse in a lane, always shown by the pointer
     const auto value = laneValueAt (event.getPosition());
 
@@ -1689,9 +1714,10 @@ void PianoRollView::updateHoveredKey (juce::Point<int> position)
 
 void PianoRollView::mouseExit (const juce::MouseEvent&)
 {
-    if (hoverValue.isNotEmpty())
+    if (hoverValue.isNotEmpty() || hoveredLane >= 0)
     {
         hoverValue.clear();
+        hoveredLane = -1;
         repaint();
     }
 
@@ -2076,7 +2102,7 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
         g.setColour (juce::Colour (0xff232529));
         g.fillRect (nameArea);
         g.setColour (juce::Colours::white.withAlpha (isMaximized ? 0.85f : 0.55f));
-        g.setFont (juce::FontOptions (10.0f, isMaximized ? juce::Font::bold : juce::Font::plain));
+        g.setFont (juce::FontOptions (11.5f, isMaximized ? juce::Font::bold : juce::Font::plain));
         g.drawFittedText (lanes::Settings::get().displayName (ids[laneIndex]), nameArea.reduced (4, 2),
                           isMaximized ? juce::Justification::topLeft : juce::Justification::centredLeft, isMaximized ? 4 : 1, 0.8f);
 
@@ -2086,6 +2112,13 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
         if (! isMaximized)
         {
             paintMinimizedLane (g, row.withTrimmedLeft (keysWidth).withTrimmedTop (1), laneKind, seq);
+
+            if (laneIndex == hoveredLane)   // hover: a subtle lift (click maximizes it)
+            {
+                g.setColour (juce::Colours::white.withAlpha (0.06f));
+                g.fillRect (row.withTrimmedTop (1));
+            }
+
             continue;
         }
 
@@ -2126,7 +2159,11 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
             if (seq != nullptr)
             {
                 int previousX = -1, previousY = -1;
-                g.setColour (lanes::valueColour (lanes::Kind::controller, 0.5f));
+                const auto colourOf = [&laneKind] (int value)
+                {
+                    return lanes::valueColour (lanes::Kind::controller, (float) value / (float) laneKind.maxValue());
+                };
+                int previousValue = 0;
 
                 for (auto& control : seq->getControls())
                 {
@@ -2138,21 +2175,28 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
 
                     if (previousX >= 0 && x >= lane.getX())
                     {
+                        g.setColour (colourOf (previousValue));   // the held step in its value's colour
                         g.fillRect (juce::jmax (lane.getX(), previousX), previousY, juce::jmax (1, x - previousX), 2);
+                        g.setColour (colourOf (control.value));
                         g.fillRect (x, juce::jmin (previousY, y), 2, std::abs (y - previousY) + 2);
                     }
+
+                    g.setColour (colourOf (control.value));
 
                     if (x >= lane.getX() && x <= lane.getRight())
                         g.fillRect (x - 1, y - 1, 4, 4);
 
                     previousX = x;
                     previousY = y;
+                    previousValue = control.value;
 
                     if (x > lane.getRight())
                         break;
                 }
 
                 // Hold the last value to the right edge
+                g.setColour (colourOf (previousValue));
+
                 if (previousX >= 0 && previousX < lane.getRight())
                     g.fillRect (juce::jmax (lane.getX(), previousX), previousY,
                                 lane.getRight() - juce::jmax (lane.getX(), previousX), 2);

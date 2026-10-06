@@ -105,6 +105,7 @@ private:
     juce::String laneValueAt (juce::Point<int>) const;   // the value under the mouse ("" = none)
 
     juce::String maximizedLane;   // id; empty = the first shown
+    int hoveredLane = -1;         // a minimized lane under the mouse (lit subtly)
     juce::String hoverValue;      // drawn by the mouse (always visible, no tooltip delay)
     juce::Point<int> hoverPoint;
 
