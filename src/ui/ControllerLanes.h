@@ -262,7 +262,10 @@ namespace lanes
                 {
                     const auto n = (float) v / 127.0f;
                     const auto t = std::pow (n, 1.4f);
-                    colours[(size_t) v] = withLuminance (0.728f - 0.211f * t, 0.62f - 0.1f * n, 0.07f + 0.43f * n);
+                    // The brightness ladder: lightness (CIE L*) rising in equal visual steps, 28 -> 86
+                    const auto lightness = 28.0f + 58.0f * n;
+                    const auto luminance = std::pow ((lightness + 16.0f) / 116.0f, 3.0f);
+                    colours[(size_t) v] = withLuminance (0.728f - 0.211f * t, 0.62f - 0.1f * n, luminance);
                 }
 
                 return colours;

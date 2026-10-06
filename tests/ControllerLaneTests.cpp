@@ -61,7 +61,7 @@ public:
 
             expect (rising, "a softer velocity looks brighter than a louder one");
             expect (lanes::perceivedLuminance (lanes::valueColour (lanes::Kind::velocity, 0.0f)) < 0.12f);   // dark
-            expect (lanes::perceivedLuminance (lanes::valueColour (lanes::Kind::velocity, 1.0f)) > 0.4f);    // light
+            expect (lanes::perceivedLuminance (lanes::valueColour (lanes::Kind::velocity, 1.0f)) > 0.55f);   // light
         }
 
         beginTest ("aftertouch is kept in the clip (project files) and shown by its lane");
