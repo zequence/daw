@@ -662,33 +662,22 @@ private:
                 {
                     begin (aux, nullptr);
 
-                    // The sends (3/4 of the EQ's knobs) in threes, each three a diagonal down three
-                    // columns - starting on the side the dynamics left room, so the two interlock
-                    constexpr int auxW = 44, auxH = 51, auxStep = 34;
-                    const int auxX[3] = { left, left + (right - left - auxW) / 2, right - auxW };
-                    int auxY[3] = { columnY[0], juce::jmax (columnY[0], columnY[1]), columnY[1] };
-                    int latest[3] = { std::numeric_limits<int>::min() / 2, std::numeric_limits<int>::min() / 2, std::numeric_limits<int>::min() / 2 };
-                    const auto fromRight = next == 1;
+                    // The sends (46 px knobs): the same zigzag, at the same angle as the EQ's, crammed
+                    // closer - their columns nearer the middle - and carrying on from the dynamics
+                    constexpr int auxW = 48, auxH = 55, auxDx = 39, auxStep = 27;   // auxStep / auxDx = stagger / column distance
+                    const auto x0 = left + (right - left - auxW - auxDx) / 2;
+                    auto first = true;
 
-                    for (size_t i = 0; i < auxKnobs.size(); ++i)
+                    for (auto& k : auxKnobs)
                     {
-                        const auto c = fromRight ? 2 - (int) (i % 3) : (int) (i % 3);
-                        auto y = auxY[c];
-
-                        for (auto a : { c - 1, c + 1 })   // clear of the neighbouring columns' knobs
-                            if (a >= 0 && a < 3)
-                                y = juce::jmax (y, latest[a] + auxStep);
-
-                        placed.push_back ({ auxKnobs[i].get(), { auxX[c], y, auxW, auxH } });
-                        latest[c] = y;
-                        auxY[c] = y + auxH;
-
-                        if (c != 2) mark (0, y, y + auxH);
-                        if (c != 0) mark (1, y, y + auxH);
+                        const auto y = juce::jmax (columnY[next], lastY + (first ? stagger + 1 : auxStep));
+                        placed.push_back ({ k.get(), { x0 + next * auxDx, y, auxW, auxH } });
+                        mark (next, y, y + auxH);
+                        columnY[next] = y + auxH;
+                        lastY = y;
+                        next = 1 - next;
+                        first = false;
                     }
-
-                    columnY[0] = juce::jmax (auxY[0], auxY[1]);
-                    columnY[1] = juce::jmax (auxY[1], auxY[2]);
                 }
 
                 finish();
@@ -710,8 +699,8 @@ private:
 
             if (kind != Kind::master)   // drive and pan, side by side, by the level
             {
-                auto knobs = area.removeFromTop (64);   // pan as big as the EQ's knobs, drive about 3/4 of it
-                drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2).withSizeKeepingCentre (44, 51).withY (knobs.getY() + 6));
+                auto knobs = area.removeFromTop (64);   // pan as big as the EQ's knobs, drive 46 px
+                drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2).withSizeKeepingCentre (48, 55).withY (knobs.getY() + 4));
                 pan.setBounds (knobs.withSizeKeepingCentre (58, 64));
                 area.removeFromTop (4);
             }
