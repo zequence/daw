@@ -1583,7 +1583,6 @@ void PianoRollView::paint (juce::Graphics& g)
                 continue;
 
             const auto velocity = velocityPreview.count (i) ? velocityPreview.at (i) : note.velocity;
-            const auto brightness = 0.45f + 0.55f * (float) velocity / 127.0f;
 
             // Sound slot colours: the colour of the note's slot (notes without one stay neutral grey);
             // a selected note keeps its colour and gets a white outline
@@ -1594,13 +1593,12 @@ void PianoRollView::paint (juce::Graphics& g)
             if (slotColours)
                 g.setColour (slot != nullptr && slot->colour.isNotEmpty() ? AudioEngine::colourFromHex (slot->colour, juce::Colours::grey)
                                                                          : juce::Colour (0xff8a8d93));
-            else
-                g.setColour (selected ? juce::Colours::orange.withBrightness (brightness)
-                                      : juce::Colour (0xff5d8fc4).withBrightness (brightness));
+            else   // velocity around the colour wheel: soft = blue, through cyan, green and yellow, loud = red
+                g.setColour (juce::Colour::fromHSV (0.6667f * (1.0f - (float) velocity / 127.0f), 0.62f, 0.9f, 1.0f));
 
             g.fillRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f);
-            g.setColour (slotColours && selected ? juce::Colours::white : juce::Colours::black.withAlpha (0.4f));
-            g.drawRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f, slotColours && selected ? 2.0f : 1.0f);
+            g.setColour (selected ? juce::Colours::white : juce::Colours::black.withAlpha (0.4f));   // the colour is taken: selection = outline
+            g.drawRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f, selected ? 2.0f : 1.0f);
 
             // Articulation: its symbol on the note; one the map doesn't have is an error mark
             if (articulationMap != nullptr)
