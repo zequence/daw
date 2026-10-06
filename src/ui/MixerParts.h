@@ -322,7 +322,7 @@ struct LevelFader final : juce::Slider
 {
     LevelFader() : juce::Slider (juce::Slider::LinearVertical, juce::Slider::NoTextBox) {}
 
-    static constexpr float capHeight = 34.0f, capWidth = 26.0f;
+    static constexpr float capHeight = 51.0f, capWidth = 39.0f;
 
     void paint (juce::Graphics& g) override
     {

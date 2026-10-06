@@ -103,7 +103,7 @@ public:
 
 private:
     enum class Kind { channel, aux, master };
-    static constexpr int stripWidth = 136, stripHeight = 1420;
+    static constexpr int stripWidth = 118, stripHeight = 1240;
 
     const mixer::ConsoleStyle& style() const   { return mixer::ConsoleStyle::ssl(); }
 
@@ -543,7 +543,7 @@ private:
             // lets the next begin beside it; their panels follow the knobs, diagonal where they meet.
             if (kind != Kind::master)
             {
-                constexpr int knobW = 68, knobH = 75, stagger = 39, buttonW = 44, buttonH = 16, titleH = 12, pad = 2, gap = 4;
+                constexpr int knobW = 58, knobH = 64, stagger = 33, buttonW = 44, buttonH = 16, titleH = 12, pad = 2, gap = 4;
                 const auto left = area.getX() + pad, right = area.getRight() - pad, mid = area.getCentreX();
                 const int columnX[2] = { left, right - knobW };
                 int columnY[2] = { area.getY() + pad, area.getY() + pad };
@@ -661,8 +661,17 @@ private:
                 {
                     begin (aux, nullptr);
 
-                    for (auto& k : auxKnobs)
-                        knob (k.get());
+                    // The sends are smaller (about 2/3 of the EQ's knobs): three to a row
+                    const auto auxW = (right - left) / 3, auxH = auxW + 7;
+                    const auto y = juce::jmax (columnY[0], columnY[1]);
+
+                    for (size_t i = 0; i < auxKnobs.size(); ++i)
+                        placed.push_back ({ auxKnobs[i].get(), { left + (int) (i % 3) * auxW, y + (int) (i / 3) * auxH, auxW, auxH } });
+
+                    const auto bottom = y + (int) ((auxKnobs.size() + 2) / 3) * auxH;
+                    mark (0, y, bottom);
+                    mark (1, y, bottom);
+                    columnY[0] = columnY[1] = bottom;
                 }
 
                 finish();
@@ -684,9 +693,9 @@ private:
 
             if (kind != Kind::master)   // drive and pan, side by side, by the level
             {
-                auto knobs = area.removeFromTop (48);   // the big knobs keep their size
-                drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2));
-                pan.setBounds (knobs);
+                auto knobs = area.removeFromTop (64);   // pan as big as the EQ's knobs, drive about 2/3 of it
+                drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2).withSizeKeepingCentre (40, 46).withY (knobs.getY() + 9));
+                pan.setBounds (knobs.withSizeKeepingCentre (58, 64));
                 area.removeFromTop (4);
             }
 
