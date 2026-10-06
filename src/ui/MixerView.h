@@ -198,6 +198,80 @@ private:
     };
 
     //==========================================================================
+    // The level fader, in the style of a 70s/80s console: a recessed slot, a printed dB scale,
+    // and a chunky brushed-metal cap with grip ridges and a white index line at the level
+    struct LevelFader final : juce::Slider
+    {
+        LevelFader() : juce::Slider (juce::Slider::LinearVertical, juce::Slider::NoTextBox) {}
+
+        static constexpr float capHeight = 34.0f, capWidth = 26.0f;
+
+        void paint (juce::Graphics& g) override
+        {
+            const auto bounds = getLocalBounds().toFloat();
+            const auto slotX = bounds.getRight() - capWidth * 0.5f - 2.0f;   // the slot sits right, the scale left
+            const auto top = (float) getPositionOfValue (getMaximum());
+            const auto bottom = (float) getPositionOfValue (getMinimum());
+
+            // The scale: ticks and numbers, 0 dB brighter
+            g.setFont (juce::FontOptions (8.5f));
+
+            for (auto [db, text] : std::initializer_list<std::pair<double, const char*>> {
+                     { 6.0, "+6" }, { 0.0, "0" }, { -5.0, "5" }, { -10.0, "10" }, { -20.0, "20" },
+                     { -30.0, "30" }, { -40.0, "40" }, { -60.0, "-" } })
+            {
+                const auto y = (float) getPositionOfValue (db);
+                const auto zero = db == 0.0;
+                g.setColour (juce::Colours::white.withAlpha (zero ? 0.85f : 0.45f));
+                g.fillRect (slotX - capWidth * 0.5f - 5.0f, y - 0.5f, zero ? 6.0f : 4.0f, 1.0f);
+                g.drawText (db <= -60.0 ? juce::String (juce::CharPointer_UTF8 ("\xe2\x88\x9e")) : juce::String (text),
+                            juce::Rectangle<float> (0.0f, y - 6.0f, slotX - capWidth * 0.5f - 6.0f, 12.0f),
+                            juce::Justification::centredRight, false);
+            }
+
+            // The slot: dark and recessed
+            const auto slot = juce::Rectangle<float> (slotX - 2.5f, top, 5.0f, bottom - top);
+            g.setColour (juce::Colour (0xff0b0c0e));
+            g.fillRoundedRectangle (slot, 2.5f);
+            g.setColour (juce::Colours::white.withAlpha (0.08f));
+            g.drawRoundedRectangle (slot.translated (0.0f, 0.5f), 2.5f, 1.0f);
+
+            // The cap, centred on the level
+            const auto y = (float) getPositionOfValue (getValue());
+            const auto cap = juce::Rectangle<float> (capWidth, capHeight).withCentre ({ slotX, y });
+
+            g.setColour (juce::Colours::black.withAlpha (0.45f));   // its shadow on the panel
+            g.fillRoundedRectangle (cap.translated (1.5f, 2.5f), 3.0f);
+
+            juce::ColourGradient metal (juce::Colour (0xffd9dcdf), cap.getX(), cap.getY(),
+                                        juce::Colour (0xff7d8186), cap.getX(), cap.getBottom(), false);
+            metal.addColour (0.48, juce::Colour (0xffb7bbbf));
+            metal.addColour (0.52, juce::Colour (0xff9a9ea3));
+            g.setGradientFill (metal);
+            g.fillRoundedRectangle (cap, 3.0f);
+            g.setColour (juce::Colours::black.withAlpha (0.7f));
+            g.drawRoundedRectangle (cap, 3.0f, 1.0f);
+
+            // Grip ridges above and below the index line
+            for (int i = 1; i <= 4; ++i)
+                for (auto sign : { -1.0f, 1.0f })
+                {
+                    const auto ridgeY = y + sign * (3.0f + (float) i * 3.2f);
+                    g.setColour (juce::Colours::black.withAlpha (0.35f));
+                    g.fillRect (cap.getX() + 3.0f, ridgeY, cap.getWidth() - 6.0f, 1.0f);
+                    g.setColour (juce::Colours::white.withAlpha (0.35f));
+                    g.fillRect (cap.getX() + 3.0f, ridgeY + 1.0f, cap.getWidth() - 6.0f, 0.8f);
+                }
+
+            // The white index line: exactly the level
+            g.setColour (juce::Colours::black.withAlpha (0.6f));
+            g.fillRect (cap.getX() + 1.0f, y - 1.5f, cap.getWidth() - 2.0f, 3.0f);
+            g.setColour (juce::Colours::white);
+            g.fillRect (cap.getX() + 1.0f, y - 0.75f, cap.getWidth() - 2.0f, 1.5f);
+        }
+    };
+
+    //==========================================================================
     // A grey box with a caption: a part of the strip that isn't built yet
     struct Placeholder final : juce::Component, juce::SettableTooltipClient
     {
@@ -255,8 +329,6 @@ private:
             if (channelId != 0)
                 addAndMakeVisible (pan);
 
-            fader.setSliderStyle (juce::Slider::LinearVertical);
-            fader.setTextBoxStyle (juce::Slider::NoTextBox, true, 0, 0);
             fader.setRange (-60.0, 6.0, 0.1);
             fader.setSkewFactorFromMidPoint (-12.0);
             fader.setDoubleClickReturnValue (true, 0.0);
@@ -385,7 +457,7 @@ private:
         juce::Label name, level, output;
         Placeholder inserts { "Inserts", 4 }, sends { "Sends", 2 };
         PanKnob pan;
-        juce::Slider fader;
+        LevelFader fader;
         Meter meter;
         juce::TextButton solo { "S" }, mute { "M" };
     };
