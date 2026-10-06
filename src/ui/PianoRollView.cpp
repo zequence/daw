@@ -1951,9 +1951,7 @@ bool PianoRollView::noteInputKey (const juce::KeyPress& key)
         return true;
     }
 
-    if (! inputToggle.getToggleState())
-        return false;
-
+    // The note length and its dots: whenever the editor shows (drawing, double-clicking, note input)
     if (keys::matches ("input.dot", key))       { toggleDots (1); return true; }
     if (keys::matches ("input.doubleDot", key)) { toggleDots (2); return true; }
 
@@ -1963,6 +1961,9 @@ bool PianoRollView::noteInputKey (const juce::KeyPress& key)
             lengthBox.setSelectedId (length, juce::sendNotificationSync);
             return true;
         }
+
+    if (! inputToggle.getToggleState())   // the rest only means something in note input
+        return false;
 
     if (keys::matches ("input.rest", key))
     {

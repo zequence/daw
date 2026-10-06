@@ -19,7 +19,7 @@ struct TimeAxis
     // The grid follows the zoom (no setting): zoomed out it is bars; zooming in, half notes,
     // quarters, eighths... down to 1/256 - the finest whose lines are at least this far apart.
     // The same grid lines are the snap positions, in every timeline view.
-    static constexpr double minGridPixels = 14.0;
+    static constexpr double minGridPixels = 24.0;
 
     juce::int64 gridStep (const TempoMap& map, juce::int64 atTick) const
     {

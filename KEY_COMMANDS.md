@@ -10,8 +10,9 @@ ids shown below. A test fails if a command there is missing from this file.
 
 ## Which command wins
 
-1. **Note input** keys, while the MIDI editor shows and note input is on.
-   The note input toggle (N) works whenever the MIDI editor shows.
+1. **Note length and note input** keys, while the MIDI editor shows: the note
+   lengths and dots (1-9, ., Shift+.) and the note input toggle (N) always; the
+   rest (0) while note input is on.
 2. **Articulation keys** from the selected track's expression map. These are set
    per map in the expression map editor, not here.
 3. **MIDI editor** keys, while the MIDI editor shows.
@@ -79,6 +80,17 @@ A drag that starts on empty space is always a selection rectangle.
 | Copy the selected notes | Ctrl+C | `editor.copy` |
 | Cut the selected notes | Ctrl+X | `editor.cut` |
 | Paste at the transport line | Ctrl+V | `editor.paste` |
+| Note length 1/1 | 1, Numpad 1 | `input.length1` |
+| Note length 1/2 | 2, Numpad 2 | `input.length2` |
+| Note length 1/4 | 3, Numpad 3 | `input.length3` |
+| Note length 1/8 | 4, Numpad 4 | `input.length4` |
+| Note length 1/16 | 5, Numpad 5 | `input.length5` |
+| Note length 1/32 | 6, Numpad 6 | `input.length6` |
+| Note length 1/64 | 7, Numpad 7 | `input.length7` |
+| Note length 1/128 | 8, Numpad 8 | `input.length8` |
+| Note length 1/256 | 9, Numpad 9 | `input.length9` |
+| Dotted note (toggle) | . | `input.dot` |
+| Double-dotted note (toggle) | Shift+. | `input.doubleDot` |
 | Transport line to the previous note start (else the next grid line) | Left | `editor.playheadLeft` |
 | Transport line to the next note end (else the next grid line) | Right | `editor.playheadRight` |
 | Move the selected notes a grid step earlier | Alt+Left | `editor.nudgeLeft` |
@@ -99,21 +111,11 @@ uses the same grid step.
 
 ## Note input
 
-These work while note input is on (the editor's Input button, or N).
+This works while note input is on (the editor's Input button, or N). The note lengths and dots
+(1-9, . and Shift+.) work in the MIDI editor whether note input is on or not.
 
 | Command | Default | Id |
 |---|---|---|
-| Note length 1/1 | 1, Numpad 1 | `input.length1` |
-| Note length 1/2 | 2, Numpad 2 | `input.length2` |
-| Note length 1/4 | 3, Numpad 3 | `input.length3` |
-| Note length 1/8 | 4, Numpad 4 | `input.length4` |
-| Note length 1/16 | 5, Numpad 5 | `input.length5` |
-| Note length 1/32 | 6, Numpad 6 | `input.length6` |
-| Note length 1/64 | 7, Numpad 7 | `input.length7` |
-| Note length 1/128 | 8, Numpad 8 | `input.length8` |
-| Note length 1/256 | 9, Numpad 9 | `input.length9` |
 | Rest (move on by the note length) | 0, Numpad 0 | `input.rest` |
-| Dotted note (toggle) | . | `input.dot` |
-| Double-dotted note (toggle) | Shift+. | `input.doubleDot` |
 
 Choosing a new note length removes the dot.

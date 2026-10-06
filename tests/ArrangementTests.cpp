@@ -201,10 +201,10 @@ public:
             axis.ticksPerPixel = 4 * Q / 10.0;   // a bar is 10 px: bars only
             expectEquals (axis.gridStep (*map, 0), 4 * Q);
 
-            axis.ticksPerPixel = Q / 15.0;       // a quarter is 15 px: quarters
+            axis.ticksPerPixel = Q / 25.0;       // a quarter is 25 px: quarters
             expectEquals (axis.gridStep (*map, 0), Q);
 
-            axis.ticksPerPixel = Q / 60.0;       // a sixteenth is 15 px
+            axis.ticksPerPixel = Q / 100.0;      // a sixteenth is 25 px
             expectEquals (axis.gridStep (*map, 0), Q / 4);
 
             // Snapping: to the nearest line counted from the bar; off = untouched
@@ -216,7 +216,7 @@ public:
             // In 3/4 a half note doesn't fit the bar evenly: the lines count from each bar,
             // and nothing snaps past the next bar line
             const auto waltz = map->withMeterChange (0, 3, 4);
-            axis.ticksPerPixel = 2 * Q / 20.0;   // a half note is 20 px, a quarter 10
+            axis.ticksPerPixel = 2 * Q / 30.0;   // a half note is 30 px, a quarter 15
             expectEquals (axis.gridStep (*waltz, 0), 2 * Q);
             expectEquals (axis.snapToGrid (*waltz, 2 * Q + Q / 2 + 1), 3 * Q);   // the next bar, not 4Q
         }
