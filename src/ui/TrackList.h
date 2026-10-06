@@ -23,6 +23,11 @@ public:
     void setSelectedTrack (AudioEngine::TrackId);
     AudioEngine::TrackId getSelectedTrack() const noexcept { return selectedTrack; }
     const std::set<AudioEngine::TrackId>& getMultiSelection() const noexcept { return multiSelection; }
+
+    // The tracks shown in the MIDI editor (a bar on their right edge; the edited one's wider). Empty = none.
+    void setEditedTracks (std::vector<AudioEngine::TrackId> shown, AudioEngine::TrackId edited);
+    std::vector<AudioEngine::TrackId> editorTracks;
+    AudioEngine::TrackId editorTrack = 0;
     AudioEngine::FolderId getSelectedFolder() const noexcept { return selectedFolder; }
 
     std::function<void (AudioEngine::TrackId)> onSelect, onArm, onShowContextMenu;

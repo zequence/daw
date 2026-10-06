@@ -104,6 +104,17 @@ public:
         // The track color shows as a left border only; uncolored = grey (ISSUES.md)
         g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (trackId), juce::Colour (0xff6d7178)));
         g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
+
+        // Shown in the MIDI editor: a bar on the right edge - wider and brighter for the edited one
+        const auto& shown = owner.editorTracks;
+
+        if (std::find (shown.begin(), shown.end(), trackId) != shown.end())
+        {
+            const auto edited = owner.editorTrack == trackId;
+            const auto width = edited ? 5.0f : 2.5f;
+            g.setColour (theme::colour (theme::Token::channelEdited).withAlpha (edited ? 1.0f : 0.55f));
+            g.fillRect (bounds.getRight() - width - 1.0f, bounds.getY() + 1.0f, width, bounds.getHeight() - 2.0f);
+        }
     }
 
     void resized() override
@@ -112,6 +123,7 @@ public:
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 6).reduced (8, 0);   // past the colour strip
         area = area.withSizeKeepingCentre (area.getWidth(), 20);
 
+        area.removeFromRight (5);   // the editor bar's room
         armButton.setBounds (area.removeFromRight (20));
         area.removeFromRight (6);
         soloButton.setBounds (area.removeFromLeft (20));
@@ -317,6 +329,18 @@ void TrackList::refresh()
             folderRow->refresh();
         }
     }
+}
+
+void TrackList::setEditedTracks (std::vector<AudioEngine::TrackId> shown, AudioEngine::TrackId edited)
+{
+    if (shown == editorTracks && edited == editorTrack)
+        return;
+
+    editorTracks = std::move (shown);
+    editorTrack = edited;
+
+    for (auto& [key, component] : liveRows)
+        component->repaint();
 }
 
 void TrackList::selectFolder (AudioEngine::FolderId folderId)

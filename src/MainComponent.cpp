@@ -1273,6 +1273,13 @@ void MainComponent::timerCallback()
 {
     engine.pollRecording();
 
+
+    // The side list marks the editor's tracks (none when it is closed)
+    if (contentView == ContentView::midiEditor)
+        trackList.setEditedTracks (pianoRollView.getTracks(), pianoRollView.getTrack());
+    else
+        trackList.setEditedTracks ({}, 0);
+
     auto& transport = engine.getTransport();
     playButton.setToggleState (transport.isPlaying(), juce::dontSendNotification);
     playButton.setButtonText (transport.isPlaying() ? "Stop" : "Play");
