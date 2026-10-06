@@ -759,10 +759,21 @@ scanned but filtered out.
   are saved in the project; every change is an undoable history entry; commands
   for all of it in the API (`mixer.*`).
 
+- **Console styles** (added 2026-10-07). The strip is drawn in a console style;
+  SSL first (others later, chosen in the mixer's header). The SSL strip, top to
+  bottom: inserts; EQ after the SSL 4000 E channel (HPF, LPF; HF gain / freq +
+  BELL; HMF gain / freq / Q; LMF gain / freq / Q; LF gain / freq + BELL; EQ IN);
+  dynamics (threshold, ratio, attack, release, make-up; DYN IN); six aux send
+  knobs, one per built-in Aux bus (no bus choosing); pan; fader; solo / mute;
+  output. Small on/off buttons, lit when on. Six Aux bus strips sit between the
+  channels and the master. The EQ, dynamics, aux knobs and Aux buses are
+  placeholders until their phases (they show and turn, nothing more).
+
 Phases, each usable on its own: (1) the strip basics - names, fader, pan, solo,
 mute, meters, master bus, the view and F4 (DONE 2026-10-06; inserts, sends and
 output show as placeholders); (2) output selection and multi-output instruments
-(one strip per USED output pair); (3) aux buses and sends; (4) insert effects.
+(one strip per USED output pair); (3) the six Aux buses and the sends; (4) the EQ and dynamics (the SSL-style
+processing behind the knobs); (5) insert effects.
 Later: the mixer docked under the arrangement like the MIDI editor.
 
 ## Non-linear patching (far field)

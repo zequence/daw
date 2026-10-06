@@ -2,13 +2,16 @@
 
 #include "../AudioEngine.h"
 #include "../engine/AudioChannelProcessor.h"
-#include "ThemedLookAndFeel.h"
+#include "MixerParts.h"
 #include "CloseButton.h"
 
-// The mixer (MILESTONES.md "Audio mixer", phase 1): a strip per audio channel in the sidebar's
-// folder order, the master at the right. Each strip: name (double-click to rename), inserts and
-// sends (placeholders until those phases), pan, fader with a meter (peak and RMS, peak hold, a
-// clip light - click to reset), solo, mute, output (a placeholder: the master for now).
+// The mixer (MILESTONES.md "Audio mixer"), in a console style (SSL first). A strip per audio
+// channel in the sidebar's folder order, then the six Aux buses, the master at the right. A
+// channel strip, top to bottom: name (double-click to rename), inserts, EQ (SSL 4000 E: filters,
+// HF / HMF / LMF / LF, bell switches, EQ in), dynamics (threshold, ratio, attack, release,
+// make-up, in), six aux sends (one per Aux bus), pan, fader with meter, solo / mute, output.
+// Working now: name, pan, fader, meter, solo, mute (and the master). The inserts, EQ, dynamics,
+// aux knobs, the Aux buses and the output are placeholders: they show and turn, nothing more.
 class MixerView final : public juce::Component, private juce::Timer
 {
 public:
@@ -19,12 +22,30 @@ public:
         addAndMakeVisible (title);
         addAndMakeVisible (closeButton);
 
-        viewport.setViewedComponent (&strips, false);
-        viewport.setScrollBarsShown (false, true);
-        addAndMakeVisible (viewport);
+        styleBox.addItem (mixer::ConsoleStyle::ssl().name, 1);
+        styleBox.setSelectedId (1, juce::dontSendNotification);
+        styleBox.setTooltip ("Console style - SSL for now; more styles to come");
+        styleBox.setWantsKeyboardFocus (false);
+        addAndMakeVisible (styleBox);
 
-        master = std::make_unique<Strip> (*this, 0);
-        addAndMakeVisible (*master);
+        // Strips scroll sideways; the whole row scrolls up and down when the window is short
+        outer.setViewedComponent (&body, false);
+        outer.setScrollBarsShown (true, false);
+        addAndMakeVisible (outer);
+
+        channelsViewport.setViewedComponent (&strips, false);
+        channelsViewport.setScrollBarsShown (false, true);
+        body.addAndMakeVisible (channelsViewport);
+
+        for (int aux = 1; aux <= 6; ++aux)
+        {
+            auto strip = std::make_unique<Strip> (*this, Kind::aux, 0, aux);
+            strips.addAndMakeVisible (*strip);
+            auxStrips.push_back (std::move (strip));
+        }
+
+        master = std::make_unique<Strip> (*this, Kind::master, 0, 0);
+        body.addAndMakeVisible (*master);
 
         startTimerHz (30);
     }
@@ -48,265 +69,59 @@ public:
         auto area = getLocalBounds();
         auto header = area.removeFromTop (30).reduced (8, 3);
         closeButton.setBounds (header.removeFromRight (header.getHeight() + 4));
+        header.removeFromRight (8);
+        styleBox.setBounds (header.removeFromRight (90));
         title.setBounds (header);
 
-        master->setBounds (area.removeFromRight (stripWidth + 8).withTrimmedLeft (8).reduced (0, 4));
-        viewport.setBounds (area.reduced (4, 0));
-        layoutStrips();
+        outer.setBounds (area);
+        layoutBody();
     }
 
     void paint (juce::Graphics& g) override
     {
         g.fillAll (theme::colour (theme::Token::surfaceContent));
-        g.setColour (theme::colour (theme::Token::borderSubtle));
-        g.fillRect (master->getX() - 5, master->getY(), 1, master->getHeight());
     }
 
 private:
-    static constexpr int stripWidth = 78;
+    enum class Kind { channel, aux, master };
+    static constexpr int stripWidth = 84, stripHeight = 960;
+
+    const mixer::ConsoleStyle& style() const   { return mixer::ConsoleStyle::ssl(); }
 
     //==========================================================================
-    // A level meter: peak (bright) over RMS (body), a peak-hold line, a clip light (click resets)
-    struct Meter final : juce::Component
+    // A section of a strip: a panel with a legend; its controls are laid out by the strip
+    struct Section final : juce::Component
     {
-        void update (float newPeak, float newRms)
-        {
-            peak = juce::jmax (newPeak, peak * 0.86f);
-            rms = juce::jmax (newRms, rms * 0.9f);
-
-            if (newPeak >= holdLevel)
-            {
-                holdLevel = newPeak;
-                holdTicks = 45;   // ~1.5 s at 30 Hz
-            }
-            else if (--holdTicks <= 0)
-            {
-                holdLevel = juce::jmax (0.0f, holdLevel * 0.9f);
-            }
-
-            clipped = clipped || newPeak >= 1.0f;
-            repaint();
-        }
-
-        static float toFraction (float level)
-        {
-            const auto db = juce::Decibels::gainToDecibels (level, -60.0f);
-            return juce::jlimit (0.0f, 1.0f, (db + 60.0f) / 66.0f);   // -60 .. +6 dB
-        }
+        explicit Section (const juce::String& legendToUse) : legend (legendToUse) {}
 
         void paint (juce::Graphics& g) override
         {
-            auto area = getLocalBounds().toFloat();
-            const auto clip = area.removeFromTop (5.0f);
-            g.setColour (clipped ? juce::Colour (0xffe0403a) : juce::Colour (0xff2a2d33));
-            g.fillRect (clip.reduced (0.0f, 1.0f));
-
-            g.setColour (juce::Colour (0xff15171a));
-            g.fillRect (area);
-
-            const auto barFor = [&area] (float level) { return area.withTop (area.getBottom() - area.getHeight() * toFraction (level)); };
-            g.setColour (juce::Colour (0xff3d8f5a));
-            g.fillRect (barFor (rms));
-            g.setColour (juce::Colour (0xff6fd08f).withAlpha (0.55f));
-            g.fillRect (barFor (peak).withBottom (barFor (rms).getY()));
-
-            if (holdLevel > 0.001f)
-            {
-                g.setColour (holdLevel >= 1.0f ? juce::Colour (0xffe0403a) : juce::Colours::white.withAlpha (0.8f));
-                g.fillRect (area.getX(), barFor (holdLevel).getY(), area.getWidth(), 1.5f);
-            }
+            const auto& style = mixer::ConsoleStyle::ssl();
+            g.setColour (style.section);
+            g.fillRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
+            g.setColour (style.sectionLine);
+            g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 3.0f, 1.0f);
+            g.setColour (style.sectionText);
+            g.setFont (juce::FontOptions (8.5f, juce::Font::bold));
+            g.drawText (legend, getLocalBounds().removeFromTop (12), juce::Justification::centred, false);
         }
 
-        void mouseDown (const juce::MouseEvent&) override   { clipped = false; holdLevel = 0.0f; repaint(); }
-
-        float peak = 0.0f, rms = 0.0f, holdLevel = 0.0f;
-        int holdTicks = 0;
-        bool clipped = false;
-    };
-
-    //==========================================================================
-    // The pan knob: drawn here - a round knob, an arc from the centre to the setting, a pointer -
-    // with its value inside: 0 in the centre, -1 / 1 all the way, two decimals between. The
-    // number is dimmed except while the knob is being changed.
-    struct PanKnob final : juce::Slider
-    {
-        PanKnob() : juce::Slider (juce::Slider::RotaryHorizontalVerticalDrag, juce::Slider::NoTextBox)
-        {
-            setRotaryParameters (juce::MathConstants<float>::pi * 1.25f, juce::MathConstants<float>::pi * 2.75f, true);
-        }
-
-        static juce::String format (double value)
-        {
-            if (std::abs (value) < 0.005)  return "0";
-            if (value >= 0.995)            return "1";
-            if (value <= -0.995)           return "-1";
-            return juce::String (value, 2);
-        }
-
-        void paint (juce::Graphics& g) override
-        {
-            const auto box = getLocalBounds().toFloat().reduced (2.0f);
-            const auto size = juce::jmin (box.getWidth(), box.getHeight());
-            const auto circle = juce::Rectangle<float> (size, size).withCentre (box.getCentre());
-            const auto centre = circle.getCentre();
-            const auto radius = size * 0.5f;
-            const auto params = getRotaryParameters();
-            const auto proportion = (float) valueToProportionOfLength (getValue());
-            const auto angle = params.startAngleRadians + proportion * (params.endAngleRadians - params.startAngleRadians);
-            const auto middle = (params.startAngleRadians + params.endAngleRadians) * 0.5f;
-
-            // The track, and the arc from the centre to the setting
-            juce::Path track, arc;
-            track.addCentredArc (centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f, params.startAngleRadians, params.endAngleRadians, true);
-            g.setColour (juce::Colour (0xff15171a));
-            g.strokePath (track, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
-            if (std::abs (angle - middle) > 0.01f)
-            {
-                arc.addCentredArc (centre.x, centre.y, radius - 1.5f, radius - 1.5f, 0.0f, middle, angle, true);
-                g.setColour (theme::colour (theme::Token::buttonAccentOn));
-                g.strokePath (arc, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-            }
-
-            // The knob: a dark body with a soft light from above
-            const auto body = circle.reduced (5.0f);
-            g.setGradientFill (juce::ColourGradient (juce::Colour (0xff3a3e46), body.getCentreX(), body.getY(),
-                                                     juce::Colour (0xff23262b), body.getCentreX(), body.getBottom(), false));
-            g.fillEllipse (body);
-            g.setColour (juce::Colours::black.withAlpha (0.6f));
-            g.drawEllipse (body, 1.0f);
-
-            // The pointer: easy to see - from the rim inwards, white with a dark outline (clear of the number)
-            const auto inner = body.getWidth() * 0.5f;
-            const auto tip = centre.getPointOnCircumference (inner + 1.0f, angle);
-            const auto base = centre.getPointOnCircumference (inner - 7.0f, angle);
-            juce::Path pointer;
-            pointer.startNewSubPath (base);
-            pointer.lineTo (tip);
-            g.setColour (juce::Colours::black.withAlpha (0.8f));
-            g.strokePath (pointer, juce::PathStrokeType (4.5f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-            g.setColour (juce::Colours::white);
-            g.strokePath (pointer, juce::PathStrokeType (2.6f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
-
-            // The value, dimmed unless it's being changed
-            g.setColour (juce::Colours::white.withAlpha (isMouseButtonDown() ? 0.95f : 0.4f));
-            g.setFont (juce::FontOptions (9.5f, juce::Font::bold));
-            g.drawText (format (getValue()), body.toNearestInt(), juce::Justification::centred, false);
-        }
-
-        void mouseUp (const juce::MouseEvent& event) override   { juce::Slider::mouseUp (event); repaint(); }
-    };
-
-    //==========================================================================
-    // The level fader, in the style of a 70s/80s console: a recessed slot, a printed dB scale,
-    // and a chunky brushed-metal cap with grip ridges and a white index line at the level
-    struct LevelFader final : juce::Slider
-    {
-        LevelFader() : juce::Slider (juce::Slider::LinearVertical, juce::Slider::NoTextBox) {}
-
-        static constexpr float capHeight = 34.0f, capWidth = 26.0f;
-
-        void paint (juce::Graphics& g) override
-        {
-            const auto bounds = getLocalBounds().toFloat();
-            const auto slotX = bounds.getRight() - capWidth * 0.5f - 2.0f;   // the slot sits right, the scale left
-            const auto top = (float) getPositionOfValue (getMaximum());
-            const auto bottom = (float) getPositionOfValue (getMinimum());
-
-            // The scale: ticks and numbers, 0 dB brighter
-            g.setFont (juce::FontOptions (8.5f));
-
-            for (auto [db, text] : std::initializer_list<std::pair<double, const char*>> {
-                     { 6.0, "+6" }, { 0.0, "0" }, { -5.0, "5" }, { -10.0, "10" }, { -20.0, "20" },
-                     { -30.0, "30" }, { -40.0, "40" }, { -60.0, "-" } })
-            {
-                const auto y = (float) getPositionOfValue (db);
-                const auto zero = db == 0.0;
-                g.setColour (juce::Colours::white.withAlpha (zero ? 0.85f : 0.45f));
-                g.fillRect (slotX - capWidth * 0.5f - 5.0f, y - 0.5f, zero ? 6.0f : 4.0f, 1.0f);
-                g.drawText (db <= -60.0 ? juce::String (juce::CharPointer_UTF8 ("\xe2\x88\x9e")) : juce::String (text),
-                            juce::Rectangle<float> (0.0f, y - 6.0f, slotX - capWidth * 0.5f - 6.0f, 12.0f),
-                            juce::Justification::centredRight, false);
-            }
-
-            // The slot: dark and recessed
-            const auto slot = juce::Rectangle<float> (slotX - 2.5f, top, 5.0f, bottom - top);
-            g.setColour (juce::Colour (0xff0b0c0e));
-            g.fillRoundedRectangle (slot, 2.5f);
-            g.setColour (juce::Colours::white.withAlpha (0.08f));
-            g.drawRoundedRectangle (slot.translated (0.0f, 0.5f), 2.5f, 1.0f);
-
-            // The cap, centred on the level
-            const auto y = (float) getPositionOfValue (getValue());
-            const auto cap = juce::Rectangle<float> (capWidth, capHeight).withCentre ({ slotX, y });
-
-            g.setColour (juce::Colours::black.withAlpha (0.45f));   // its shadow on the panel
-            g.fillRoundedRectangle (cap.translated (1.5f, 2.5f), 3.0f);
-
-            juce::ColourGradient metal (juce::Colour (0xffd9dcdf), cap.getX(), cap.getY(),
-                                        juce::Colour (0xff7d8186), cap.getX(), cap.getBottom(), false);
-            metal.addColour (0.48, juce::Colour (0xffb7bbbf));
-            metal.addColour (0.52, juce::Colour (0xff9a9ea3));
-            g.setGradientFill (metal);
-            g.fillRoundedRectangle (cap, 3.0f);
-            g.setColour (juce::Colours::black.withAlpha (0.7f));
-            g.drawRoundedRectangle (cap, 3.0f, 1.0f);
-
-            // Grip ridges above and below the index line
-            for (int i = 1; i <= 4; ++i)
-                for (auto sign : { -1.0f, 1.0f })
-                {
-                    const auto ridgeY = y + sign * (3.0f + (float) i * 3.2f);
-                    g.setColour (juce::Colours::black.withAlpha (0.35f));
-                    g.fillRect (cap.getX() + 3.0f, ridgeY, cap.getWidth() - 6.0f, 1.0f);
-                    g.setColour (juce::Colours::white.withAlpha (0.35f));
-                    g.fillRect (cap.getX() + 3.0f, ridgeY + 1.0f, cap.getWidth() - 6.0f, 0.8f);
-                }
-
-            // The white index line: exactly the level
-            g.setColour (juce::Colours::black.withAlpha (0.6f));
-            g.fillRect (cap.getX() + 1.0f, y - 1.5f, cap.getWidth() - 2.0f, 3.0f);
-            g.setColour (juce::Colours::white);
-            g.fillRect (cap.getX() + 1.0f, y - 0.75f, cap.getWidth() - 2.0f, 1.5f);
-        }
-    };
-
-    //==========================================================================
-    // A grey box with a caption: a part of the strip that isn't built yet
-    struct Placeholder final : juce::Component, juce::SettableTooltipClient
-    {
-        Placeholder (const juce::String& captionToUse, int slotsToUse) : caption (captionToUse), slots (slotsToUse) {}
-
-        void paint (juce::Graphics& g) override
-        {
-            auto area = getLocalBounds().toFloat().reduced (0.5f);
-            g.setColour (juce::Colours::white.withAlpha (0.45f));
-            g.setFont (juce::FontOptions (10.0f));
-            g.drawText (caption, area.removeFromTop (13.0f).toNearestInt(), juce::Justification::centredLeft, false);
-
-            for (int i = 0; i < slots; ++i)
-            {
-                const auto slot = area.removeFromTop (area.getHeight() / (float) (slots - i)).reduced (0.0f, 1.0f);
-                g.setColour (juce::Colour (0xff202328));
-                g.fillRoundedRectangle (slot, theme::corner);
-                g.setColour (juce::Colours::white.withAlpha (0.12f));
-                g.drawRoundedRectangle (slot, theme::corner, 1.0f);
-            }
-        }
-
-        juce::String caption;
-        int slots;
+        juce::String legend;
     };
 
     //==========================================================================
     struct Strip final : juce::Component
     {
-        Strip (MixerView& o, AudioEngine::AudioChannelId id) : owner (o), channelId (id)
+        Strip (MixerView& o, Kind kindToUse, AudioEngine::AudioChannelId id, int auxNumberToUse)
+            : owner (o), kind (kindToUse), channelId (id), auxNumber (auxNumberToUse)
         {
+            const auto& style = owner.style();
+            const auto placeholderTip = juce::String ("Placeholder - not working yet (MILESTONES.md \"Audio mixer\")");
+
             name.setJustificationType (juce::Justification::centred);
             name.setFont (juce::FontOptions (12.0f, juce::Font::bold));
-            name.setEditable (false, channelId != 0);   // double-click renames (not the master)
-            name.setTooltip (channelId != 0 ? "Double-click to rename" : "The master bus");
+            name.setEditable (false, kind == Kind::channel);   // double-click renames a channel
+            name.setTooltip (kind == Kind::channel ? "Double-click to rename" : kind == Kind::master ? "The master bus" : placeholderTip);
             name.onTextChange = [this]
             {
                 owner.engine.setAudioChannelName (channelId, name.getText());
@@ -314,29 +129,109 @@ private:
             };
             addAndMakeVisible (name);
 
-            inserts.setTooltip ("Insert effects - coming (MILESTONES.md \"Audio mixer\", phase 4)");
-            sends.setTooltip ("Aux sends - coming (phase 3)");
+            inserts.setTooltip (placeholderTip);
             addAndMakeVisible (inserts);
 
-            if (channelId != 0)
-                addAndMakeVisible (sends);
+            // --- EQ (SSL 4000 E) and dynamics: placeholders (channels and Aux buses) ---
+            if (kind != Kind::master)
+            {
+                const auto add = [this, &placeholderTip] (mixer::Knob& knob, Section& section, double min, double max,
+                                                          double initial, std::function<juce::String (double)> format)
+                {
+                    knob.setRange (min, max, (max - min) / 200.0);
+                    knob.setValue (initial, juce::dontSendNotification);
+                    knob.setDoubleClickReturnValue (true, initial);
+                    knob.format = std::move (format);
+                    knob.setTooltip (knob.legend + " - " + placeholderTip);
+                    section.addAndMakeVisible (knob);
+                };
 
+                const auto db = [] (double v) { return (v > 0 ? "+" : "") + juce::String (v, 1); };
+                const auto hz = [] (double v) { return v >= 1000.0 ? juce::String (v / 1000.0, 1) + "k" : juce::String (juce::roundToInt (v)); };
+                const auto plain = [] (double v) { return juce::String (v, 1); };
+                const auto ms = [] (double v) { return v < 10.0 ? juce::String (v, 1) : juce::String (juce::roundToInt (v)); };
+
+                add (hpf, eq, 16.0, 350.0, 16.0, hz);       hpf.setSkewFactorFromMidPoint (60.0);
+                add (lpf, eq, 3000.0, 22000.0, 22000.0, hz); lpf.setSkewFactorFromMidPoint (8000.0);
+                add (hfGain, eq, -15.0, 15.0, 0.0, db);
+                add (hfFreq, eq, 1500.0, 16000.0, 8000.0, hz);
+                add (hmfGain, eq, -15.0, 15.0, 0.0, db);
+                add (hmfFreq, eq, 600.0, 7000.0, 2000.0, hz);
+                add (hmfQ, eq, 0.5, 3.0, 1.0, plain);
+                add (lmfGain, eq, -15.0, 15.0, 0.0, db);
+                add (lmfFreq, eq, 200.0, 2000.0, 600.0, hz);
+                add (lmfQ, eq, 0.5, 3.0, 1.0, plain);
+                add (lfGain, eq, -15.0, 15.0, 0.0, db);
+                add (lfFreq, eq, 30.0, 450.0, 100.0, hz);
+
+                add (threshold, dynamics, -40.0, 0.0, 0.0, db);
+                add (ratio, dynamics, 1.0, 20.0, 1.0, [] (double v) { return juce::String (v, 1) + ":1"; });
+                add (attack, dynamics, 0.1, 100.0, 10.0, ms);   attack.setSkewFactorFromMidPoint (10.0);
+                add (release, dynamics, 50.0, 2000.0, 300.0, ms); release.setSkewFactorFromMidPoint (300.0);
+                add (makeup, dynamics, 0.0, 20.0, 0.0, db);
+
+                for (auto* b : { &hfBell, &lfBell, &eqIn })
+                {
+                    b->setTooltip (placeholderTip);
+                    eq.addAndMakeVisible (b);
+                }
+
+                dynamicsIn.setTooltip (placeholderTip);
+                dynamics.addAndMakeVisible (dynamicsIn);
+                addAndMakeVisible (eq);
+                addAndMakeVisible (dynamics);
+            }
+
+            // --- Six aux sends, one per Aux bus (channels only): placeholders ---
+            if (kind == Kind::channel)
+            {
+                for (int i = 0; i < 6; ++i)
+                {
+                    auto knob = std::make_unique<mixer::Knob> ("Aux " + juce::String (i + 1), style.auxCap, false);
+                    knob->setRange (-60.0, 6.0, 0.1);
+                    knob->setValue (-60.0, juce::dontSendNotification);
+                    knob->setSkewFactorFromMidPoint (-12.0);
+                    knob->format = [] (double v) { return v <= -59.9 ? juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e")) : juce::String (v, 1); };
+                    knob->setTooltip ("Send to Aux " + juce::String (i + 1) + " - " + placeholderTip);
+                    aux.addAndMakeVisible (*knob);
+                    auxKnobs.push_back (std::move (knob));
+                }
+
+                addAndMakeVisible (aux);
+            }
+
+            // --- Pan, fader, meter, solo, mute: working on channels and the master ---
             pan.setRange (-1.0, 1.0, 0.01);
             pan.setDoubleClickReturnValue (true, 0.0);
-            pan.setTooltip ("Pan (double-click: centre)");
-            pan.onValueChange = [this] { owner.engine.setAudioChannelPan (channelId, (float) pan.getValue()); };
+            pan.alwaysShowValue = true;
+            pan.format = [] (double v)
+            {
+                if (std::abs (v) < 0.005) return juce::String ("0");
+                if (v >= 0.995)           return juce::String ("1");
+                if (v <= -0.995)          return juce::String ("-1");
+                return juce::String (v, 2);
+            };
+            pan.setTooltip (kind == Kind::aux ? placeholderTip : "Pan (double-click: centre)");
+            pan.onValueChange = [this]
+            {
+                if (kind == Kind::channel)
+                    owner.engine.setAudioChannelPan (channelId, (float) pan.getValue());
+            };
 
-            if (channelId != 0)
+            if (kind != Kind::master)
                 addAndMakeVisible (pan);
 
             fader.setRange (-60.0, 6.0, 0.1);
             fader.setSkewFactorFromMidPoint (-12.0);
             fader.setDoubleClickReturnValue (true, 0.0);
-            fader.setTooltip ("Level (double-click: 0 dB)");
+            fader.setValue (0.0, juce::dontSendNotification);
+            fader.setTooltip (kind == Kind::aux ? placeholderTip : "Level (double-click: 0 dB)");
             fader.onValueChange = [this]
             {
                 if (auto* p = processor())
                     p->setGain (fader.getValue() <= -59.9 ? 0.0f : juce::Decibels::decibelsToGain ((float) fader.getValue()));
+
+                updateLevelText();
             };
             addAndMakeVisible (fader);
             addAndMakeVisible (meter);
@@ -355,16 +250,20 @@ private:
 
             theme::setButtonRole (solo, "solo");
             theme::setButtonRole (mute, "mute");
-            solo.setVisible (channelId != 0);
-            solo.onClick = [this] { owner.engine.setAudioChannelSoloed (channelId, solo.getToggleState()); };
+            solo.setVisible (kind != Kind::master);
+            solo.onClick = [this]
+            {
+                if (kind == Kind::channel)
+                    owner.engine.setAudioChannelSoloed (channelId, solo.getToggleState());
+            };
             mute.onClick = [this]
             {
                 if (auto* p = processor())
                     p->setMuted (mute.getToggleState());
             };
 
-            output.setTooltip ("Output selection - coming (phase 2); every channel goes to the master for now");
-            output.setText (channelId != 0 ? juce::String::fromUTF8 ("\xe2\x86\x92 Master") : juce::String ("Device out"),
+            output.setTooltip (kind == Kind::master ? "The audio device" : placeholderTip);
+            output.setText (kind == Kind::master ? juce::String ("Device out") : juce::String::fromUTF8 ("\xe2\x86\x92 Master"),
                             juce::dontSendNotification);
             output.setJustificationType (juce::Justification::centred);
             output.setFont (juce::FontOptions (10.5f));
@@ -374,18 +273,32 @@ private:
 
             refreshName();
             syncControls();
+            updateLevelText();
         }
 
+        // The engine's strip (none for the Aux buses yet)
         AudioChannelProcessor* processor() const
         {
-            return channelId == 0 ? owner.engine.getMasterChannel() : owner.engine.getAudioChannel (channelId);
+            if (kind == Kind::master)  return owner.engine.getMasterChannel();
+            if (kind == Kind::channel) return owner.engine.getAudioChannel (channelId);
+            return nullptr;
         }
 
         void refreshName()
         {
-            if (! name.isBeingEdited())
-                name.setText (channelId == 0 ? juce::String ("Master") : owner.engine.getAudioChannelName (channelId),
-                              juce::dontSendNotification);
+            if (name.isBeingEdited())
+                return;
+
+            name.setText (kind == Kind::master ? juce::String ("Master")
+                            : kind == Kind::aux ? "Aux " + juce::String (auxNumber)
+                                                : owner.engine.getAudioChannelName (channelId),
+                          juce::dontSendNotification);
+        }
+
+        void updateLevelText()
+        {
+            level.setText (fader.getValue() <= -59.9 ? juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e")) : juce::String (fader.getValue(), 1),
+                           juce::dontSendNotification);
         }
 
         // The controls follow the engine (an API change, undo) - not while being dragged
@@ -401,12 +314,10 @@ private:
                     pan.setValue (p->getPan(), juce::dontSendNotification);
 
                 mute.setToggleState (p->isMuted(), juce::dontSendNotification);
-                level.setText (fader.getValue() <= -59.9 ? juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e"))
-                                                         : juce::String (fader.getValue(), 1),
-                               juce::dontSendNotification);
+                updateLevelText();
             }
 
-            if (channelId != 0)
+            if (kind == Kind::channel)
                 solo.setToggleState (owner.engine.isAudioChannelSoloed (channelId), juce::dontSendNotification);
         }
 
@@ -418,23 +329,80 @@ private:
 
         void paint (juce::Graphics& g) override
         {
-            const auto isHighlighted = channelId != 0 && channelId == owner.highlighted;
-            g.setColour (isHighlighted ? theme::colour (theme::Token::channelSelectedBg) : theme::colour (theme::Token::channelBg));
-            g.fillRoundedRectangle (getLocalBounds().toFloat(), theme::corner);
+            const auto isHighlighted = kind == Kind::channel && channelId == owner.highlighted;
+            g.setColour (isHighlighted ? owner.style().panel.brighter (0.25f) : owner.style().panel);
+            g.fillRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
+
+            if (kind != Kind::channel)   // Aux and master: a coloured band under the name
+            {
+                g.setColour (kind == Kind::master ? juce::Colour (0xffc23b33) : owner.style().auxCap);
+                g.fillRect (getLocalBounds().reduced (4, 0).withTop (27).withHeight (2));
+            }
         }
 
         void resized() override
         {
             auto area = getLocalBounds().reduced (4);
             name.setBounds (area.removeFromTop (22));
-            area.removeFromTop (4);
-            inserts.setBounds (area.removeFromTop (78));
-            area.removeFromTop (4);
+            area.removeFromTop (5);
+            inserts.setBounds (area.removeFromTop (76));
+            area.removeFromTop (5);
 
-            if (channelId != 0)
-                sends.setBounds (area.removeFromTop (48));
+            // Two knobs side by side per row
+            const auto row = [] (juce::Rectangle<int>& inside, int height, juce::Component* left, juce::Component* right)
+            {
+                auto line = inside.removeFromTop (height);
 
-            area.removeFromTop (4);
+                if (right == nullptr)
+                {
+                    left->setBounds (line.withSizeKeepingCentre (line.getWidth() / 2, height));
+                    return;
+                }
+
+                left->setBounds (line.removeFromLeft (line.getWidth() / 2));
+                right->setBounds (line);
+            };
+            constexpr int knobRow = 34, buttonRow = 15;
+
+            if (kind != Kind::master)
+            {
+                auto e = area.removeFromTop (12 + 6 * knobRow + knobRow + 3 * buttonRow + 8);
+                eq.setBounds (e);
+                auto inside = eq.getLocalBounds().reduced (2).withTrimmedTop (12);
+                row (inside, knobRow, &hpf, &lpf);
+                row (inside, knobRow, &hfGain, &hfFreq);
+                hfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (40, buttonRow - 2));
+                row (inside, knobRow, &hmfGain, &hmfFreq);
+                row (inside, knobRow, &hmfQ, nullptr);
+                row (inside, knobRow, &lmfGain, &lmfFreq);
+                row (inside, knobRow, &lmfQ, nullptr);
+                row (inside, knobRow, &lfGain, &lfFreq);
+                lfBell.setBounds (inside.removeFromTop (buttonRow).withSizeKeepingCentre (40, buttonRow - 2));
+                eqIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (40, buttonRow - 1));
+                area.removeFromTop (5);
+
+                auto d = area.removeFromTop (12 + 3 * knobRow + buttonRow + 6);
+                dynamics.setBounds (d);
+                inside = dynamics.getLocalBounds().reduced (2).withTrimmedTop (12);
+                row (inside, knobRow, &threshold, &ratio);
+                row (inside, knobRow, &attack, &release);
+                row (inside, knobRow, &makeup, nullptr);
+                dynamicsIn.setBounds (inside.removeFromTop (buttonRow + 2).withSizeKeepingCentre (40, buttonRow - 1));
+                area.removeFromTop (5);
+            }
+
+            if (kind == Kind::channel)
+            {
+                auto a = area.removeFromTop (12 + 3 * knobRow + 4);
+                aux.setBounds (a);
+                auto inside = aux.getLocalBounds().reduced (2).withTrimmedTop (12);
+
+                for (size_t i = 0; i + 1 < auxKnobs.size(); i += 2)
+                    row (inside, knobRow, auxKnobs[i].get(), auxKnobs[i + 1].get());
+
+                area.removeFromTop (5);
+            }
+
             output.setBounds (area.removeFromBottom (20));
             area.removeFromBottom (4);
             auto buttons = area.removeFromBottom (22);
@@ -443,8 +411,8 @@ private:
             area.removeFromBottom (4);
             level.setBounds (area.removeFromBottom (16));
 
-            if (channelId != 0)
-                pan.setBounds (area.removeFromTop (40).withSizeKeepingCentre (40, 40));
+            if (kind != Kind::master)
+                pan.setBounds (area.removeFromTop (44).withSizeKeepingCentre (44, 44));
 
             auto faderArea = area.reduced (0, 2);
             meter.setBounds (faderArea.removeFromRight (12));
@@ -453,12 +421,30 @@ private:
         }
 
         MixerView& owner;
-        const AudioEngine::AudioChannelId channelId;   // 0 = the master
+        const Kind kind;
+        const AudioEngine::AudioChannelId channelId;   // channels
+        const int auxNumber;                           // Aux buses: 1-6
         juce::Label name, level, output;
-        Placeholder inserts { "Inserts", 4 }, sends { "Sends", 2 };
-        PanKnob pan;
-        LevelFader fader;
-        Meter meter;
+        mixer::Placeholder inserts { "Inserts", 4 };
+
+        Section eq { "EQ" }, dynamics { "DYNAMICS" }, aux { "AUX" };
+        mixer::Knob hpf { "HPF", owner.style().filterCap, false }, lpf { "LPF", owner.style().filterCap, false },
+                    hfGain { "HF dB", owner.style().hfCap, true }, hfFreq { "HF kHz", owner.style().hfCap, false },
+                    hmfGain { "HMF dB", owner.style().hmfCap, true }, hmfFreq { "HMF kHz", owner.style().hmfCap, false },
+                    hmfQ { "HMF Q", owner.style().hmfCap, false },
+                    lmfGain { "LMF dB", owner.style().lmfCap, true }, lmfFreq { "LMF kHz", owner.style().lmfCap, false },
+                    lmfQ { "LMF Q", owner.style().lmfCap, false },
+                    lfGain { "LF dB", owner.style().lfCap, true }, lfFreq { "LF Hz", owner.style().lfCap, false },
+                    threshold { "THRESH", owner.style().dynamicsCap, false }, ratio { "RATIO", owner.style().dynamicsCap, false },
+                    attack { "ATTACK", owner.style().dynamicsCap, false }, release { "RELEASE", owner.style().dynamicsCap, false },
+                    makeup { "MAKE-UP", owner.style().dynamicsCap, false };
+        mixer::LitButton hfBell { "BELL", owner.style().bellLit }, lfBell { "BELL", owner.style().bellLit },
+                         eqIn { "EQ IN", owner.style().eqLit }, dynamicsIn { "DYN IN", owner.style().dynamicsLit };
+        std::vector<std::unique_ptr<mixer::Knob>> auxKnobs;
+
+        mixer::Knob pan { {}, owner.style().panCap, true };
+        mixer::LevelFader fader;
+        mixer::Meter meter;
         juce::TextButton solo { "S" }, mute { "M" };
     };
 
@@ -479,22 +465,23 @@ private:
 
             for (auto id : ids)
             {
-                auto strip = std::make_unique<Strip> (*this, id);
+                auto strip = std::make_unique<Strip> (*this, Kind::channel, id, 0);
                 strips.addAndMakeVisible (*strip);
                 channelStrips.push_back (std::move (strip));
             }
 
-            layoutStrips();
+            layoutBody();
         }
 
         const auto revisionChanged = engine.getStateRevision() != lastRevision;
         lastRevision = engine.getStateRevision();
+        const auto sync = revisionChanged || ++syncCounter % 8 == 0;
 
         for (auto& strip : channelStrips)
         {
             strip->tick();
 
-            if (revisionChanged || ++syncCounter % 8 == 0)
+            if (sync)
             {
                 strip->syncControls();
                 strip->refreshName();
@@ -505,20 +492,36 @@ private:
         master->syncControls();
     }
 
-    void layoutStrips()
+    // The row: channels and Aux buses scrolling sideways, the master fixed at the right; the
+    // whole row scrolls up and down when the view is shorter than a strip
+    void layoutBody()
     {
-        const auto height = juce::jmax (300, viewport.getMaximumVisibleHeight());
-        strips.setSize ((int) channelStrips.size() * (stripWidth + 4) + 4, height);
+        const auto visibleHeight = outer.getMaximumVisibleHeight();
+        const auto height = juce::jmax (stripHeight, visibleHeight);
+        const auto width = outer.getMaximumVisibleWidth();
+        body.setSize (width, height);
 
-        for (size_t i = 0; i < channelStrips.size(); ++i)
-            channelStrips[i]->setBounds (4 + (int) i * (stripWidth + 4), 4, stripWidth, height - 8);
+        master->setBounds (width - stripWidth - 8, 4, stripWidth, height - 8);
+        channelsViewport.setBounds (4, 0, width - stripWidth - 20, height);
+
+        const auto stripsHeight = height - (channelsViewport.isHorizontalScrollBarShown() ? 12 : 0);
+        const auto gap = 14;   // between the channels and the Aux buses
+        const auto count = (int) channelStrips.size();
+        strips.setSize (count * (stripWidth + 4) + gap + 6 * (stripWidth + 4) + 4, stripsHeight);
+
+        for (int i = 0; i < count; ++i)
+            channelStrips[(size_t) i]->setBounds (4 + i * (stripWidth + 4), 4, stripWidth, stripsHeight - 8);
+
+        for (int i = 0; i < (int) auxStrips.size(); ++i)
+            auxStrips[(size_t) i]->setBounds (4 + count * (stripWidth + 4) + gap + i * (stripWidth + 4), 4, stripWidth, stripsHeight - 8);
     }
 
     AudioEngine& engine;
     juce::Label title;
-    juce::Viewport viewport;
-    juce::Component strips;
-    std::vector<std::unique_ptr<Strip>> channelStrips;
+    juce::ComboBox styleBox;
+    juce::Viewport outer, channelsViewport;
+    juce::Component body, strips;
+    std::vector<std::unique_ptr<Strip>> channelStrips, auxStrips;
     std::unique_ptr<Strip> master;
     std::vector<AudioEngine::AudioChannelId> shownIds;
     AudioEngine::AudioChannelId highlighted = 0;
