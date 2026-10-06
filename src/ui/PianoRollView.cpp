@@ -220,9 +220,20 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     };
     addAndMakeVisible (redoButton);
 
-    trackLabel.setJustificationType (juce::Justification::centredRight);
-    trackLabel.setColour (juce::Label::textColourId, juce::Colours::lightgrey);
-    addAndMakeVisible (trackLabel);
+    editTargetBox.setTooltip ("What is edited: the track - and where its regions overlap, which clip (the others are dimmed)");
+    editTargetBox.setWantsKeyboardFocus (false);
+    editTargetBox.onChange = [this]
+    {
+        const auto index = editTargetBox.getSelectedId() - 1;
+
+        if (index >= 0 && index < (int) targetRegions.size())
+        {
+            activeRegion = targetRegions[(size_t) index];
+            selection.clear();
+            repaint();
+        }
+    };
+    addAndMakeVisible (editTargetBox);
 
     for (auto* c : std::initializer_list<juce::Component*> { &auditionToggle, &inputToggle, &snapBox,
                                                              &lengthBox, &dotButton, &laneBox, &quantizeButton, &undoButton,
@@ -296,8 +307,8 @@ void PianoRollView::setTrack (AudioEngine::TrackId id)
     {
         trackId = id;
         selection.clear();
-        activeRegion = -1;   // another track: its own regions (the tabs follow)
-        tabRegions.clear();
+        activeRegion = -1;   // another track: its own regions (the dropdown follows)
+        targetRegions.clear();
         newNoteArticulation = {};   // another track, maybe another map
         articulationKey.clear();
         drag = Drag::none;
@@ -317,7 +328,7 @@ void PianoRollView::setTrack (AudioEngine::TrackId id)
         }
     }
 
-    trackLabel.setText (engine.getTrackName (trackId), juce::dontSendNotification);
+    rebuildEditTargets();
     repaint();
 }
 
@@ -1440,62 +1451,48 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
 }
 
 //==============================================================================
-// One tab per region that overlaps another ("Bar N" where it starts), plus "All"
-void PianoRollView::rebuildRegionTabs()
+// The dropdown: the track's name, or with overlapping regions one entry per region ("clip-N" in
+// order of start). The earliest is edited unless another is chosen.
+void PianoRollView::rebuildEditTargets()
 {
     std::vector<int> regions;
-    std::vector<juce::String> names;
     const auto seq = sequence();
-    const auto map = engine.getTransport().getTempoMap();
+    const auto name = engine.getTrackName (trackId);
 
     if (seq != nullptr)
-        for (auto& block : computePhraseBlocks (*seq, *map))
+        for (auto& block : computePhraseBlocks (*seq, *engine.getTransport().getTempoMap()))
             if (block.layers > 1 && std::find (regions.begin(), regions.end(), block.region) == regions.end())
-            {
                 regions.push_back (block.region);
-                names.push_back ("Bar " + juce::String (map->ticksToBarsBeats (block.startTick).bar));
-            }
 
-    if (regions == tabRegions)
+    if (regions == targetRegions && name == targetTrackName && editTargetBox.getNumItems() > 0)
         return;
 
-    tabRegions = regions;
+    targetRegions = regions;
+    targetTrackName = name;
 
-    if (std::find (regions.begin(), regions.end(), activeRegion) == regions.end())
-        activeRegion = -1;   // its region was glued or moved away
+    if (regions.empty())
+        activeRegion = -1;
+    else if (std::find (regions.begin(), regions.end(), activeRegion) == regions.end())
+        activeRegion = regions.front();   // the earlier clip
 
-    regionTabs.clear();
+    editTargetBox.clear (juce::dontSendNotification);
 
-    if (! regions.empty())
+    if (regions.empty())
     {
-        const auto addTab = [this] (const juce::String& name, int region)
-        {
-            auto tab = std::make_unique<juce::TextButton> (name);
-            tab->setClickingTogglesState (true);
-            tab->setRadioGroupId (0x5e610);
-            tab->setConnectedEdges (juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);
-            tab->setWantsKeyboardFocus (false);
-            tab->setToggleState (region == activeRegion, juce::dontSendNotification);
-            theme::setButtonRole (*tab, "accent");
-            tab->setTooltip (region < 0 ? juce::String ("All the overlapping regions")
-                                        : "Edit only this region; the others are dimmed. New notes go into it.");
-            tab->onClick = [this, region]
-            {
-                activeRegion = region;
-                selection.clear();
-                repaint();
-            };
-            addAndMakeVisible (*tab);
-            regionTabs.push_back (std::move (tab));
-        };
-
-        addTab ("All", -1);
-
+        editTargetBox.addItem (name, 1);
+        editTargetBox.setSelectedId (1, juce::dontSendNotification);
+    }
+    else
+    {
         for (size_t i = 0; i < regions.size(); ++i)
-            addTab (names[i], regions[i]);
+            editTargetBox.addItem (name + ", clip-" + juce::String ((int) i + 1), (int) i + 1);
+
+        const auto chosen = std::find (regions.begin(), regions.end(), activeRegion) - regions.begin();
+        editTargetBox.setSelectedId ((int) chosen + 1, juce::dontSendNotification);
     }
 
-    resized();
+    selection.clear();
+    repaint();
 }
 
 void PianoRollView::timerCallback()
@@ -1505,7 +1502,7 @@ void PianoRollView::timerCallback()
     if (seq != lastSeen)
     {
         lastSeen = seq;
-        rebuildRegionTabs();
+        rebuildEditTargets();
 
         // Drop selection indices that no longer exist
         const auto noteCount = seq != nullptr ? (int) seq->getNotes().size() : 0;
@@ -1528,6 +1525,7 @@ void PianoRollView::timerCallback()
         lastPlayheadTick = playhead;
         lastAxisRevision = axis.revision;
         lastEngineRevision = engine.getStateRevision();
+        rebuildEditTargets();
         repaint();
     }
 }
@@ -1561,14 +1559,7 @@ void PianoRollView::resized()
     colourBox.setBounds (toolbar.removeFromLeft (150));
     toolbar.removeFromLeft (10);
 
-    // The region tabs (only while regions overlap), right of the tools
-    for (auto it = regionTabs.rbegin(); it != regionTabs.rend(); ++it)
-    {
-        (*it)->setBounds (toolbar.removeFromRight (juce::jmin (72, (*it)->getBestWidthForHeight (toolbar.getHeight()) + 16)));
-        toolbar.removeFromRight (2);
-    }
-
-    trackLabel.setBounds (toolbar);
+    editTargetBox.setBounds (toolbar.removeFromRight (juce::jmin (240, juce::jmax (120, toolbar.getWidth()))));
 }
 
 void PianoRollView::paint (juce::Graphics& g)

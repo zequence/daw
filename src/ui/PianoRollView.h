@@ -171,12 +171,14 @@ private:
     juce::int64 chordTick = -1;            // where the current chord is written (-1: none yet)
     double chordStartMs = 0.0;             // when its first note arrived
 
-    // Overlapping regions (the arrangement): tabs switch between them. Another region's notes
-    // are dimmed and can't be picked; new notes go into the chosen one. -1 = all regions.
+    // What is edited (the dropdown in the toolbar): the track, and where its regions overlap, one
+    // of them ("clip-N", the earliest by default). Another region's notes are dimmed and can't be
+    // picked; new notes go into the chosen one. -1 = all (no overlaps). Later also several tracks.
     int activeRegion = -1;
-    std::vector<int> tabRegions;
-    std::vector<std::unique_ptr<juce::TextButton>> regionTabs;
-    void rebuildRegionTabs();
+    std::vector<int> targetRegions;
+    juce::String targetTrackName;
+    juce::ComboBox editTargetBox;
+    void rebuildEditTargets();
     bool isEditable (const MidiSequence::Note& note) const   { return activeRegion < 0 || note.region == activeRegion; }
 
     // Undo/redo of a note written by note input also puts the transport line back: each
@@ -193,7 +195,6 @@ private:
     std::optional<ExpressionMap> cachedMap;         // the track's map for painting, refreshed when the engine changes
     AudioEngine::TrackId cachedMapTrack = -1;
     int cachedMapRevision = -1;
-    juce::Label trackLabel;
     std::vector<int> lastCcList;           // CCs currently offered by laneBox
 
     static constexpr int keysWidth = TimeAxis::gutter, laneHeight = 80, toolbarHeight = 30;
