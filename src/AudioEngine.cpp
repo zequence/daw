@@ -1265,11 +1265,16 @@ void AudioEngine::setTrackSequence (TrackId id, MidiSequence::Ptr sequence)
         constexpr size_t maxHistory = 200;
 
         track->undoStack.push_back (track->sequence);
+        track->undoGroups.push_back (currentUndoGroup);
 
         if (track->undoStack.size() > maxHistory)
+        {
             track->undoStack.erase (track->undoStack.begin());
+            track->undoGroups.erase (track->undoGroups.begin());
+        }
 
         track->redoStack.clear();
+        track->redoGroups.clear();
 
         juce::Logger::writeToLog ("Track " + juce::String (id)
                                   + (sequence != nullptr ? ": sequence set (" + juce::String ((int) sequence->getNotes().size()) + " notes)"
@@ -1279,6 +1284,34 @@ void AudioEngine::setTrackSequence (TrackId id, MidiSequence::Ptr sequence)
     }
 }
 
+bool AudioEngine::undoOne (Track& track, TrackId id)
+{
+    if (track.undoStack.empty())
+        return false;
+
+    track.redoStack.push_back (track.sequence);
+    track.redoGroups.push_back (track.undoGroups.back());
+    applySequence (track, track.undoStack.back());
+    track.undoStack.pop_back();
+    track.undoGroups.pop_back();
+    emitClipChanged (id);
+    return true;
+}
+
+bool AudioEngine::redoOne (Track& track, TrackId id)
+{
+    if (track.redoStack.empty())
+        return false;
+
+    track.undoStack.push_back (track.sequence);
+    track.undoGroups.push_back (track.redoGroups.back());
+    applySequence (track, track.redoStack.back());
+    track.redoStack.pop_back();
+    track.redoGroups.pop_back();
+    emitClipChanged (id);
+    return true;
+}
+
 bool AudioEngine::undoTrackSequence (TrackId id)
 {
     auto* track = findTrack (id);
@@ -1286,11 +1319,18 @@ bool AudioEngine::undoTrackSequence (TrackId id)
     if (track == nullptr || track->undoStack.empty())
         return false;
 
-    track->redoStack.push_back (track->sequence);
-    applySequence (*track, track->undoStack.back());
-    track->undoStack.pop_back();
-    emitClipChanged (id);
-    return true;
+    // Part of a multi-track edit: undo it on every track where it is the latest edit
+    if (const auto group = track->undoGroups.back(); group != 0)
+    {
+        for (auto otherId : getTrackIds())
+            if (auto* other = findTrack (otherId); other != nullptr && ! other->undoGroups.empty()
+                                                    && other->undoGroups.back() == group)
+                undoOne (*other, otherId);
+
+        return true;
+    }
+
+    return undoOne (*track, id);
 }
 
 bool AudioEngine::redoTrackSequence (TrackId id)
@@ -1300,11 +1340,17 @@ bool AudioEngine::redoTrackSequence (TrackId id)
     if (track == nullptr || track->redoStack.empty())
         return false;
 
-    track->undoStack.push_back (track->sequence);
-    applySequence (*track, track->redoStack.back());
-    track->redoStack.pop_back();
-    emitClipChanged (id);
-    return true;
+    if (const auto group = track->redoGroups.back(); group != 0)
+    {
+        for (auto otherId : getTrackIds())
+            if (auto* other = findTrack (otherId); other != nullptr && ! other->redoGroups.empty()
+                                                    && other->redoGroups.back() == group)
+                redoOne (*other, otherId);
+
+        return true;
+    }
+
+    return redoOne (*track, id);
 }
 
 bool AudioEngine::canUndoClip (TrackId id) const
@@ -2581,6 +2627,8 @@ void AudioEngine::restoreProjectTracks (const juce::XmlElement& root, const std:
     {
         track.undoStack.clear();
         track.redoStack.clear();
+        track.undoGroups.clear();
+        track.redoGroups.clear();
     }
 }
 

@@ -183,8 +183,20 @@ public:
     void addToTrackSequence (TrackId, std::vector<MidiSequence::Note>, std::vector<MidiSequence::Control>);
 
     // Per-track clip history. Sequences are immutable, so history is a stack of pointers.
-    bool undoTrackSequence (TrackId);
+    bool undoTrackSequence (TrackId);   // an edit spanning several tracks is undone on all of them
     bool redoTrackSequence (TrackId);
+
+    // Clip edits made between these belong together (e.g. regions moved to other tracks):
+    // undoing it on any of its tracks undoes it on all of them
+    void beginUndoGroup()   { currentUndoGroup = ++lastUndoGroup; }
+    void endUndoGroup()     { currentUndoGroup = 0; }
+
+    struct ScopedUndoGroup
+    {
+        explicit ScopedUndoGroup (AudioEngine& e) : engine (e) { engine.beginUndoGroup(); }
+        ~ScopedUndoGroup()                                     { engine.endUndoGroup(); }
+        AudioEngine& engine;
+    };
     bool canUndoClip (TrackId) const;
     bool canRedoClip (TrackId) const;
 
@@ -483,6 +495,7 @@ private:
         juce::String name;
         MidiSequence::Ptr sequence;                 // message-thread copy, for UI queries
         std::vector<MidiSequence::Ptr> undoStack, redoStack;
+        std::vector<int> undoGroups, redoGroups;    // per entry: the multi-track edit it belongs to (0 = none)
         std::vector<Output> outputs;
         bool muted = false, soloed = false;
         bool recordReplace = false;                 // false = add, true = replace on first input
@@ -599,7 +612,10 @@ private:
     int graphBatchDepth = 0;        // > 0: graph edits defer their rebuild (see updateKind)
     BusyStatus busyStatus;
     juce::AudioProcessorGraph::UpdateKind updateKind() const noexcept;
-    bool historySuppress = false;   // mute event emission while applying a snapshot
+    bool historySuppress = false;
+    int currentUndoGroup = 0, lastUndoGroup = 0;
+    bool undoOne (Track&, TrackId);
+    bool redoOne (Track&, TrackId);   // mute event emission while applying a snapshot
 
     std::map<TrackId, Track> tracks;
     std::map<InstrumentId, Instrument> instruments;

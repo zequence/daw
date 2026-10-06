@@ -174,10 +174,10 @@ void ArrangementView::mouseDrag (const juce::MouseEvent& event)
                                   : juce::jmax ((juce::int64) 0, dragging.startTick + rawDelta);
     dragDeltaTicks = target - dragging.startTick;
 
-    // Up/down (a single block): to the track under the mouse (folders and empty space keep the last one)
+    // Up/down: to the track under the mouse (folders and empty space keep the last one)
     const auto items = itemsNow();
 
-    if (const auto index = itemIndexAt (items, event.y); selection.size() == 1 && index >= 0 && items[(size_t) index].member != 0)
+    if (const auto index = itemIndexAt (items, event.y); index >= 0 && items[(size_t) index].member != 0)
         dragTargetTrack = items[(size_t) index].member;
 
     repaint();
@@ -256,12 +256,53 @@ void ArrangementView::mouseUp (const juce::MouseEvent& event)
     repaint();
 }
 
-// Moves (or copies) every selected block by the drag; a single block may also change track.
+std::map<AudioEngine::TrackId, AudioEngine::TrackId> ArrangementView::trackShift (const Items& items) const
+{
+    std::vector<AudioEngine::TrackId> order;   // the tracks top to bottom (folders skipped)
+
+    for (auto& item : items)
+        if (item.member != 0)
+            order.push_back (item.member);
+
+    const auto indexOf = [&order] (AudioEngine::TrackId id)
+    {
+        return (int) (std::find (order.begin(), order.end(), id) - order.begin());
+    };
+
+    const auto anchor = indexOf (dragging.trackId), target = indexOf (dragTargetTrack);
+
+    if (! dragging.valid() || anchor >= (int) order.size() || target >= (int) order.size())
+        return {};
+
+    int lowest = (int) order.size(), highest = -1;
+
+    for (auto& block : selection)
+    {
+        const auto index = indexOf (block.trackId);
+
+        if (index >= (int) order.size())
+            return {};
+
+        lowest = juce::jmin (lowest, index);
+        highest = juce::jmax (highest, index);
+    }
+
+    const auto shift = juce::jlimit (-lowest, (int) order.size() - 1 - highest, target - anchor);
+    std::map<AudioEngine::TrackId, AudioEngine::TrackId> result;
+
+    for (auto& block : selection)
+        result[block.trackId] = order[(size_t) (indexOf (block.trackId) + shift)];
+
+    return result;
+}
+
+// Moves (or copies) every selected block by the drag, in time and up/down across tracks
 void ArrangementView::moveSelection()
 {
-    const auto toTrack = selection.size() == 1 && dragTargetTrack != 0 ? dragTargetTrack : 0;
+    const auto shift = trackShift (itemsNow());
+    const auto changesTrack = std::any_of (shift.begin(), shift.end(), [] (const auto& entry) { return entry.first != entry.second; });
 
-    if (dragDeltaTicks == 0 && (toTrack == 0 || toTrack == selection.front().trackId))
+    if (dragDeltaTicks == 0 && ! changesTrack)
         return;
 
     juce::Array<juce::var> moves;
@@ -270,7 +311,8 @@ void ArrangementView::moveSelection()
     for (auto& block : selection)
     {
         const auto destStart = juce::jmax ((juce::int64) 0, block.startTick + dragDeltaTicks);
-        const auto destTrack = toTrack != 0 ? toTrack : block.trackId;
+        const auto it = shift.find (block.trackId);
+        const auto destTrack = it != shift.end() ? it->second : block.trackId;
 
         auto move = juce::DynamicObject::Ptr (new juce::DynamicObject());
         move->setProperty ("trackId", block.trackId);
@@ -484,12 +526,15 @@ void ArrangementView::paint (juce::Graphics& g)
 
     // --- Phrase blocks ---
     {
-        // A block dragged up/down is drawn in the target track's lane
-        int targetLaneTop = 0;
+        // Blocks dragged up/down are drawn in their destination tracks' lanes
+        std::map<AudioEngine::TrackId, int> laneTops;
 
         for (size_t i = 0; i < items.size(); ++i)
-            if (items[i].member != 0 && items[i].member == dragTargetTrack)
-                targetLaneTop = rowTop (items, i);
+            if (items[i].member != 0)
+                laneTops[items[i].member] = rowTop (items, i);
+
+        const auto shift = dragging.valid() && didDrag ? trackShift (items)
+                                                       : std::map<AudioEngine::TrackId, AudioEngine::TrackId>();
 
         int y = -vscroll.y;
 
@@ -523,7 +568,8 @@ void ArrangementView::paint (juce::Graphics& g)
                     ref.endTick += dragDeltaTicks;
                 }
 
-                const auto rect = blockRect (ref, isDragged && selection.size() == 1 && dragTargetTrack != 0 ? targetLaneTop : y);
+                const auto shifted = isDragged ? shift.find (trackId) : shift.end();
+                const auto rect = blockRect (ref, shifted != shift.end() ? laneTops[shifted->second] : y);
 
                 if (rect.getRight() < TimeAxis::gutter || rect.getX() > getWidth())
                     continue;

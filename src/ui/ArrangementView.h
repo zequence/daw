@@ -93,6 +93,10 @@ private:
     std::vector<BlockRef> blocksTouching (juce::Rectangle<int>);
     void moveSelection();
 
+    // Up/down moves keep the selection's shape: every block shifts by the same number of
+    // tracks as the pressed one (limited so none falls off the list). Empty = no move.
+    std::map<AudioEngine::TrackId, AudioEngine::TrackId> trackShift (const Items&) const;
+
     std::vector<BlockRef> selection;
     BlockRef dragging;                     // the pressed block of a move (its snap and its track lead)
     bool marquee = false, marqueeAdds = false;

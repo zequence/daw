@@ -890,6 +890,7 @@ void CommandDispatcher::registerCommands()
                 if (std::find (ids.begin(), ids.end(), (AudioEngine::TrackId) destTrack) == ids.end())
                     return respond (fail ("unknown destTrackId " + juce::String (destTrack)));
 
+                AudioEngine::ScopedUndoGroup group (engine);   // one undo on either track restores both
                 const auto inRange = [start, end] (juce::int64 tick) { return tick >= start && tick < end; };
                 const auto withEdit = [this] (int track, auto edit)
                 {
@@ -1087,6 +1088,8 @@ void CommandDispatcher::registerCommands()
                              result[to].controls.push_back (control);
                          }
              }
+
+             AudioEngine::ScopedUndoGroup group (engine);   // one undo on any of the tracks restores them all
 
              for (auto& [id, work] : result)
                  engine.setTrackSequence ((AudioEngine::TrackId) id, work.notes.empty() && work.controls.empty()

@@ -126,6 +126,16 @@ public:
             const auto moved = engine.getTrackSequence (other);
             expect (moved != nullptr && moved->getNotes().size() == 1 && moved->getNotes()[0].startTick == 8 * Q);
 
+            // One undo on the destination track (the selected one after the drag) restores both tracks
+            expect (engine.undoTrackSequence (other));
+            expectEquals ((int) notesOf().size(), 2);
+            expect (engine.getTrackSequence (other) == nullptr || engine.getTrackSequence (other)->getNotes().empty());
+
+            // ...and redo moves it again
+            expect (engine.redoTrackSequence (trackId));
+            expectEquals ((int) notesOf().size(), 1);
+            expectEquals ((int) engine.getTrackSequence (other)->getNotes().size(), 1);
+
             expect (! api.run ("clip.moveRange",
                                params ({ { "trackId", tid }, { "start", 0 }, { "end", Q },
                                          { "destStart", 0 }, { "destTrackId", 99999 } }))["ok"]);
