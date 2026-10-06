@@ -33,9 +33,10 @@ namespace keys
             { "view.draw",            "Global", "MIDI editor with the pen (toggle)",           { K ('d') } },
             { "view.performance",     "Global", "Performance monitor",                         { K (K::F12Key) } },
             { "view.history",         "Global", "History pane on / off",                       { K ('h') } },
+            { "view.instruments",     "Global", "Instruments pane on / off",                   { K ('i') } },
             { "track.solo",           "Global", "Solo the selected track",                     { K ('s') } },
             { "track.mute",           "Global", "Mute the selected track",                     { K ('m') } },
-            { "track.instrumentGui",  "Global", "Show / hide the selected track's instrument GUI", { K ('i') } },
+            { "track.instrumentGui",  "Global", "Open / close the selected track's instrument GUI", { K ('g') } },
             { "edit.undo",            "Global", "Undo (the editor's own, else the selected track's)", { K ('z', ctrl, 0) } },
             { "edit.redo",            "Global", "Redo",                                        { K ('y', ctrl, 0), K ('z', ctrl | shift, 0) } },
 

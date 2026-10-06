@@ -85,7 +85,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     audioDomainButton.onClick = [this] { setDomain (Domain::audio); };
     // The Instruments and History buttons toggle: clicking again returns to the
     // domain's arrange view (ISSUES.md "Top bar").
-    instrumentsButton.setTooltip ("The instrument rack, in a pane on the right (click again or Esc to close)");
+    instrumentsButton.setTooltip ("The instrument rack (I), in a pane on the right (click again or Esc to close)");
     historyButton.setTooltip ("Global history (H), in a pane on the right: click an entry to time-travel (click again or Esc to close)");
     instrumentsButton.onClick = [this] { toggleSidePane (SidePane::instruments); };
     historyButton.onClick = [this] { toggleSidePane (SidePane::history); };
@@ -632,7 +632,8 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     juce::PopupMenu menu;
 
     menu.addItem ("Set output...", [safe, id] { if (safe != nullptr) safe->chooseTrackOutput (id); });
-    menu.addItem ("Show/hide instrument GUI (I)", ! engine.getTrackOutputs (id).empty(), false,
+    menu.addItem ("Open / close instrument GUI (" + keys::Bindings::describe (keys::Bindings::get().keysFor ("track.instrumentGui")) + ")",
+                  ! engine.getTrackOutputs (id).empty(), false,
                   [safe, id] { if (safe != nullptr) safe->openTrackPluginWindow (id); });
     menu.addItem ("Record mode: replace", true, engine.isTrackRecordReplace (id), [safe, id]
     {
@@ -1550,6 +1551,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (selectedTrack != 0 && keys::matches ("track.mute", key))
     {
         engine.setTrackMuted (selectedTrack, ! engine.isTrackMuted (selectedTrack));
+        return true;
+    }
+
+    if (keys::matches ("view.instruments", key))
+    {
+        toggleSidePane (SidePane::instruments);
         return true;
     }
 

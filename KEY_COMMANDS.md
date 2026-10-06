@@ -30,9 +30,10 @@ A key that is typed into a text field goes to the field.
 | MIDI editor with the pen (toggle) | D | `view.draw` |
 | Performance monitor | F12 | `view.performance` |
 | History pane on / off | H | `view.history` |
+| Instruments pane on / off | I | `view.instruments` |
 | Solo the selected track | S | `track.solo` |
 | Mute the selected track | M | `track.mute` |
-| Show / hide the selected track's instrument GUI | I | `track.instrumentGui` |
+| Open / close the selected track's instrument GUI | G | `track.instrumentGui` |
 | Undo (the editor's own, else the selected track's) | Ctrl+Z | `edit.undo` |
 | Redo | Ctrl+Y, Ctrl+Shift+Z | `edit.redo` |
 
