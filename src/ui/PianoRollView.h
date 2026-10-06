@@ -142,7 +142,7 @@ private:
     juce::Rectangle<int> noteRect (const MidiSequence::Note&) const;
     juce::int64 snapTick (juce::int64 tick) const;
     int pressedNote = -1;                     // the note a move/resize drag started on (its snap leads)
-    juce::int64 snapNoteEnd (juce::int64 tick) const;   // the nearest grid line or other note's start/end
+    juce::int64 snapNoteEnd (juce::int64 tick, bool includeGrid = true) const;   // the nearest grid line or other note's start/end
     void updateCursorAt (juce::Point<int>);   // resize edge, pen (Draw) or the normal pointer
     juce::int64 snapTicksOrZero() const;      // 0 when snapping is off (the transport's Snap button)
     juce::int64 gridTicks() const;            // the grid step at this zoom, regardless of the toggle

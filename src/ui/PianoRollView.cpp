@@ -521,9 +521,11 @@ juce::int64 PianoRollView::snapTicksOrZero() const
 
 // Where a dragged note's edge snaps: the nearest of the zoom's grid line and the other notes' starts
 // and ends (the selected ones move with it, so they don't count)
-juce::int64 PianoRollView::snapNoteEnd (juce::int64 tick) const
+juce::int64 PianoRollView::snapNoteEnd (juce::int64 tick, bool includeGrid) const
 {
-    auto best = axis.snapToGrid (*engine.getTransport().getTempoMap(), tick);
+    // Without the grid: only other notes' edges (none near: the tick itself, i.e. no snap)
+    auto best = includeGrid ? axis.snapToGrid (*engine.getTransport().getTempoMap(), tick)
+                            : std::numeric_limits<juce::int64>::max() / 2;
 
     if (auto seq = sequence())
         for (int i = 0; i < (int) seq->getNotes().size(); ++i)
@@ -538,7 +540,7 @@ juce::int64 PianoRollView::snapNoteEnd (juce::int64 tick) const
                     best = edge;
         }
 
-    return best;
+    return best == std::numeric_limits<juce::int64>::max() / 2 ? tick : best;
 }
 
 juce::int64 PianoRollView::snapTick (juce::int64 tick) const
@@ -1601,12 +1603,14 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
         }
         else if (drag == Drag::move && axis.snap && seq != nullptr && pressedNote >= 0 && pressedNote < (int) seq->getNotes().size())
         {
-            // The pressed note lands with its start - or its end, whichever needs the smaller nudge - on
-            // the nearest grid line or other note's start/end; the selection moves with it
+            // The pressed note's START goes to the nearest grid line or other note's start/end; its END
+            // may line up with another note's start/end instead, when that is nearer (the end never
+            // snaps to the grid - that made notes step by their own length). The selection follows.
             const auto& note = seq->getNotes()[(size_t) pressedNote];
             const auto start = note.startTick + rawTicks, end = start + note.lengthTicks;
             const auto byStart = snapNoteEnd (start) - start;
-            const auto byEnd = snapNoteEnd (end) - end;
+            const auto endTarget = snapNoteEnd (end, false);
+            const auto byEnd = endTarget != end ? endTarget - end : std::numeric_limits<juce::int64>::max() / 2;
             dragTickOffset = juce::jmax (-note.startTick, rawTicks + (std::abs (byEnd) < std::abs (byStart) ? byEnd : byStart));
         }
         else
