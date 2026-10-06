@@ -30,6 +30,23 @@ namespace colours
             { "Grey",       "#cdcbcc" },
             { "Brown",      "#a07850" },
             { "Slate",      "#3e688c" },
+
+            // Pastels (the second column of the menu)
+            { "Rose",       "#f4a7b0" },
+            { "Peach",      "#f8c8a0" },
+            { "Apricot",    "#fbd9a6" },
+            { "Butter",     "#f6e7a1" },
+            { "Lime",       "#d8eca2" },
+            { "Mint",       "#b5e6c8" },
+            { "Seafoam",    "#a7e0dc" },
+            { "Sky",        "#a9d4f2" },
+            { "Periwinkle", "#b7c0f4" },
+            { "Lavender",   "#d4bff2" },
+            { "Lilac",      "#e9bde6" },
+            { "Blush",      "#f2c6d6" },
+            { "Sand",       "#e3d3b8" },
+            { "Sage",       "#c4d3b6" },
+            { "Stone",      "#cfd3da" },
         };
 
         return entries;
@@ -43,6 +60,9 @@ namespace colours
 
         for (auto& entry : palette())
         {
+            if (juce::String (entry.name) == "Rose")
+                menu.addColumnBreak();   // vivid | pastel
+
             juce::PopupMenu::Item item (juce::String::fromUTF8 ("\xE2\x96\xA0 ") + entry.name);   // filled square
             item.colour = AudioEngine::colourFromHex (entry.hex, juce::Colours::white);
             item.isTicked = current == entry.hex;

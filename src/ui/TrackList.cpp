@@ -103,13 +103,13 @@ public:
 
         // The track color shows as a left border only; uncolored = grey (ISSUES.md)
         g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (trackId), juce::Colour (0xff6d7178)));
-        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
+        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
     }
 
     void resized() override
     {
         // One line: S|M (one joined box), the name, and R at the right edge
-        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).reduced (8, 0);
+        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 6).reduced (8, 0);   // past the colour strip
         area = area.withSizeKeepingCentre (area.getWidth(), 20);
 
         armButton.setBounds (area.removeFromRight (20));
@@ -219,12 +219,12 @@ public:
 
         // Folder color as a left border; uncolored = grey (like tracks)
         g.setColour (AudioEngine::colourFromHex (engine.getFolderColour (folderId), juce::Colour (0xff6d7178)));
-        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
+        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
 
         // Collapse triangle
         const auto collapsed = engine.isFolderCollapsed (folderId);
         juce::Path triangle;
-        const auto cx = bounds.getX() + 13.0f, cy = bounds.getCentreY();
+        const auto cx = bounds.getX() + 18.0f, cy = bounds.getCentreY();
 
         if (collapsed)
             triangle.addTriangle (cx - 3.0f, cy - 5.0f, cx - 3.0f, cy + 5.0f, cx + 5.0f, cy);
@@ -237,7 +237,7 @@ public:
 
     void resized() override
     {
-        nameLabel.setBounds (getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 24).reduced (0, 2));
+        nameLabel.setBounds (getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 29).reduced (0, 2));
     }
 
 private:
