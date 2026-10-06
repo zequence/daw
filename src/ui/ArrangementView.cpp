@@ -475,10 +475,10 @@ void ArrangementView::mouseMove (const juce::MouseEvent& event)
 
     const auto moveDirectly = editorSettings::moveRegionsDirectly (engine.getSettingsFile()) != event.mods.isAltDown();
 
-    if (const auto span = folderSpanAt (event.getPosition());   // a (selected) folder region drags sideways
+    if (const auto span = folderSpanAt (event.getPosition());   // a movable folder region: the hand (it drags sideways)
         isSelectedFolderSpan (span) || (moveDirectly && span.folder != 0))
     {
-        setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+        setMouseCursor (juce::MouseCursor::DraggingHandCursor);   // movable, like any region
         return;
     }
 
