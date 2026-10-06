@@ -457,7 +457,7 @@ private:
                 area.removeFromTop (4);
             }
 
-            auto faderArea = area.withHeight (juce::jmin (area.getHeight(), 150)).reduced (0, 2);   // a shorter fader
+            auto faderArea = area.reduced (0, 2);   // the level runs to the bottom
             meter.setBounds (faderArea.removeFromRight (12));
             faderArea.removeFromRight (4);
             fader.setBounds (faderArea);

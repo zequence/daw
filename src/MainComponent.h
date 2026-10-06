@@ -237,8 +237,14 @@ private:
             return base.withHeight (12.0f * (float) (blockWidth - 2 * padding) / juce::jmax (1.0f, width));
         }
 
-        static int blockHeight()      { return juce::roundToInt (font().getAscent() + 2 * padding * 0.6f); }
-        static int preferredHeight()  { return blockHeight() + 2 * margin; }
+        // The block fits the strip it's given (as tall as the timeline bar): its letters shrink to
+        // the height there is, never wider than at the minimum sidebar width
+        juce::Font fittedFont (int blockHeight) const
+        {
+            const auto widthFit = font();
+            const auto heightFit = widthFit.withHeight ((float) blockHeight / 0.95f * 0.8f);
+            return heightFit.getHeight() < widthFit.getHeight() ? heightFit : widthFit;
+        }
 
         void set (const juce::String& newText, juce::Colour newColour)
         {
@@ -249,13 +255,14 @@ private:
 
         void paint (juce::Graphics& g) override
         {
-            const auto block = juce::Rectangle<int> (0, 0, juce::jmin (blockWidth, getWidth() - 2 * margin), blockHeight())
+            const auto blockHeight = juce::jmax (8, getHeight() - 4);   // 2 px above and below
+            const auto block = juce::Rectangle<int> (0, 0, juce::jmin (blockWidth, getWidth() - 2 * margin), blockHeight)
                                    .withCentre ({ getWidth() / 2, getHeight() / 2 });
 
             g.setColour (colour);
             g.fillRoundedRectangle (block.toFloat(), theme::corner);
             g.setColour (theme::colour (theme::Token::surfaceWindow));
-            g.setFont (font());
+            g.setFont (fittedFont (blockHeight));
             g.drawText (text, block, juce::Justification::centred, false);
         }
 

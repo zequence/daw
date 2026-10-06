@@ -1874,9 +1874,8 @@ void MainComponent::resized()
     if (sidebarWidth == 0)
         sidebarWidth = juce::jmax (180, getWidth() * 15 / 100);
 
-    // The top strip: the timeline bar's rows, or the header block if taller (both columns
-    // grow together, so the side list rows stay level with the arrangement lanes)
-    const auto timelineHeight = juce::jmax (timelineBar.getPreferredHeight(), SidebarHeader::preferredHeight());
+    // The top strip: the timeline bar's rows; the sidebar header fits into the same height
+    const auto timelineHeight = timelineBar.getPreferredHeight();   // the header block fits into it
     auto sidebar = area.removeFromLeft (sidebarWidth);
 
     // The sidebar lists start at the same y as the content views (below the
