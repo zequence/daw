@@ -557,7 +557,7 @@ private:
                     current = nullptr;
                 };
 
-                const auto begin = [&] (Section& section)
+                const auto begin = [&] (Section& section, juce::Component* onOff)
                 {
                     const auto first = current == nullptr;
                     finish();
@@ -571,6 +571,15 @@ private:
                     title = { columnX[next], columnY[next], knobW, titleH };
                     mark (next, title.getY(), title.getBottom());
                     columnY[next] = title.getBottom();
+
+                    if (onOff != nullptr)   // the section's on/off, at the top beside the first knob
+                    {
+                        const auto c = 1 - next;
+                        const auto y = juce::jmax (columnY[c], title.getY());
+                        placed.push_back ({ onOff, juce::Rectangle<int> (columnX[c], y, knobW, buttonH).withSizeKeepingCentre (buttonW, buttonH - 2) });
+                        mark (c, y, y + buttonH);
+                        columnY[c] = y + buttonH;
+                    }
                 };
 
                 const auto knob = [&] (juce::Component* k)
@@ -593,25 +602,23 @@ private:
 
                 const auto pageTop = area.getY();
 
-                begin (eq);
+                begin (eq, &eqIn);
                 for (auto* k : { &hpf, &lpf, &hfGain, &hfFreq })
                     knob (k);
                 button (hfBell);
                 for (auto* k : { &hmfGain, &hmfFreq, &hmfQ, &lmfGain, &lmfFreq, &lmfQ, &lfGain, &lfFreq })
                     knob (k);
                 button (lfBell);
-                button (eqIn);
 
-                begin (dynamics);
+                begin (dynamics, &dynamicsIn);
                 for (auto* k : { &threshold, &ratio, &attack, &release, &makeup })
                     knob (k);
-                button (dynamicsIn);
 
                 auto pageBottom = juce::jmax (columnY[0], columnY[1]) + pad;   // the inserts share the EQ and dynamics' space
 
                 if (kind == Kind::channel)
                 {
-                    begin (aux);
+                    begin (aux, nullptr);
 
                     for (auto& k : auxKnobs)
                         knob (k.get());
