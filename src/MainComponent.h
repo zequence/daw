@@ -77,6 +77,10 @@ private:
     void updatePlaceholders();
     void togglePerfPanel();
     void toggleEditor (bool draw);
+    void openEditorOn (std::vector<AudioEngine::TrackId> tracks);   // top one edited; empty = the selected track
+    std::vector<AudioEngine::TrackId> tracksToEdit() const;         // what E/D open (see the .cpp)
+    std::vector<AudioEngine::TrackId> inSidebarOrder (const std::set<AudioEngine::TrackId>&) const;
+    bool lastSelectionInArrangement = false;                         // which selection E/D follow
     void startPluginScan (juce::StringArray args);
 
     void changeListenerCallback (juce::ChangeBroadcaster*) override;

@@ -39,6 +39,17 @@ public:
 
     void clearSelection()   { selection.clear(); repaint(); }   // Esc
 
+    // The tracks of the selected regions (each once)
+    std::set<AudioEngine::TrackId> selectedTracks() const
+    {
+        std::set<AudioEngine::TrackId> tracks;
+
+        for (auto& block : selection)
+            tracks.insert (block.trackId);
+
+        return tracks;
+    }
+
 private:
     struct BlockRef
     {

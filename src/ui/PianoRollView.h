@@ -40,8 +40,15 @@ public:
     bool isDrawMode() const              { return drawMode; }
     ~PianoRollView() override;
 
-    void setTrack (AudioEngine::TrackId);
+    void setTrack (AudioEngine::TrackId);   // the edited track; shows just it unless it is one of the shown
     AudioEngine::TrackId getTrack() const noexcept { return trackId; }
+
+    // Several tracks in the editor (top to bottom): 'active' is edited, the others' notes are
+    // dimmed; the dropdown switches between them
+    void setTracks (std::vector<AudioEngine::TrackId> tracks, AudioEngine::TrackId active);
+    const std::vector<AudioEngine::TrackId>& getTracks() const noexcept { return shownTracks; }
+    std::function<void (AudioEngine::TrackId)> onEditedTrackChanged;   // the dropdown picked another track
+    bool isShown (AudioEngine::TrackId id) const { return std::find (shownTracks.begin(), shownTracks.end(), id) != shownTracks.end(); }
 
     void paint (juce::Graphics&) override;
     void resized() override;
@@ -175,8 +182,10 @@ private:
     // of them ("clip-N", the earliest by default). Another region's notes are dimmed and can't be
     // picked; new notes go into the chosen one. -1 = all (no overlaps). Later also several tracks.
     int activeRegion = -1;
-    std::vector<int> targetRegions;
-    juce::String targetTrackName;
+    std::vector<int> targetRegions;               // the edited track's overlapping regions
+    std::vector<std::pair<AudioEngine::TrackId, int>> editTargets;   // the dropdown: (track, region; -1 = whole track)
+    juce::String targetsKey;                      // what the dropdown was built from
+    std::vector<AudioEngine::TrackId> shownTracks;
     juce::ComboBox editTargetBox;
     void rebuildEditTargets();
     bool isEditable (const MidiSequence::Note& note) const   { return activeRegion < 0 || note.region == activeRegion; }

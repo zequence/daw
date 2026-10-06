@@ -22,6 +22,8 @@ public:
     void refresh();
     void setSelectedTrack (AudioEngine::TrackId);
     AudioEngine::TrackId getSelectedTrack() const noexcept { return selectedTrack; }
+    const std::set<AudioEngine::TrackId>& getMultiSelection() const noexcept { return multiSelection; }
+    AudioEngine::FolderId getSelectedFolder() const noexcept { return selectedFolder; }
 
     std::function<void (AudioEngine::TrackId)> onSelect, onArm, onShowContextMenu;
 

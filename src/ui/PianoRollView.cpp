@@ -226,11 +226,17 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     {
         const auto index = editTargetBox.getSelectedId() - 1;
 
-        if (index >= 0 && index < (int) targetRegions.size())
+        if (index >= 0 && index < (int) editTargets.size())
         {
-            activeRegion = targetRegions[(size_t) index];
+            const auto [track, region] = editTargets[(size_t) index];
+            setTrack (track);           // one of the shown: they stay shown
+            activeRegion = region;
             selection.clear();
-            repaint();
+            targetsKey.clear();
+            rebuildEditTargets();
+
+            if (onEditedTrackChanged)
+                onEditedTrackChanged (track);
         }
     };
     addAndMakeVisible (editTargetBox);
@@ -303,8 +309,12 @@ void PianoRollView::noteInput (const juce::MidiMessage& message, double received
 
 void PianoRollView::setTrack (AudioEngine::TrackId id)
 {
+    if (! isShown (id))
+        shownTracks = { id };   // not one of the shown tracks: just this one
+
     if (trackId != id)
     {
+        targetsKey.clear();
         trackId = id;
         selection.clear();
         activeRegion = -1;   // another track: its own regions (the dropdown follows)
@@ -1451,48 +1461,88 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
 }
 
 //==============================================================================
-// The dropdown: the track's name, or with overlapping regions one entry per region ("clip-N" in
-// order of start). The earliest is edited unless another is chosen.
+// The dropdown: every shown track (top to bottom) - a track whose regions overlap has one entry
+// per region ("Name, clip-N" in order of start). The edited track's earliest clip is edited
+// unless another is chosen.
 void PianoRollView::rebuildEditTargets()
 {
-    std::vector<int> regions;
-    const auto seq = sequence();
-    const auto name = engine.getTrackName (trackId);
+    const auto map = engine.getTransport().getTempoMap();
+    const auto overlappingRegions = [this, &map] (AudioEngine::TrackId track)
+    {
+        std::vector<int> regions;
 
-    if (seq != nullptr)
-        for (auto& block : computePhraseBlocks (*seq, *engine.getTransport().getTempoMap()))
-            if (block.layers > 1 && std::find (regions.begin(), regions.end(), block.region) == regions.end())
-                regions.push_back (block.region);
+        if (auto seq = engine.getTrackSequence (track))
+            for (auto& block : computePhraseBlocks (*seq, *map))
+                if (block.layers > 1 && std::find (regions.begin(), regions.end(), block.region) == regions.end())
+                    regions.push_back (block.region);
 
-    if (regions == targetRegions && name == targetTrackName && editTargetBox.getNumItems() > 0)
+        return regions;
+    };
+
+    if (shownTracks.empty() || ! isShown (trackId))
+        shownTracks = { trackId };
+
+    std::vector<std::pair<AudioEngine::TrackId, int>> list;
+    juce::StringArray names;
+
+    for (auto track : shownTracks)
+    {
+        const auto name = engine.getTrackName (track);
+        const auto regions = overlappingRegions (track);
+
+        if (track == trackId)
+        {
+            targetRegions = regions;
+
+            if (regions.empty())
+                activeRegion = -1;
+            else if (std::find (regions.begin(), regions.end(), activeRegion) == regions.end())
+                activeRegion = regions.front();   // the earlier clip
+        }
+
+        if (regions.empty())
+        {
+            list.push_back ({ track, -1 });
+            names.add (name);
+        }
+        else
+        {
+            for (size_t i = 0; i < regions.size(); ++i)
+            {
+                list.push_back ({ track, regions[i] });
+                names.add (name + ", clip-" + juce::String ((int) i + 1));
+            }
+        }
+    }
+
+    const auto key = names.joinIntoString ("|") + "#" + juce::String (trackId) + "#" + juce::String (activeRegion);
+
+    if (key == targetsKey && editTargetBox.getNumItems() > 0)
         return;
 
-    targetRegions = regions;
-    targetTrackName = name;
-
-    if (regions.empty())
-        activeRegion = -1;
-    else if (std::find (regions.begin(), regions.end(), activeRegion) == regions.end())
-        activeRegion = regions.front();   // the earlier clip
-
+    targetsKey = key;
+    editTargets = list;
     editTargetBox.clear (juce::dontSendNotification);
 
-    if (regions.empty())
-    {
-        editTargetBox.addItem (name, 1);
-        editTargetBox.setSelectedId (1, juce::dontSendNotification);
-    }
-    else
-    {
-        for (size_t i = 0; i < regions.size(); ++i)
-            editTargetBox.addItem (name + ", clip-" + juce::String ((int) i + 1), (int) i + 1);
+    for (int i = 0; i < names.size(); ++i)
+        editTargetBox.addItem (names[i], i + 1);
 
-        const auto chosen = std::find (regions.begin(), regions.end(), activeRegion) - regions.begin();
-        editTargetBox.setSelectedId ((int) chosen + 1, juce::dontSendNotification);
-    }
+    for (size_t i = 0; i < editTargets.size(); ++i)
+        if (editTargets[i].first == trackId && (editTargets[i].second == activeRegion || editTargets[i].second < 0))
+            editTargetBox.setSelectedId ((int) i + 1, juce::dontSendNotification);
 
-    selection.clear();
     repaint();
+}
+
+void PianoRollView::setTracks (std::vector<AudioEngine::TrackId> tracks, AudioEngine::TrackId active)
+{
+    if (tracks.empty())
+        return;
+
+    shownTracks = std::move (tracks);
+    setTrack (isShown (active) ? active : shownTracks.front());
+    targetsKey.clear();
+    rebuildEditTargets();
 }
 
 void PianoRollView::timerCallback()
@@ -1649,6 +1699,22 @@ void PianoRollView::paint (juce::Graphics& g)
         }
 
         barTick += ticksPerBar;
+    }
+
+    // --- The other shown tracks' notes: dimmed, in their track colour, not editable ---
+    for (auto other : shownTracks)
+    {
+        if (other == trackId)
+            continue;
+
+        if (auto otherSeq = engine.getTrackSequence (other))
+        {
+            g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (other), juce::Colour (0xff8a8f98)).withAlpha (0.3f));
+
+            for (auto& note : otherSeq->getNotes())
+                if (const auto rect = noteRect (note); rect.intersects (grid))
+                    g.fillRoundedRectangle (rect.toFloat().reduced (0.5f), 2.0f);
+        }
     }
 
     // --- Notes ---

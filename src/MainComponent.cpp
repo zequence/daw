@@ -210,11 +210,21 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), id]
                                          { if (safe != nullptr) safe->chooseTrackOutput (id); });
     };
-    trackList.onSelect = [this] (auto id) { selectTrack (id, false); };
+    trackList.onSelect = [this] (auto id)
+    {
+        lastSelectionInArrangement = false;
+        selectTrack (id, false);
+    };
 
     // Multi-selection arms every selected track when auto-record is on (ISSUES.md)
     trackList.onSelectionChanged = [this] (const std::set<AudioEngine::TrackId>& selection)
     {
+        lastSelectionInArrangement = false;
+
+        // While editing, Ctrl-selected tracks join the editor; the edited track stays edited
+        if (contentView == ContentView::midiEditor && selection.size() > 1)
+            pianoRollView.setTracks (inSidebarOrder (selection), pianoRollView.getTrack());
+
         if (! engine.getSettingsFile().getBoolValue (SettingsView::autoRecordOnSelectKey, true))
             return;
 
@@ -232,12 +242,26 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
                          &expressionMapView.closeButton, &historyView.closeButton })
         close->onClick = [this] { showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions); };
 
-    arrangementView.onSelectTrack = [this] (auto id) { selectTrack (id, false); };
+    arrangementView.onSelectTrack = [this] (auto id)
+    {
+        lastSelectionInArrangement = true;
+        selectTrack (id, false);
+    };
     arrangementView.onOpenEditor = [this] (auto id)
     {
+        // Several regions selected (the double-clicked one among them): edit all their tracks
+        if (const auto tracks = arrangementView.selectedTracks(); tracks.size() > 1 && tracks.count (id))
+        {
+            openEditorOn (inSidebarOrder (tracks));
+            return;
+        }
+
         selectTrack (id, false);
-        showContent (ContentView::midiEditor);
+        openEditorOn ({ id });
     };
+
+    // The editor's dropdown picked another of its tracks: that one is selected
+    pianoRollView.onEditedTrackChanged = [this] (auto id) { selectTrack (id, false); };
 
     instrumentsView.onVeproSync = [this]
     {
@@ -1363,8 +1387,78 @@ void MainComponent::toggleEditor (bool draw)
 
     if (contentView == ContentView::midiEditor)
         updateViewVisibility();
-    else if (selectedTrack != 0)
-        showContent (ContentView::midiEditor);
+    else
+        openEditorOn (tracksToEdit());
+}
+
+std::vector<AudioEngine::TrackId> MainComponent::inSidebarOrder (const std::set<AudioEngine::TrackId>& tracks) const
+{
+    std::vector<AudioEngine::TrackId> ordered;
+
+    for (auto& item : engine.getSidebarItems (true, false))
+        if (item.member != 0 && tracks.count ((AudioEngine::TrackId) item.member))
+            ordered.push_back ((AudioEngine::TrackId) item.member);
+
+    return ordered;
+}
+
+// What E/D edit: the latest selection - several regions in the arrangement (their tracks), several
+// tracks Ctrl-selected in the side list, a folder (every track inside it), else the selected track
+std::vector<AudioEngine::TrackId> MainComponent::tracksToEdit() const
+{
+    if (lastSelectionInArrangement)
+        if (const auto tracks = arrangementView.selectedTracks(); tracks.size() > 1)
+            return inSidebarOrder (tracks);
+
+    if (! lastSelectionInArrangement && trackList.getMultiSelection().size() > 1)
+        return inSidebarOrder (trackList.getMultiSelection());
+
+    if (const auto folder = trackList.getSelectedFolder(); folder != 0)
+    {
+        std::vector<AudioEngine::TrackId> inside;
+        const auto items = engine.getSidebarItems (true, false);
+        int folderDepth = -1;
+
+        for (auto& item : items)
+        {
+            if (folderDepth < 0)
+            {
+                if (item.folder == folder)
+                    folderDepth = item.depth;
+
+                continue;
+            }
+
+            if (item.depth <= folderDepth)
+                break;   // past the folder's contents
+
+            if (item.member != 0)
+                inside.push_back ((AudioEngine::TrackId) item.member);
+        }
+
+        if (! inside.empty())
+            return inside;
+    }
+
+    if (selectedTrack != 0)
+        return { selectedTrack };
+
+    return {};
+}
+
+// The editor on these tracks (top to bottom); the top one is edited
+void MainComponent::openEditorOn (std::vector<AudioEngine::TrackId> tracks)
+{
+    if (tracks.empty())
+        return;
+
+    const auto edited = tracks.front();
+
+    if (selectedTrack != edited)
+        selectTrack (edited, false);
+
+    showContent (ContentView::midiEditor);
+    pianoRollView.setTracks (std::move (tracks), edited);
 }
 
 bool MainComponent::keyPressed (const juce::KeyPress& key)
