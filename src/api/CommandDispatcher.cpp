@@ -1001,6 +1001,103 @@ void CommandDispatcher::registerCommands()
          "trackId:int start:int64 end:int64 destStart:int64 [destTrackId:int=trackId] [includeControls:bool=true]",
          rangeCopier (true));
 
+    // Several regions at once (the arrangement's selection): every source range is read from the
+    // tracks as they were, then each track is written ONCE - one undo step per track, one history entry
+    add ("clip.moveRanges", "Move (or copy) several ranges at once, possibly to other tracks",
+         "moves:[{trackId:int start:int64 end:int64 destStart:int64 [destTrackId:int=trackId]}] [copy:bool=false] "
+         "[includeControls:bool=true]",
+         [this] (const juce::var& params, Respond respond)
+         {
+             const auto* moves = params.getProperty ("moves", {}).getArray();
+             const bool copy = params.getProperty ("copy", false);
+             const bool includeControls = params.getProperty ("includeControls", true);
+
+             if (moves == nullptr || moves->isEmpty())
+                 return respond (fail ("give 'moves'"));
+
+             const auto ids = engine.getTrackIds();
+             const auto known = [&ids] (int id) { return std::find (ids.begin(), ids.end(), (AudioEngine::TrackId) id) != ids.end(); };
+
+             struct Work { std::vector<MidiSequence::Note> notes; std::vector<MidiSequence::Control> controls; };
+             std::map<int, Work> original, result;
+
+             const auto load = [this, &original, &result] (int id)
+             {
+                 if (original.count (id))
+                     return;
+
+                 Work work;
+
+                 if (auto sequence = engine.getTrackSequence (id))
+                 {
+                     work.notes = sequence->getNotes();
+                     work.controls = sequence->getControls();
+                 }
+
+                 original[id] = work;
+                 result[id] = work;
+             };
+
+             for (auto& move : *moves)
+             {
+                 const int from = move.getProperty ("trackId", 0);
+                 const int to = move.getProperty ("destTrackId", from);
+
+                 if (! known (from) || ! known (to))
+                     return respond (fail ("unknown track in 'moves'"));
+
+                 if ((juce::int64) move.getProperty ("end", 0) <= (juce::int64) move.getProperty ("start", 0))
+                     return respond (fail ("each move needs 'end' greater than 'start'"));
+
+                 load (from);
+                 load (to);
+             }
+
+             // Take every range out first (from the originals), then put them all at their destinations
+             if (! copy)
+                 for (auto& move : *moves)
+                 {
+                     const juce::int64 start = move.getProperty ("start", 0), end = move.getProperty ("end", 0);
+                     auto& work = result[(int) move.getProperty ("trackId", 0)];
+                     std::erase_if (work.notes, [=] (const auto& n) { return n.startTick >= start && n.startTick < end; });
+
+                     if (includeControls)
+                         std::erase_if (work.controls, [=] (const auto& c) { return c.tick >= start && c.tick < end; });
+                 }
+
+             for (auto& move : *moves)
+             {
+                 const int from = move.getProperty ("trackId", 0);
+                 const int to = move.getProperty ("destTrackId", from);
+                 const juce::int64 start = move.getProperty ("start", 0), end = move.getProperty ("end", 0);
+                 const auto offset = (juce::int64) move.getProperty ("destStart", 0) - start;
+
+                 for (auto note : original[from].notes)
+                     if (note.startTick >= start && note.startTick < end)
+                     {
+                         note.startTick = juce::jmax ((juce::int64) 0, note.startTick + offset);
+                         result[to].notes.push_back (note);
+                     }
+
+                 if (includeControls)
+                     for (auto control : original[from].controls)
+                         if (control.tick >= start && control.tick < end)
+                         {
+                             control.tick = juce::jmax ((juce::int64) 0, control.tick + offset);
+                             result[to].controls.push_back (control);
+                         }
+             }
+
+             for (auto& [id, work] : result)
+                 engine.setTrackSequence ((AudioEngine::TrackId) id, work.notes.empty() && work.controls.empty()
+                                                                       ? nullptr
+                                                                       : MidiSequence::create (std::move (work.notes), std::move (work.controls)));
+
+             auto reply = object();
+             reply->setProperty ("tracks", (int) result.size());
+             respond (ok (juce::var (reply.get())));
+         });
+
     add ("clip.setControlRange",
          "Replace one controller's events inside [start,end) in one undoable step; empty 'events' erases. "
          "The CC-lane editor draws through this.",

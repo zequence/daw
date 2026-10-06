@@ -257,7 +257,6 @@ void ArrangementView::mouseUp (const juce::MouseEvent& event)
 }
 
 // Moves (or copies) every selected block by the drag; a single block may also change track.
-// Blocks on one track are processed so a moved range never lands on one still to move.
 void ArrangementView::moveSelection()
 {
     const auto toTrack = selection.size() == 1 && dragTargetTrack != 0 ? dragTargetTrack : 0;
@@ -265,27 +264,30 @@ void ArrangementView::moveSelection()
     if (dragDeltaTicks == 0 && (toTrack == 0 || toTrack == selection.front().trackId))
         return;
 
-    auto order = selection;
-    std::sort (order.begin(), order.end(), [forward = dragDeltaTicks > 0] (const BlockRef& a, const BlockRef& b)
-               { return forward ? a.startTick > b.startTick : a.startTick < b.startTick; });
-
+    juce::Array<juce::var> moves;
     std::vector<BlockRef> moved;
 
-    for (auto& block : order)
+    for (auto& block : selection)
     {
         const auto destStart = juce::jmax ((juce::int64) 0, block.startTick + dragDeltaTicks);
         const auto destTrack = toTrack != 0 ? toTrack : block.trackId;
 
-        auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
-        params->setProperty ("trackId", block.trackId);
-        params->setProperty ("start", block.startTick);
-        params->setProperty ("end", block.endTick);
-        params->setProperty ("destStart", destStart);
-        params->setProperty ("destTrackId", destTrack);
-        runCommand (dragIsCopy ? "clip.copyRange" : "clip.moveRange", params);
+        auto move = juce::DynamicObject::Ptr (new juce::DynamicObject());
+        move->setProperty ("trackId", block.trackId);
+        move->setProperty ("start", block.startTick);
+        move->setProperty ("end", block.endTick);
+        move->setProperty ("destStart", destStart);
+        move->setProperty ("destTrackId", destTrack);
+        moves.add (juce::var (move.get()));
 
         moved.push_back ({ destTrack, destStart, destStart + (block.endTick - block.startTick) });
     }
+
+    // One command for the whole selection: one edit per track, one history entry
+    auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    params->setProperty ("moves", moves);
+    params->setProperty ("copy", dragIsCopy);
+    runCommand ("clip.moveRanges", params);
 
     selection = moved;   // (blocks recompute from the notes; the refs re-match at their new starts)
 }

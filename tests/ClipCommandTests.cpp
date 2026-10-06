@@ -132,6 +132,27 @@ public:
             engine.removeTrack (other);
         }
 
+        beginTest ("moveRanges moves several regions as one edit (overlapping destinations included)");
+        {
+            // Two regions; the first moves onto where the second was - the second must not be swept along
+            juce::Array<juce::var> notes { note (0, Q, 60), note (8 * Q, Q, 62) };
+            api.run ("clip.set", params ({ { "trackId", tid }, { "notes", notes } }));
+
+            juce::Array<juce::var> moves {
+                params ({ { "trackId", tid }, { "start", 0 },     { "end", 4 * Q },  { "destStart", 8 * Q } }),
+                params ({ { "trackId", tid }, { "start", 8 * Q }, { "end", 12 * Q }, { "destStart", 16 * Q } }) };
+
+            expect (api.run ("clip.moveRanges", params ({ { "moves", moves } }))["ok"]);
+            expectEquals ((int) notesOf().size(), 2);
+            expectEquals (notesOf()[0].startTick, 8 * Q);
+            expectEquals (notesOf()[1].startTick, 16 * Q);
+
+            // One undo step brings both back
+            expect (engine.undoTrackSequence (trackId));
+            expectEquals (notesOf()[0].startTick, (juce::int64) 0);
+            expectEquals (notesOf()[1].startTick, 8 * Q);
+        }
+
         beginTest ("setControlRange replaces one controller's window only");
         {
             juce::Array<juce::var> controls {
