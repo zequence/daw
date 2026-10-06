@@ -727,8 +727,8 @@ only; manual renames always win.
 ## Audio mixer (drafted 2026-10-06)
 
 A mixer for the audio channels: names, level faders, pan, solo, mute, meters,
-aux sends, insert effects and output selection. M opens it where the MIDI editor
-shows: full-size, or docked under the arrangement with the same handle.
+aux sends, insert effects and output selection. F4 opens it (F1 MIDI arrangement,
+F2 MIDI editor, F3 audio arrangement / automation); M stays mute.
 
 Today an audio channel is one stereo strip per instrument (gain, mute, a block
 peak) wired straight to the device's stereo output, and only the instrument's
@@ -760,8 +760,10 @@ scanned but filtered out.
   for all of it in the API (`mixer.*`).
 
 Phases, each usable on its own: (1) the strip basics - names, fader, pan, solo,
-mute, meters, master bus, the view and M; (2) output selection and multi-output
-instruments; (3) aux buses and sends; (4) insert effects.
+mute, meters, master bus, the view and F4 (DONE 2026-10-06; inserts, sends and
+output show as placeholders); (2) output selection and multi-output instruments
+(one strip per USED output pair); (3) aux buses and sends; (4) insert effects.
+Later: the mixer docked under the arrangement like the MIDI editor.
 
 ## Non-linear patching (far field)
 

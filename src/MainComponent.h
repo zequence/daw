@@ -19,6 +19,7 @@
 #include "ui/HistoryView.h"
 #include "ui/TimelineBar.h"
 #include "ui/BusyOverlay.h"
+#include "ui/MixerView.h"
 
 // The single-window shell:
 //   topbar (menu, domain buttons, transport) / sidebar + content container / status.
@@ -43,7 +44,7 @@ public:
     void confirmQuit();
 
 private:
-    enum class ContentView { midiRegions, midiEditor, audioRegions, instrumentEditor, expressionMaps };   // Instruments and History: the side pane
+    enum class ContentView { midiRegions, midiEditor, audioRegions, instrumentEditor, expressionMaps, mixer };   // Instruments and History: the side pane
 
     // Instruments and History open as a pane on the right, beside the arrangement or the editor
     enum class SidePane { none, instruments, history };
@@ -292,7 +293,8 @@ private:
     TimelineBar timelineBar { engine, commandDispatcher, timeAxis };
 
     // Content views
-    PlaceholderView audioRegionsView { "Audio regions" };
+    PlaceholderView audioRegionsView { "Audio arrangement" };
+    MixerView mixerView { engine };
     ArrangementView arrangementView { engine, commandDispatcher, timeAxis, trackScroll };
     PianoRollView pianoRollView { engine, commandDispatcher, timeAxis };
     InstrumentsView instrumentsView { engine };

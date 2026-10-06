@@ -224,6 +224,8 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
                          &expressionMapView.closeButton, &historyView.closeButton })
         close->onClick = [this] { showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions); };
 
+    mixerView.closeButton.onClick = [this] { showContent (mainView); };
+
     pianoRollView.closeButton.onClick = [this]
     {
         if (isEditorDockedShowing())
@@ -362,7 +364,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
              &sidebarHeader, &trackList, &channelList, &sidebarResizer, &sidePaneResizer, &dockHandle,
-             &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView,
+             &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView, &mixerView,
              &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView, &settingsView,
              &statusLabel })
         addAndMakeVisible (c);
@@ -1207,6 +1209,7 @@ void MainComponent::updateViewVisibility()
     arrangementView.setVisible (contentView == ContentView::midiRegions);
     pianoRollView.setVisible (isEditorShowing());
     dockHandle.setVisible (contentView == ContentView::midiRegions);
+    mixerView.setVisible (contentView == ContentView::mixer);
     audioRegionsView.setVisible (contentView == ContentView::audioRegions);
     instrumentsView.setVisible (sidePane == SidePane::instruments);
     instrumentEditorView.setVisible (contentView == ContentView::instrumentEditor);
@@ -1235,10 +1238,10 @@ void MainComponent::updateViewVisibility()
 void MainComponent::updatePlaceholders()
 {
     const auto channelCount = (int) engine.getAudioChannelIds().size();
-    audioRegionsView.setDetails ({ juce::String (channelCount) + (channelCount == 1 ? " audio channel" : " audio channels")
-                                     + " - strips are in the sidebar.",
+    audioRegionsView.setDetails ({ "Coming: audio regions and automation lanes for the audio channels.",
                                    "",
-                                   "Audio regions and editing arrive later." });
+                                   juce::String (channelCount) + (channelCount == 1 ? " audio channel" : " audio channels")
+                                     + " - their strips are in the sidebar and the mixer (F4)." });
 }
 
 void MainComponent::togglePerfPanel()
@@ -1318,6 +1321,16 @@ void MainComponent::timerCallback()
 {
     engine.pollRecording();
 
+
+    // The mixer highlights the selected track's channel (its first output's instrument)
+    {
+        AudioEngine::AudioChannelId channel = 0;
+
+        if (const auto outputs = engine.getTrackOutputs (selectedTrack); ! outputs.empty())
+            channel = engine.getAudioChannelForInstrument (outputs.front().instrument);
+
+        mixerView.setHighlightedChannel (channel);
+    }
 
     // The side list marks the editor's tracks (none when it is closed), full or docked
     if (isEditorShowing())
@@ -1567,6 +1580,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
             return true;
         }
 
+        if (contentView == ContentView::mixer)   // the mixer: back where it came from
+        {
+            showContent (mainView);
+            return true;
+        }
+
         // The side pane closes first
         if (sidePane != SidePane::none)
         {
@@ -1648,6 +1667,36 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     if (selectedTrack != 0 && keys::matches ("track.mute", key))
     {
         engine.setTrackMuted (selectedTrack, ! engine.isTrackMuted (selectedTrack));
+        return true;
+    }
+
+    // The views: F1 MIDI arrangement, F2 MIDI editor, F3 audio arrangement, F4 mixer (again: back)
+    if (keys::matches ("view.midiArrange", key))
+    {
+        setDomain (Domain::midi);
+        return true;
+    }
+
+    if (keys::matches ("view.midiEditor", key))
+    {
+        if (domain != Domain::midi)
+            domain = Domain::midi;
+
+        if (contentView != ContentView::midiEditor)
+            openEditorOn (tracksToEdit());
+
+        return true;
+    }
+
+    if (keys::matches ("view.audioArrange", key))
+    {
+        setDomain (Domain::audio);
+        return true;
+    }
+
+    if (keys::matches ("view.mixer", key))
+    {
+        showContent (contentView == ContentView::mixer ? mainView : ContentView::mixer);
         return true;
     }
 
@@ -1838,7 +1887,7 @@ void MainComponent::resized()
     timelineBar.setBounds (area.removeFromTop (timelineHeight));
 
     for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView, &audioRegionsView,
-                                                                &instrumentEditorView, &expressionMapView })
+                                                                &instrumentEditorView, &expressionMapView, &mixerView })
         view->setBounds (area);
 
     // The arrangement: the editor handle along its bottom, the docked editor under it when open
