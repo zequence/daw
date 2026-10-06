@@ -48,6 +48,17 @@ public:
     void setTracks (std::vector<AudioEngine::TrackId> tracks, AudioEngine::TrackId active);
     const std::vector<AudioEngine::TrackId>& getTracks() const noexcept { return shownTracks; }
     std::function<void (AudioEngine::TrackId)> onEditedTrackChanged;   // the dropdown picked another track
+
+    // Esc: selected notes are deselected first; false when nothing was selected
+    bool deselectNotes()
+    {
+        if (! anySelected())
+            return false;
+
+        clearAllSelections();
+        repaint();
+        return true;
+    }
     bool isShown (AudioEngine::TrackId id) const { return std::find (shownTracks.begin(), shownTracks.end(), id) != shownTracks.end(); }
 
     void paint (juce::Graphics&) override;

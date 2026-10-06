@@ -1490,6 +1490,10 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
             return true;
         }
 
+        // The MIDI editor: Esc first deselects the notes, then closes
+        if (contentView == ContentView::midiEditor && pianoRollView.deselectNotes())
+            return true;
+
         if (contentView == ContentView::midiEditor || contentView == ContentView::instruments
              || contentView == ContentView::history)
         {
