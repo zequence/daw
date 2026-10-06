@@ -48,6 +48,9 @@ it clears the region selection.
 | Note input on / off | N | `editor.noteInput` |
 | Delete the selected notes | Delete, Backspace | `editor.delete` |
 | Select all notes | Ctrl+A | `editor.selectAll` |
+| Copy the selected notes | Ctrl+C | `editor.copy` |
+| Cut the selected notes | Ctrl+X | `editor.cut` |
+| Paste at the transport line | Ctrl+V | `editor.paste` |
 | Transport line to the previous note start (else the next grid line) | Left | `editor.playheadLeft` |
 | Transport line to the next note end (else the next grid line) | Right | `editor.playheadRight` |
 | Move the selected notes a grid step earlier | Alt+Left | `editor.nudgeLeft` |
@@ -56,6 +59,10 @@ it clears the region selection.
 | Transpose the selected notes a half step down | Down | `editor.transposeDown` |
 | Transpose the selected notes an octave up | Ctrl+Up | `editor.octaveUp` |
 | Transpose the selected notes an octave down | Ctrl+Down | `editor.octaveDown` |
+
+Pasted notes keep their spacing; the earliest lands on the transport line, and the
+pasted notes become the selection. With "All" on, notes copied from several tracks go
+back to those tracks when they are shown (else to the edited track).
 
 With parallel notes, Left and Right stop at the closest start or end first. With no note
 that way, they move to the next grid line. The grid follows the zoom: bars when zoomed

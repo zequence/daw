@@ -852,6 +852,102 @@ void PianoRollView::deleteSelection()
     });
 }
 
+void PianoRollView::copySelection()
+{
+    std::map<AudioEngine::TrackId, std::vector<MidiSequence::Note>> copied;
+
+    if (auto seq = sequence())
+        for (auto index : selection)
+            if (index < (int) seq->getNotes().size())
+                copied[trackId].push_back (seq->getNotes()[(size_t) index]);
+
+    forOtherSelections ([&copied] (AudioEngine::TrackId other, const MidiSequence& otherSeq, std::set<int>& chosen)
+    {
+        for (auto index : chosen)
+            copied[other].push_back (otherSeq.getNotes()[(size_t) index]);
+    });
+
+    if (copied.empty())
+        return;
+
+    auto earliest = std::numeric_limits<juce::int64>::max();
+
+    for (auto& [track, notes] : copied)
+        for (auto& note : notes)
+            earliest = juce::jmin (earliest, note.startTick);
+
+    for (auto& [track, notes] : copied)
+        for (auto& note : notes)
+        {
+            note.startTick -= earliest;
+            note.region = 0;   // the paste decides the region
+        }
+
+    clipboard = std::move (copied);
+}
+
+void PianoRollView::pasteAtPlayhead()
+{
+    if (clipboard.empty() || trackId == 0)
+        return;
+
+    const auto at = engine.getTransport().getPositionTicks();
+    std::map<AudioEngine::TrackId, std::vector<MidiSequence::Note>> wanted;
+
+    AudioEngine::ScopedUndoGroup group (engine);   // one undo for every track
+
+    // Each copied track's notes go back to it when it is shown, else to the edited track
+    std::map<AudioEngine::TrackId, juce::Array<juce::var>> adds;
+
+    for (auto& [source, notes] : clipboard)
+    {
+        const auto target = isShown (source) ? source : trackId;
+
+        for (auto note : notes)
+        {
+            note.startTick += at;
+
+            auto n = new juce::DynamicObject();
+            n->setProperty ("start", note.startTick);
+            n->setProperty ("length", note.lengthTicks);
+            n->setProperty ("key", note.key);
+            n->setProperty ("velocity", note.velocity);
+            n->setProperty ("channel", note.channel);
+
+            if (! note.articulation.isEmpty())
+                n->setProperty ("articulation", note.articulation.toVar());
+
+            if (target == trackId && activeRegion >= 0)
+                n->setProperty ("region", activeRegion);   // into the clip being edited
+
+            adds[target].add (juce::var (n));
+            wanted[target].push_back (note);
+        }
+    }
+
+    for (auto& [target, notes] : adds)
+    {
+        auto params = new juce::DynamicObject();
+        params->setProperty ("trackId", target);
+        params->setProperty ("notes", notes);
+        runCommand ("clip.addNotes", params);
+    }
+
+    // The pasted notes become the selection
+    clearAllSelections();
+
+    for (auto& [target, notes] : wanted)
+        if (auto seq = engine.getTrackSequence (target))
+        {
+            if (target == trackId)
+                selection = reselect (*seq, notes);
+            else if (editAll)
+                otherSelections[target] = reselect (*seq, notes);
+        }
+
+    repaint();
+}
+
 void PianoRollView::deleteNote (int index)
 {
     juce::Array<juce::var> indices;
@@ -1618,6 +1714,25 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
     if (keys::matches ("edit.redo", key))
     {
         redoButton.triggerClick();
+        return true;
+    }
+
+    if (keys::matches ("editor.copy", key))
+    {
+        copySelection();
+        return true;
+    }
+
+    if (keys::matches ("editor.cut", key))
+    {
+        copySelection();
+        deleteSelection();
+        return true;
+    }
+
+    if (keys::matches ("editor.paste", key))
+    {
+        pasteAtPlayhead();
         return true;
     }
 

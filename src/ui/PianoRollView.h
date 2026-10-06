@@ -119,6 +119,12 @@ private:
     void commitNewNote (const MidiSequence::Note&);   // one clip.addNotes = one history event
     void addNoteAt (juce::int64 tick, int key);
     void deleteSelection();
+
+    // Copy / cut / paste (Ctrl+C/X/V): the notes per track, times relative to the earliest;
+    // pasting puts the earliest on the transport line. Shared by every editor in the app.
+    static inline std::map<AudioEngine::TrackId, std::vector<MidiSequence::Note>> clipboard;
+    void copySelection();
+    void pasteAtPlayhead();
     void deleteNote (int index);
     void commitMoveOrResize();
     void commitVelocities();
