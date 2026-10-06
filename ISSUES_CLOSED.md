@@ -333,6 +333,16 @@ resolution notes. Newest additions go at the top of each chapter.
 
 # Midi editor
 
+- [x] The MIDI editor shows several tracks: the edited one normally, the others greyed out.
+  - Resolved: E/D or double-click open the editor on the selected regions' tracks, Ctrl-selected tracks or a folder's tracks; the others are drawn dimmed in their track colour.
+- [x] A dropdown in the editor's top bar chooses what to edit, listing only the tracks shown.
+  - Resolved: the dropdown lists every shown track (and clip-N where its regions overlap); the side list marks the shown tracks and the edited one with a bar on the right.
+- [x] A button to edit several tracks at once (for example copy and paste).
+  - Resolved: the All toggle - select, move, nudge, transpose, delete, copy and paste notes across the shown tracks, with one undo.
+- [x] Velocity, CC, pitch bend and aftertouch lanes at the bottom, stacked; velocity by default.
+  - Resolved: controller lanes (Settings > Controller lanes for availability and names; right-click a lane name to choose a track's lanes, saved per track). One lane maximized, the others minimized strips with a coloured value line; CC edited as points with steps and bent ramps.
+- [x] An articulation chooser in the editor's top bar, from the track's expression map.
+  - Resolved: the articulation button opens the articulation panel (columns per group, symbols); it sets the selected notes' or the next notes' articulation and switches the player live.
 - [x] CC edits are done by adding points rather then drawing. CC is either in staircase steps, ramps or "bent" ramps. The possible position of points is determined by Q and grid settings.
   - Resolved: a controller lane is a list of points; a click adds one (snapped to the zoom's grid and the notes' starts and ends when Snap is on). Between two points a step with a handle in the middle: click it for a ramp, drag it to bend the ramp, double-click it for a step again. Points drag (one also in time; several, e.g. picked by selecting notes over them, up/down together); Delete removes selected points. Playback renders ramps into messages. Old CC data loads as steps.
 
