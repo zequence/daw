@@ -19,7 +19,6 @@ Claude is unsure of an issue they will pose a question.
 
 # Transport
 
-
 # Timeline bar
 
 # Sidebar
@@ -29,7 +28,6 @@ Claude is unsure of an issue they will pose a question.
 - [ ] Configuration views: a MIDI track view (port and channel, greyed out when
       immutable) and an instrument view (expression map selection). (Milestone
       "MIDI track and instrument configuration views" in MILESTONES.md.)
-
 
 # Midi record
 
