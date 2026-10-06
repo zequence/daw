@@ -502,7 +502,7 @@ private:
             // lets the next begin beside it; their panels follow the knobs, diagonal where they meet.
             if (kind != Kind::master)
             {
-                constexpr int knobW = 68, knobH = 79, stagger = 41, buttonW = 44, buttonH = 16, titleH = 12, pad = 2, gap = 4;
+                constexpr int knobW = 68, knobH = 75, stagger = 39, buttonW = 44, buttonH = 16, titleH = 12, pad = 2, gap = 4;
                 const auto left = area.getX() + pad, right = area.getRight() - pad, mid = area.getCentreX();
                 const int columnX[2] = { left, right - knobW };
                 int columnY[2] = { area.getY() + pad, area.getY() + pad };

@@ -59,7 +59,11 @@ struct Knob : juce::Slider
     void paint (juce::Graphics& g) override
     {
         auto area = getLocalBounds().toFloat();
-        const auto legendArea = legend.isNotEmpty() ? area.removeFromBottom (11.0f) : juce::Rectangle<float>();
+        // The legend tucks up into the open bottom of the scale, so it reserves less than its height
+        const auto legendArea = legend.isNotEmpty() ? area.withTop (area.getBottom() - 11.0f) : juce::Rectangle<float>();
+
+        if (legend.isNotEmpty())
+            area.removeFromBottom (7.0f);
         const auto size = juce::jmin (area.getWidth(), area.getHeight()) - 2.0f;
         const auto circle = juce::Rectangle<float> (size, size).withCentre (area.getCentre());
         const auto centre = circle.getCentre();
