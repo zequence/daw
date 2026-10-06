@@ -123,6 +123,15 @@ void ArrangementView::mouseDown (const juce::MouseEvent& event)
     dragging = {};
     dragTargetTrack = 0;
     marquee = false;
+    draggingFolder = {};
+
+    // A folder region: dragged sideways, with everything inside it
+    if (const auto span = folderSpanAt (position); span.folder != 0 && ! event.mods.isPopupMenu())
+    {
+        draggingFolder = span;
+        draggingFolderTracks = tracksInFolder (span.folder);
+        return;
+    }
 
     // A click on a contact point glues the two regions
     if (const auto glue = gluePointAt (position); glue.trackId != 0 && ! event.mods.isPopupMenu())
@@ -177,6 +186,14 @@ void ArrangementView::mouseDrag (const juce::MouseEvent& event)
     if (event.getDistanceFromDragStart() > 2)
         didDrag = true;
 
+    if (draggingFolder.folder != 0)   // sideways only, snapped like a region
+    {
+        const auto rawDelta = (juce::int64) ((event.x - dragStart.x) * axis.ticksPerPixel);
+        dragDeltaTicks = axis.snapToGrid (*engine.getTransport().getTempoMap(), draggingFolder.start + rawDelta) - draggingFolder.start;
+        repaint();
+        return;
+    }
+
     if (marquee)
     {
         repaint();
@@ -225,6 +242,36 @@ std::vector<ArrangementView::BlockRef> ArrangementView::blocksTouching (juce::Re
 
 void ArrangementView::mouseUp (const juce::MouseEvent& event)
 {
+    if (draggingFolder.folder != 0)
+    {
+        // Every track's content in the stretch moves by the same amount: one edit, one undo
+        if (didDrag && dragDeltaTicks != 0)
+        {
+            juce::Array<juce::var> moves;
+
+            for (auto track : draggingFolderTracks)
+            {
+                auto move = juce::DynamicObject::Ptr (new juce::DynamicObject());
+                move->setProperty ("trackId", track);
+                move->setProperty ("start", draggingFolder.start);
+                move->setProperty ("end", draggingFolder.end);
+                move->setProperty ("destStart", juce::jmax ((juce::int64) 0, draggingFolder.start + dragDeltaTicks));
+                moves.add (juce::var (move.get()));
+            }
+
+            auto params = juce::DynamicObject::Ptr (new juce::DynamicObject());
+            params->setProperty ("moves", moves);
+            runCommand ("clip.moveRanges", params);
+            selection.clear();
+        }
+
+        draggingFolder = {};
+        draggingFolderTracks.clear();
+        dragDeltaTicks = 0;
+        repaint();
+        return;
+    }
+
     if (marquee)
     {
         // A click selects the block under it - where regions overlap, only the top one (or clears);
@@ -371,6 +418,12 @@ void ArrangementView::mouseMove (const juce::MouseEvent& event)
         return;
     }
 
+    if (folderSpanAt (event.getPosition()).folder != 0)   // a folder region drags sideways
+    {
+        setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+        return;
+    }
+
     const auto hit = blockAt (event.getPosition());
     setMouseCursor (hit.valid() && isSelected (hit) ? juce::MouseCursor::DraggingHandCursor
                                                     : juce::MouseCursor::NormalCursor);
@@ -503,6 +556,23 @@ std::vector<std::pair<juce::int64, juce::int64>> ArrangementView::folderSpans (A
     }
 
     return merged;
+}
+
+ArrangementView::FolderSpan ArrangementView::folderSpanAt (juce::Point<int> position)
+{
+    const auto items = itemsNow();
+    const auto index = itemIndexAt (items, position.y);
+
+    if (index < 0 || items[(size_t) index].folder == 0 || position.x < TimeAxis::gutter)
+        return {};
+
+    const auto tick = xToTick (position.x);
+
+    for (auto& [start, end] : folderSpans (items[(size_t) index].folder))
+        if (tick >= start && tick < end)
+            return { items[(size_t) index].folder, start, end };
+
+    return {};
 }
 
 void ArrangementView::mouseDoubleClick (const juce::MouseEvent& event)
@@ -727,8 +797,13 @@ void ArrangementView::paint (juce::Graphics& g)
                 const auto style = theme::regionStyle (base, false);
                 const auto folderTracks = tracksInFolder (item.folder);
 
-                for (auto& [start, end] : folderSpans (item.folder))
+                for (auto [start, end] : folderSpans (item.folder))
                 {
+                    const auto noteShift = draggingFolder.folder == item.folder && draggingFolder.start == start && didDrag
+                                             ? dragDeltaTicks : (juce::int64) 0;
+                    const auto originalStart = start;
+                    start += noteShift;
+                    end += noteShift;
                     const auto x = tickToX (start);
                     const auto right = tickToX (end);
 
@@ -748,10 +823,10 @@ void ArrangementView::paint (juce::Graphics& g)
                         if (auto folderSeq = engine.getTrackSequence (track))
                             for (auto& note : folderSeq->getNotes())
                             {
-                                if (note.startTick < start || note.startTick >= end)
+                                if (note.startTick < originalStart || note.startTick >= originalStart + (end - start))
                                     continue;
 
-                                const auto nx = tickToX (note.startTick);
+                                const auto nx = tickToX (note.startTick + noteShift);
 
                                 if (nx > getWidth())
                                     break;
@@ -782,8 +857,12 @@ void ArrangementView::paint (juce::Graphics& g)
                 auto ref = BlockRef::of (trackId, block);
                 const auto selectedBlock = isSelected (ref);
                 const auto isDragged = dragging.valid() && didDrag && selectedBlock;
+                const auto inDraggedFolder = draggingFolder.folder != 0 && didDrag && block.startTick >= draggingFolder.start
+                                               && block.startTick < draggingFolder.end
+                                               && std::find (draggingFolderTracks.begin(), draggingFolderTracks.end(), trackId)
+                                                    != draggingFolderTracks.end();
 
-                if (isDragged)
+                if (isDragged || inDraggedFolder)
                 {
                     ref.startTick += dragDeltaTicks;
                     ref.endTick += dragDeltaTicks;

@@ -122,6 +122,13 @@ private:
     std::vector<AudioEngine::TrackId> tracksInFolder (AudioEngine::FolderId) const;
     std::vector<std::pair<juce::int64, juce::int64>> folderSpans (AudioEngine::FolderId);
 
+    // A folder region under the mouse (its folder, 0 = none) and dragging one: sideways only,
+    // moving everything inside it on every track of the folder
+    struct FolderSpan { AudioEngine::FolderId folder = 0; juce::int64 start = 0, end = 0; };
+    FolderSpan folderSpanAt (juce::Point<int>);
+    FolderSpan draggingFolder;
+    std::vector<AudioEngine::TrackId> draggingFolderTracks;
+
     // Where a region starts touching or overlapping an earlier one (different region ids keep
     // them apart): hovering its left edge shows the glue pointer, clicking joins them
     struct GluePoint { AudioEngine::TrackId trackId = 0; int region = 0, into = 0; };
