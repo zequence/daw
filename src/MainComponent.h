@@ -107,12 +107,13 @@ private:
     // (same Y axis); declared before both.
     sidebar::VerticalScroll trackScroll;
     // Above the lists: MIDI / AUDIO in a block of the domain's colour, the letters in
-    // the background colour (inverted). The block spans about 90% of the sidebar at its
-    // minimum width; the letters are sized to fill it (both words the same size).
+    // the background colour (inverted). At the sidebar's minimum width the space beside the
+    // block equals the space above and below it; the letters fill it (both words the same size).
     struct SidebarHeader final : juce::Component
     {
         static constexpr int minSidebarWidth = 150;
-        static constexpr int blockWidth = minSidebarWidth * 9 / 10, padding = 8, margin = 6;
+        static constexpr int margin = 12;                                  // around the block, every side
+        static constexpr int blockWidth = minSidebarWidth - 2 * margin, padding = 16;
 
         static juce::Font font()
         {
