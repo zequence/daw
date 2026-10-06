@@ -252,6 +252,7 @@ void ArrangementView::mouseUp (const juce::MouseEvent& event)
     dragging = {};
     dragDeltaTicks = 0;
     dragTargetTrack = 0;
+    mouseMove (event);   // the new selection may be under the pointer
     repaint();
 }
 
@@ -287,6 +288,13 @@ void ArrangementView::moveSelection()
     }
 
     selection = moved;   // (blocks recompute from the notes; the refs re-match at their new starts)
+}
+
+void ArrangementView::mouseMove (const juce::MouseEvent& event)
+{
+    const auto hit = blockAt (event.getPosition());
+    setMouseCursor (hit.valid() && isSelected (hit) ? juce::MouseCursor::DraggingHandCursor
+                                                    : juce::MouseCursor::NormalCursor);
 }
 
 void ArrangementView::paintOverChildren (juce::Graphics& g)

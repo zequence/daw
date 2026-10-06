@@ -35,6 +35,7 @@ public:
     void mouseDoubleClick (const juce::MouseEvent&) override;
     void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
     void paintOverChildren (juce::Graphics&) override;   // the selection rectangle
+    void mouseMove (const juce::MouseEvent&) override;   // a hand over selected regions (they move)
 
 private:
     struct BlockRef
