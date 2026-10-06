@@ -3035,15 +3035,6 @@ void PianoRollView::paint (juce::Graphics& g)
         g.fillRect (playheadX, grid.getY(), 1, getHeight() - grid.getY());
     }
 
-    // --- Empty hint ---
-    if (seq == nullptr || seq->getNotes().empty())
-    {
-        g.setColour (juce::Colours::grey);
-        g.setFont (juce::FontOptions (14.0f));
-        g.drawText ("Double-click to add notes - or record something",
-                    grid, juce::Justification::centred);
-    }
-
     // The lane value under the mouse
     if (hoverValue.isNotEmpty())
     {
