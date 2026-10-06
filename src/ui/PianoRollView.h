@@ -124,6 +124,8 @@ private:
     // pasting puts the earliest on the transport line. Shared by every editor in the app.
     static inline std::map<AudioEngine::TrackId, std::vector<MidiSequence::Note>> clipboard;
     void copySelection();
+    void undo();
+    void redo();
     void pasteAtPlayhead();
     void deleteNote (int index);
     void commitMoveOrResize();
@@ -234,7 +236,7 @@ private:
     void noteInput (const juce::MidiMessage&, double receivedMs);
     bool drawMode = false;   // the top bar's Draw (pen) vs Edit (select)
     juce::ComboBox lengthBox, laneBox, colourBox;
-    juce::TextButton quantizeButton { "Q" }, undoButton { "Undo" }, redoButton { "Redo" };
+    juce::TextButton quantizeButton { "Q" };
     juce::TextButton articulationButton { "Articulation" };
     ExpressionMap::Selection newNoteArticulation;   // what new notes are drawn with (nothing selected)
     juce::String articulationKey;                   // what the button was last built for

@@ -194,42 +194,6 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     };
     addAndMakeVisible (quantizeButton);
 
-    undoButton.setTooltip ("Undo the last clip edit on this track (Ctrl+Z)");
-    redoButton.setTooltip ("Redo (Ctrl+Y / Ctrl+Shift+Z)");
-
-    undoButton.onClick = [this]
-    {
-        const auto before = sequence();
-        auto params = new juce::DynamicObject();
-        params->setProperty ("trackId", trackId);
-        runCommand ("clip.undo", params);
-        selection.clear();
-
-        // Undoing a note written by note input: the line goes back to where it was written
-        for (auto& step : inputSteps)
-            if (before != nullptr && step.result == before && sequence() != before)
-            {
-                engine.getTransport().locate (step.lineBefore);
-                chordTick = -1;
-            }
-    };
-    addAndMakeVisible (undoButton);
-
-    redoButton.onClick = [this]
-    {
-        auto params = new juce::DynamicObject();
-        params->setProperty ("trackId", trackId);
-        runCommand ("clip.redo", params);
-        selection.clear();
-
-        for (auto& step : inputSteps)
-            if (step.result != nullptr && step.result == sequence())
-            {
-                engine.getTransport().locate (step.lineAfter);
-                chordTick = -1;
-            }
-    };
-    addAndMakeVisible (redoButton);
 
     editTargetBox.setTooltip ("What is edited: the track - and where its regions overlap, which clip (the others are dimmed)");
     editTargetBox.setWantsKeyboardFocus (false);
@@ -254,8 +218,8 @@ PianoRollView::PianoRollView (AudioEngine& e, CommandDispatcher& d, TimeAxis& a)
     addAndMakeVisible (editTargetBox);
 
     for (auto* c : std::initializer_list<juce::Component*> { &auditionToggle, &inputToggle,
-                                                             &lengthBox, &dotButton, &laneBox, &quantizeButton, &undoButton,
-                                                             &redoButton, &articulationButton, &colourBox })
+                                                             &lengthBox, &dotButton, &laneBox, &quantizeButton,
+                                                             &articulationButton, &colourBox })
         c->setWantsKeyboardFocus (false);
 
     startTimerHz (30);
@@ -850,6 +814,39 @@ void PianoRollView::deleteSelection()
         runCommand ("clip.removeNotes", otherParams);
         chosen.clear();
     });
+}
+
+// Undo / redo of this track's clip (Ctrl+Z / Ctrl+Y)
+void PianoRollView::undo()
+{
+    const auto before = sequence();
+    auto params = new juce::DynamicObject();
+    params->setProperty ("trackId", trackId);
+    runCommand ("clip.undo", params);
+    selection.clear();
+
+    // Undoing a note written by note input: the line goes back to where it was written
+    for (auto& step : inputSteps)
+        if (before != nullptr && step.result == before && sequence() != before)
+        {
+            engine.getTransport().locate (step.lineBefore);
+            chordTick = -1;
+        }
+}
+
+void PianoRollView::redo()
+{
+    auto params = new juce::DynamicObject();
+    params->setProperty ("trackId", trackId);
+    runCommand ("clip.redo", params);
+    selection.clear();
+
+    for (auto& step : inputSteps)
+        if (step.result != nullptr && step.result == sequence())
+        {
+            engine.getTransport().locate (step.lineAfter);
+            chordTick = -1;
+        }
 }
 
 void PianoRollView::copySelection()
@@ -1707,13 +1704,13 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
 
     if (keys::matches ("edit.undo", key))
     {
-        undoButton.triggerClick();
+        undo();
         return true;
     }
 
     if (keys::matches ("edit.redo", key))
     {
-        redoButton.triggerClick();
+        redo();
         return true;
     }
 
@@ -1877,8 +1874,6 @@ void PianoRollView::timerCallback()
     }
 
     refreshArticulationButton();
-    undoButton.setEnabled (engine.canUndoClip (trackId));
-    redoButton.setEnabled (engine.canRedoClip (trackId));
 
     // Playhead, shared axis, or any engine mutation (grid follows tempo and
     // signature edits too) - the engine's state revision covers it all.
@@ -1906,10 +1901,6 @@ void PianoRollView::resized()
     dotButton.setBounds (toolbar.removeFromLeft (28));
     toolbar.removeFromLeft (10);
     quantizeButton.setBounds (toolbar.removeFromLeft (30));
-    toolbar.removeFromLeft (12);
-    undoButton.setBounds (toolbar.removeFromLeft (52));
-    toolbar.removeFromLeft (4);
-    redoButton.setBounds (toolbar.removeFromLeft (52));
     toolbar.removeFromLeft (12);
     auditionToggle.setBounds (toolbar.removeFromLeft (46));
     toolbar.removeFromLeft (4);
