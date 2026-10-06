@@ -230,7 +230,6 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
                          &expressionMapView.closeButton, &historyView.closeButton })
         close->onClick = [this] { showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions); };
 
-    mixerView.closeButton.onClick = [this] { showContent (mainView); };
 
     pianoRollView.closeButton.onClick = [this]
     {

@@ -3,7 +3,6 @@
 #include "../AudioEngine.h"
 #include "../engine/AudioChannelProcessor.h"
 #include "MixerParts.h"
-#include "CloseButton.h"
 
 // The mixer (MILESTONES.md "Audio mixer"), in a console style (SSL first). A strip per audio
 // channel in the sidebar's folder order, then the six Aux buses, the master at the right. A
@@ -17,16 +16,7 @@ class MixerView final : public juce::Component, private juce::Timer
 public:
     explicit MixerView (AudioEngine& e) : engine (e)
     {
-        title.setText ("Mixer", juce::dontSendNotification);
-        title.setFont (juce::FontOptions (15.0f, juce::Font::bold));
-        addAndMakeVisible (title);
-        addAndMakeVisible (closeButton);
-
-        styleBox.addItem (mixer::ConsoleStyle::ssl().name, 1);
-        styleBox.setSelectedId (1, juce::dontSendNotification);
-        styleBox.setTooltip ("Console style - SSL for now; more styles to come");
-        styleBox.setWantsKeyboardFocus (false);
-        addAndMakeVisible (styleBox);
+        addMouseListener (this, true);   // a right-click anywhere: the mixer's menu (the console style)
 
         // Strips scroll sideways; the whole row scrolls up and down when the window is short
         outer.setViewedComponent (&body, false);
@@ -50,7 +40,18 @@ public:
         startTimerHz (30);
     }
 
-    CloseButton closeButton;
+    // The right-click menu: the console style (SSL for now; more styles to come)
+    void mouseDown (const juce::MouseEvent& event) override
+    {
+        if (! event.mods.isPopupMenu())
+            return;
+
+        juce::PopupMenu styles;
+        styles.addItem (mixer::ConsoleStyle::ssl().name, true, true, [] {});
+        juce::PopupMenu menu;
+        menu.addSubMenu ("Console style", styles);
+        menu.showMenuAsync (juce::PopupMenu::Options());
+    }
 
     // The selected track's channel is highlighted (0 = none)
     void setHighlightedChannel (AudioEngine::AudioChannelId id)
@@ -67,12 +68,6 @@ public:
     void resized() override
     {
         auto area = getLocalBounds();
-        auto header = area.removeFromTop (30).reduced (8, 3);
-        closeButton.setBounds (header.removeFromRight (header.getHeight() + 4));
-        header.removeFromRight (8);
-        styleBox.setBounds (header.removeFromRight (90));
-        title.setBounds (header);
-
         outer.setBounds (area);
         layoutBody();
     }
@@ -800,8 +795,6 @@ private:
     }
 
     AudioEngine& engine;
-    juce::Label title;
-    juce::ComboBox styleBox;
     juce::Viewport outer, channelsViewport;
     juce::Component body, strips;
     std::vector<std::unique_ptr<Strip>> channelStrips, auxStrips;
