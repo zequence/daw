@@ -616,7 +616,7 @@ private:
                     if (onOff != nullptr)   // the section's on/off, at the top beside the first knob
                     {
                         const auto c = 1 - next;
-                        const auto y = juce::jmax (columnY[c], title.getY());
+                        const auto y = juce::jmax (columnY[c], title.getY()) + 5;   // a little down from the panel's top
                         auto r = juce::Rectangle<int> (columnX[c], y, knobW, buttonH).withSizeKeepingCentre (buttonW, buttonH - 2);
                         placed.push_back ({ onOff, c == 1 ? r.withX (right - buttonW) : r.withX (left) });   // out towards the edge
                         mark (c, y, y + buttonH);
