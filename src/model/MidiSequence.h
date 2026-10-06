@@ -209,13 +209,21 @@ public:
         return a.type == b.type && a.channel == b.channel && (a.type != ControlType::controller || a.number == b.number);
     }
 
-    // A ramp's curve: how far along the way (0..1) the value is at 'x' (0..1 of the time). It passes
-    // through the handle: height 'bend' at 'bendAt' (both 0.5 = a straight line).
+    // A ramp's curve: how far along the way (0..1) the value is at 'x' (0..1 of the time). A quadratic
+    // Bezier from (0,0) to (1,1) that passes through the handle - height 'bend' at 'bendAt' - at its
+    // middle, so the bend is where the handle is and both ends leave smoothly (both 0.5 = straight).
     static float rampShape (float x, float bend, float bendAt = 0.5f)
     {
-        const auto b = juce::jlimit (0.02f, 0.98f, bend);
-        const auto at = juce::jlimit (0.05f, 0.95f, bendAt);
-        return std::pow (juce::jlimit (0.0f, 1.0f, x), std::log (b) / std::log (at));
+        x = juce::jlimit (0.0f, 1.0f, x);
+
+        // The control point that puts the curve's middle on the handle (kept inside the time span)
+        const auto cx = juce::jlimit (0.0f, 1.0f, 2.0f * juce::jlimit (0.05f, 0.95f, bendAt) - 0.5f);
+        const auto cy = 2.0f * juce::jlimit (0.02f, 0.98f, bend) - 0.5f;
+
+        // x(t) = (1 - 2cx) t^2 + 2cx t: solve for t, then y(t) = 2t(1-t) cy + t^2
+        const auto qa = 1.0f - 2.0f * cx, qb = 2.0f * cx;
+        const auto t = std::abs (qa) < 1.0e-6f ? x : (-qb + std::sqrt (juce::jmax (0.0f, qb * qb + 4.0f * qa * x))) / (2.0f * qa);
+        return juce::jlimit (0.0f, 1.0f, 2.0f * t * (1.0f - t) * cy + t * t);
     }
 
     // The value a lane has at 'tick' from its points (-1 = none yet): the last point's, or along its ramp
