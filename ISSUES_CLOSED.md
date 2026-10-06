@@ -327,6 +327,11 @@ resolution notes. Newest additions go at the top of each chapter.
 - [x] Move selected notes with arrows: Up/Down a half step, Ctrl+Up/Down an
       octave, Left/Right by the snap grid
 
+# Midi editor
+
+- [x] CC edits are done by adding points rather then drawing. CC is either in staircase steps, ramps or "bent" ramps. The possible position of points is determined by Q and grid settings.
+  - Resolved: a controller lane is a list of points; a click adds one (snapped to the zoom's grid and the notes' starts and ends when Snap is on). Between two points a step with a handle in the middle: click it for a ramp, drag it to bend the ramp, double-click it for a step again. Points drag (one also in time; several, e.g. picked by selecting notes over them, up/down together); Delete removes selected points. Playback renders ramps into messages. Old CC data loads as steps.
+
 # Expression maps
 
 - [x] Add new groups for dynamic lengths, trill intervals, ricochet amount

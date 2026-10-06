@@ -46,7 +46,7 @@ it clears the region selection.
 | Command | Default | Id |
 |---|---|---|
 | Note input on / off | N | `editor.noteInput` |
-| Delete the selected notes | Delete, Backspace | `editor.delete` |
+| Delete the selected notes (or CC points) | Delete, Backspace | `editor.delete` |
 | Select all notes | Ctrl+A | `editor.selectAll` |
 | Copy the selected notes | Ctrl+C | `editor.copy` |
 | Cut the selected notes | Ctrl+X | `editor.cut` |

@@ -53,10 +53,11 @@ public:
     // Esc: selected notes are deselected first; false when nothing was selected
     bool deselectNotes()
     {
-        if (! anySelected())
+        if (! anySelected() && pointSelection.empty())
             return false;
 
         clearAllSelections();
+        pointSelection.clear();
         repaint();
         return true;
     }
@@ -82,7 +83,7 @@ public:
     bool noteInputKey (const juce::KeyPress&);
 
 private:
-    enum class Drag { none, marquee, move, resize, lane, draw };
+    enum class Drag { none, marquee, move, resize, lane, draw, point, handle };
     enum class LaneMode { velocity, pitchBend, aftertouch, controller };
 
     //==============================================================================
@@ -103,6 +104,30 @@ private:
     void paintLanes (juce::Graphics&, const MidiSequence*);
     void paintMinimizedLane (juce::Graphics&, juce::Rectangle<int> strip, const lanes::Lane&, const MidiSequence*);
     juce::String laneValueAt (juce::Point<int>) const;   // the value under the mouse ("" = none)
+
+    // CC points (the maximized controller lane): one point per click; between two points a step
+    // or a (bent) ramp, with a handle in the middle - click it for a ramp, drag it to bend,
+    // double-click it for a step again. Points snap to the grid and to the notes' starts and ends.
+    std::set<int> pointSelection;                    // control indices (the clip's controls)
+    int dragPoint = -1, dragHandle = -1;             // the pressed point / the segment's first point
+    int pointValueDelta = 0;
+    juce::int64 pointTickDelta = 0;
+    float previewBend = -1.0f;                       // while dragging a handle
+    bool handleMoved = false;
+    int hoveredHandle = -1;
+
+    bool isPointLane() const   { return laneMode() != LaneMode::velocity; }
+    std::vector<int> lanePoints() const;             // the maximized lane's points, in time order
+    std::set<int> effectivePoints() const;           // selected points + those under the selected notes' span
+    juce::Point<int> pointPosition (const MidiSequence::Control&) const;
+    juce::Point<int> handlePosition (const MidiSequence::Control& from, const MidiSequence::Control& to, float bend) const;
+    int pointAt (juce::Point<int>) const;            // -1 = none
+    int handleAt (juce::Point<int>) const;           // the segment's first point; -1 = none
+    juce::int64 snapPointTick (juce::int64 tick) const;   // the grid and the notes' starts and ends
+    void addPointAt (juce::Point<int>);
+    void commitPointDrag();
+    void commitHandle (bool click);
+    void deletePoints();
 
     juce::String maximizedLane;   // id; empty = the first shown
     int hoveredLane = -1;         // a minimized lane under the mouse (lit subtly)

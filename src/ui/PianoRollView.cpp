@@ -450,14 +450,13 @@ juce::String PianoRollView::laneValueAt (juce::Point<int> position) const
     }
     else
     {
+        // The value in effect there: the last point's, or along its ramp
         for (auto& control : seq->getControls())
-        {
-            if (control.tick > tick)
-                break;
-
             if (lane.shows (control))
-                current = control.value;
-        }
+            {
+                current = MidiSequence::laneValueAt (seq->getControls(), control, tick);
+                break;
+            }
     }
 
     // The maximized lane: the value at the mouse's height - what a drag sets - and what is there now
@@ -1380,6 +1379,48 @@ void PianoRollView::mouseDown (const juce::MouseEvent& event)
             return;
         }
 
+        if (isPointLane())
+        {
+            pointValueDelta = 0;
+            pointTickDelta = 0;
+            handleMoved = false;
+
+            if (const auto handle = handleAt (position); handle >= 0)
+            {
+                dragHandle = handle;
+                const auto seq = sequence();
+                previewBend = seq != nullptr && seq->getControls()[(size_t) handle].ramp ? seq->getControls()[(size_t) handle].bend : 0.5f;
+                drag = Drag::handle;
+                return;
+            }
+
+            if (const auto point = pointAt (position); point >= 0)
+            {
+                if (event.mods.isShiftDown())
+                {
+                    if (pointSelection.count (point)) pointSelection.erase (point);
+                    else                              pointSelection.insert (point);
+                }
+                else if (effectivePoints().count (point) == 0)
+                {
+                    pointSelection = { point };
+                    clearAllSelections();   // the notes' span no longer picks points
+                }
+
+                dragPoint = point;
+                drag = Drag::point;
+                repaint();
+                return;
+            }
+
+            if (! event.mods.isShiftDown())
+                pointSelection.clear();
+
+            addPointAt (position);
+            repaint();
+            return;
+        }
+
         drag = Drag::lane;
         laneGesture.clear();
         gestureMinTick = gestureMaxTick = -1;
@@ -1540,6 +1581,47 @@ void PianoRollView::mouseDrag (const juce::MouseEvent& event)
     {
         repaint();
     }
+    else if (drag == Drag::point)
+    {
+        if (const auto seq = sequence(); seq != nullptr && dragPoint >= 0 && dragPoint < (int) seq->getControls().size())
+        {
+            const auto& pressed = seq->getControls()[(size_t) dragPoint];
+            pointValueDelta = laneValueFromY (position.y) - pressed.value;
+
+            if (effectivePoints().size() == 1)   // one point also moves in time (snapped)
+                pointTickDelta = snapPointTick (pressed.tick + (juce::int64) ((position.x - dragStart.x) * axis.ticksPerPixel)) - pressed.tick;
+
+            const auto lane = lanes::parse (maximizedLaneId());
+            const auto value = juce::jlimit (0, lane.maxValue(), pressed.value + pointValueDelta);
+            hoverValue = lanes::Settings::get().displayName (maximizedLaneId()) + " "
+                           + juce::String (lane.kind == lanes::Kind::pitchBend ? value - 8192 : value);
+            hoverPoint = position;
+        }
+
+        repaint();
+    }
+    else if (drag == Drag::handle)
+    {
+        if (const auto seq = sequence(); seq != nullptr && dragHandle >= 0)
+        {
+            const auto points = lanePoints();
+            const auto at = std::find (points.begin(), points.end(), dragHandle);
+
+            if (at != points.end() && at + 1 != points.end())
+            {
+                const auto& from = seq->getControls()[(size_t) *at];
+                const auto& to = seq->getControls()[(size_t) *(at + 1)];
+
+                if (from.value != to.value && std::abs (position.y - dragStart.y) > 2)
+                {
+                    handleMoved = true;
+                    previewBend = juce::jlimit (0.02f, 0.98f, (float) (laneValueFromY (position.y) - from.value) / (float) (to.value - from.value));
+                }
+            }
+        }
+
+        repaint();
+    }
     else if (drag == Drag::lane)
     {
         if (laneMode() == LaneMode::velocity)
@@ -1647,6 +1729,19 @@ void PianoRollView::mouseUp (const juce::MouseEvent& event)
         else
             commitLaneGesture();
     }
+    else if (drag == Drag::point)
+    {
+        commitPointDrag();
+        dragPoint = -1;
+        pointValueDelta = 0;
+        pointTickDelta = 0;
+    }
+    else if (drag == Drag::handle)
+    {
+        commitHandle (! handleMoved);
+        dragHandle = -1;
+        previewBend = -1.0f;
+    }
 
     drag = Drag::none;
     repaint();
@@ -1654,6 +1749,20 @@ void PianoRollView::mouseUp (const juce::MouseEvent& event)
 
 void PianoRollView::mouseDoubleClick (const juce::MouseEvent& event)
 {
+    if (isPointLane())
+        if (const auto handle = handleAt (event.getPosition()); handle >= 0)
+        {
+            auto change = new juce::DynamicObject();
+            change->setProperty ("index", handle);
+            change->setProperty ("ramp", false);
+            auto params = new juce::DynamicObject();
+            params->setProperty ("trackId", trackId);
+            params->setProperty ("controls", juce::Array<juce::var> { juce::var (change) });
+            runCommand ("clip.updateControls", params);
+            repaint();
+            return;
+        }
+
     bool onRightEdge = false;
 
     if (gridArea().contains (event.getPosition()) && noteIndexAt (event.getPosition(), onRightEdge) < 0)
@@ -1744,8 +1853,20 @@ void PianoRollView::updateCursorAt (juce::Point<int> position)
     bool onRightEdge = false;
     noteIndexAt (position, onRightEdge);
 
+    const auto overHandle = isPointLane() && handleAt (position) >= 0;
+
+    if (overHandle != (hoveredHandle >= 0))
+    {
+        hoveredHandle = overHandle ? handleAt (position) : -1;
+        repaint();
+    }
+
     if (onRightEdge)
         setMouseCursor (juce::MouseCursor::LeftRightResizeCursor);
+    else if (overHandle)
+        setMouseCursor (juce::MouseCursor::PointingHandCursor);
+    else if (isPointLane() && pointAt (position) >= 0)
+        setMouseCursor (juce::MouseCursor::DraggingHandCursor);
     else if ((gridArea().contains (position) && drawMode) || laneArea().contains (position))
         setMouseCursor (penCursor());   // the velocity / CC lane is always drawn in
     else
@@ -1860,7 +1981,12 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
 
     if (keys::matches ("editor.delete", key))
     {
-        deleteSelection();
+        if (! pointSelection.empty())
+            deletePoints();
+        else
+            deleteSelection();
+
+        repaint();
         return true;
     }
 
@@ -2078,6 +2204,245 @@ void PianoRollView::resized()
     editTargetBox.setBounds (toolbar.removeFromRight (juce::jmin (240, juce::jmax (120, toolbar.getWidth()))));
 }
 
+//==============================================================================
+// CC points
+std::vector<int> PianoRollView::lanePoints() const
+{
+    std::vector<int> points;
+
+    if (auto seq = sequence())
+    {
+        const auto lane = lanes::parse (maximizedLaneId());
+
+        for (int i = 0; i < (int) seq->getControls().size(); ++i)
+            if (lane.shows (seq->getControls()[(size_t) i]))
+                points.push_back (i);
+    }
+
+    return points;
+}
+
+// The selected points, plus every point of the lane under the selected notes' span (dragged together)
+std::set<int> PianoRollView::effectivePoints() const
+{
+    auto points = pointSelection;
+    const auto seq = sequence();
+
+    if (seq == nullptr || selection.empty())
+        return points;
+
+    auto from = std::numeric_limits<juce::int64>::max(), to = (juce::int64) 0;
+
+    for (auto index : selection)
+        if (index < (int) seq->getNotes().size())
+        {
+            const auto& note = seq->getNotes()[(size_t) index];
+            from = juce::jmin (from, note.startTick);
+            to = juce::jmax (to, note.startTick + note.lengthTicks);
+        }
+
+    for (auto index : lanePoints())
+        if (const auto tick = seq->getControls()[(size_t) index].tick; tick >= from && tick <= to)
+            points.insert (index);
+
+    return points;
+}
+
+juce::Point<int> PianoRollView::pointPosition (const MidiSequence::Control& c) const
+{
+    return { tickToX (c.tick), laneValueToY (c.value) };
+}
+
+juce::Point<int> PianoRollView::handlePosition (const MidiSequence::Control& from, const MidiSequence::Control& to, float bend) const
+{
+    const auto x = tickToX ((from.tick + to.tick) / 2);
+    const auto value = from.ramp || bend >= 0.0f ? (float) from.value + (float) (to.value - from.value) * (bend >= 0.0f ? bend : from.bend)
+                                                 : 0.5f * (float) (from.value + to.value);
+    return { x, laneValueToY (juce::roundToInt (value)) };
+}
+
+int PianoRollView::pointAt (juce::Point<int> position) const
+{
+    const auto seq = sequence();
+
+    if (seq == nullptr || ! laneArea().contains (position))
+        return -1;
+
+    for (auto index : lanePoints())
+        if (pointPosition (seq->getControls()[(size_t) index]).getDistanceFrom (position) <= 5)
+            return index;
+
+    return -1;
+}
+
+int PianoRollView::handleAt (juce::Point<int> position) const
+{
+    const auto seq = sequence();
+
+    if (seq == nullptr || ! laneArea().contains (position))
+        return -1;
+
+    const auto points = lanePoints();
+
+    for (size_t i = 0; i + 1 < points.size(); ++i)
+    {
+        const auto& from = seq->getControls()[(size_t) points[i]];
+        const auto& to = seq->getControls()[(size_t) points[i + 1]];
+
+        if (tickToX (to.tick) - tickToX (from.tick) >= 14 && handlePosition (from, to, -1.0f).getDistanceFrom (position) <= 5)
+            return points[i];
+    }
+
+    return -1;
+}
+
+// With Snap on: the nearest of the grid line and the edited track's note starts and ends
+juce::int64 PianoRollView::snapPointTick (juce::int64 tick) const
+{
+    tick = juce::jmax ((juce::int64) 0, tick);
+
+    if (! axis.snap)
+        return tick;
+
+    auto best = axis.snapToGrid (*engine.getTransport().getTempoMap(), tick);
+
+    if (auto seq = sequence())
+        for (auto& note : seq->getNotes())
+            for (auto edge : { note.startTick, note.startTick + note.lengthTicks })
+                if (std::abs (edge - tick) < std::abs (best - tick))
+                    best = edge;
+
+    return best;
+}
+
+// A click on the lane's empty space: one point there (a point at that very time takes the value)
+void PianoRollView::addPointAt (juce::Point<int> position)
+{
+    const auto lane = lanes::parse (maximizedLaneId());
+    const auto tick = snapPointTick (xToTick (position.x));
+    const auto value = laneValueFromY (position.y);
+    const auto seq = sequence();
+
+    if (seq != nullptr)
+        for (auto index : lanePoints())
+            if (seq->getControls()[(size_t) index].tick == tick)
+            {
+                auto change = new juce::DynamicObject();
+                change->setProperty ("index", index);
+                change->setProperty ("value", value);
+                auto params = new juce::DynamicObject();
+                params->setProperty ("trackId", trackId);
+                params->setProperty ("controls", juce::Array<juce::var> { juce::var (change) });
+                runCommand ("clip.updateControls", params);
+                pointSelection = { index };
+                return;
+            }
+
+    auto point = new juce::DynamicObject();
+    point->setProperty ("tick", tick);
+    point->setProperty ("type", lane.controlType());
+    point->setProperty ("number", lane.cc);
+    point->setProperty ("value", value);
+
+    auto params = new juce::DynamicObject();
+    params->setProperty ("trackId", trackId);
+    params->setProperty ("controls", juce::Array<juce::var> { juce::var (point) });
+    runCommand ("clip.addControls", params);
+
+    // The new point is selected
+    pointSelection.clear();
+
+    if (auto updated = sequence())
+        for (int i = 0; i < (int) updated->getControls().size(); ++i)
+            if (const auto& c = updated->getControls()[(size_t) i]; lane.shows (c) && c.tick == tick && c.value == value)
+                pointSelection = { i };
+}
+
+// The dragged points: up/down together (one alone also moves in time)
+void PianoRollView::commitPointDrag()
+{
+    const auto seq = sequence();
+    const auto points = effectivePoints();
+
+    if (seq == nullptr || (pointValueDelta == 0 && pointTickDelta == 0))
+        return;
+
+    const auto lane = lanes::parse (maximizedLaneId());
+    juce::Array<juce::var> changes;
+    std::vector<std::pair<juce::int64, int>> wanted;
+
+    for (auto index : points)
+    {
+        const auto& c = seq->getControls()[(size_t) index];
+        const auto value = juce::jlimit (0, lane.maxValue(), c.value + pointValueDelta);
+        const auto tick = points.size() == 1 ? juce::jmax ((juce::int64) 0, c.tick + pointTickDelta) : c.tick;
+
+        auto change = new juce::DynamicObject();
+        change->setProperty ("index", index);
+        change->setProperty ("value", value);
+        change->setProperty ("tick", tick);
+        changes.add (juce::var (change));
+        wanted.push_back ({ tick, value });
+    }
+
+    auto params = new juce::DynamicObject();
+    params->setProperty ("trackId", trackId);
+    params->setProperty ("controls", changes);
+    runCommand ("clip.updateControls", params);
+
+    // The moved points stay selected (they may have been picked through the notes)
+    if (pointSelection.size() == points.size() || ! pointSelection.empty())
+    {
+        pointSelection.clear();
+
+        if (auto updated = sequence())
+            for (int i = 0; i < (int) updated->getControls().size(); ++i)
+                for (auto& [tick, value] : wanted)
+                    if (const auto& c = updated->getControls()[(size_t) i]; lane.shows (c) && c.tick == tick && c.value == value)
+                        pointSelection.insert (i);
+    }
+}
+
+// The handle: a click turns a step into a straight ramp; a drag bends the ramp
+void PianoRollView::commitHandle (bool click)
+{
+    const auto seq = sequence();
+
+    if (seq == nullptr || dragHandle < 0 || dragHandle >= (int) seq->getControls().size())
+        return;
+
+    const auto& from = seq->getControls()[(size_t) dragHandle];
+    auto change = new juce::DynamicObject();
+    change->setProperty ("index", dragHandle);
+    change->setProperty ("ramp", true);
+    change->setProperty ("bend", click ? (from.ramp ? (double) from.bend : 0.5) : (double) previewBend);
+
+    if (click && from.ramp)
+        return;   // a click on a ramp's handle changes nothing (drag to bend, double-click for a step)
+
+    auto params = new juce::DynamicObject();
+    params->setProperty ("trackId", trackId);
+    params->setProperty ("controls", juce::Array<juce::var> { juce::var (change) });
+    runCommand ("clip.updateControls", params);
+}
+
+void PianoRollView::deletePoints()
+{
+    if (pointSelection.empty())
+        return;
+
+    juce::Array<juce::var> indices;
+
+    for (auto index : pointSelection)
+        indices.add (index);
+
+    auto params = new juce::DynamicObject();
+    params->setProperty ("trackId", trackId);
+    params->setProperty ("indices", indices);
+    runCommand ("clip.removeControls", params);
+    pointSelection.clear();
+}
+
 void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
 {
     const auto ids = shownLanes();
@@ -2158,51 +2523,104 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
         }
         else
         {
-            // CC / pitch bend: step line with points
             if (seq != nullptr)
             {
-                int previousX = -1, previousY = -1;
+                // CC / pitch bend / aftertouch: the points, the curve between them, the handles
+                std::vector<MidiSequence::Control> shown;
+                std::vector<int> indices;
+                const auto picked = effectivePoints();
+
+                for (int i = 0; i < (int) seq->getControls().size(); ++i)
+                    if (auto c = seq->getControls()[(size_t) i]; laneKind.shows (c))
+                    {
+                        if (drag == Drag::point && picked.count (i))   // the drag's preview
+                        {
+                            c.value = juce::jlimit (0, laneKind.maxValue(), c.value + pointValueDelta);
+
+                            if (picked.size() == 1)
+                                c.tick = juce::jmax ((juce::int64) 0, c.tick + pointTickDelta);
+                        }
+
+                        if (drag == Drag::handle && i == dragHandle)
+                        {
+                            c.ramp = true;
+                            c.bend = previewBend;
+                        }
+
+                        shown.push_back (c);
+                        indices.push_back (i);
+                    }
+
                 const auto colourOf = [&laneKind] (int value)
                 {
                     return lanes::valueColour (lanes::Kind::controller, (float) value / (float) laneKind.maxValue());
                 };
-                int previousValue = 0;
 
-                for (auto& control : seq->getControls())
+                for (size_t i = 0; i < shown.size(); ++i)
                 {
-                    if (! laneKind.shows (control))
+                    const auto& from = shown[i];
+                    const auto a = pointPosition (from);
+                    const auto rightX = i + 1 < shown.size() ? tickToX (shown[i + 1].tick) : lane.getRight();
+
+                    if (rightX < lane.getX() || a.x > lane.getRight())
                         continue;
 
-                    const auto x = tickToX (control.tick);
-                    const auto y = laneValueToY (control.value);
-
-                    if (previousX >= 0 && x >= lane.getX())
+                    if (i + 1 < shown.size() && from.ramp)
                     {
-                        g.setColour (colourOf (previousValue));   // the held step in its value's colour
-                        g.fillRect (juce::jmax (lane.getX(), previousX), previousY, juce::jmax (1, x - previousX), 2);
-                        g.setColour (colourOf (control.value));
-                        g.fillRect (x, juce::jmin (previousY, y), 2, std::abs (y - previousY) + 2);
+                        // The ramp: drawn as a polyline along its curve
+                        const auto& to = shown[i + 1];
+                        juce::Path path;
+                        path.startNewSubPath (a.toFloat());
+
+                        for (auto x = a.x + 3; x < rightX; x += 3)
+                        {
+                            const auto t = (float) (x - a.x) / (float) juce::jmax (1, rightX - a.x);
+                            const auto v = (float) from.value + (float) (to.value - from.value) * MidiSequence::rampShape (t, from.bend);
+                            path.lineTo ((float) x, (float) laneValueToY (juce::roundToInt (v)));
+                        }
+
+                        path.lineTo (pointPosition (to).toFloat());
+                        g.setColour (colourOf ((from.value + to.value) / 2));
+                        g.strokePath (path, juce::PathStrokeType (2.0f));
+                    }
+                    else
+                    {
+                        // A step: hold, then jump at the next point
+                        g.setColour (colourOf (from.value));
+                        g.fillRect (juce::jmax (lane.getX(), a.x), a.y, juce::jmax (1, rightX - juce::jmax (lane.getX(), a.x)), 2);
+
+                        if (i + 1 < shown.size())
+                        {
+                            const auto b = pointPosition (shown[i + 1]);
+                            g.fillRect (b.x, juce::jmin (a.y, b.y), 2, std::abs (b.y - a.y) + 2);
+                        }
                     }
 
-                    g.setColour (colourOf (control.value));
+                    // The segment's handle (click: ramp; drag: bend; double-click: step)
+                    if (i + 1 < shown.size() && rightX - a.x >= 14)
+                    {
+                        const auto h = handlePosition (from, shown[i + 1], from.ramp ? from.bend : -1.0f);
+                        const auto box = juce::Rectangle<int> (6, 6).withCentre (h).toFloat();
+                        g.setColour (juce::Colours::white.withAlpha (indices[i] == hoveredHandle || indices[i] == dragHandle ? 0.95f : 0.55f));
 
-                    if (x >= lane.getX() && x <= lane.getRight())
-                        g.fillRect (x - 1, y - 1, 4, 4);
-
-                    previousX = x;
-                    previousY = y;
-                    previousValue = control.value;
-
-                    if (x > lane.getRight())
-                        break;
+                        if (indices[i] == hoveredHandle || indices[i] == dragHandle)
+                            g.fillRect (box);
+                        else
+                            g.drawRect (box, 1.0f);
+                    }
                 }
 
-                // Hold the last value to the right edge
-                g.setColour (colourOf (previousValue));
+                // The points (selected: white)
+                for (size_t i = 0; i < shown.size(); ++i)
+                {
+                    const auto p = pointPosition (shown[i]);
 
-                if (previousX >= 0 && previousX < lane.getRight())
-                    g.fillRect (juce::jmax (lane.getX(), previousX), previousY,
-                                lane.getRight() - juce::jmax (lane.getX(), previousX), 2);
+                    if (p.x < lane.getX() - 4 || p.x > lane.getRight() + 4)
+                        continue;
+
+                    g.setColour (picked.count (indices[i]) ? juce::Colours::white : colourOf (shown[i].value));
+                    g.fillRect (juce::Rectangle<int> (6, 6).withCentre (p));
+                }
             }
 
             // Gesture overlay
@@ -2218,7 +2636,7 @@ void PianoRollView::paintLanes (juce::Graphics& g, const MidiSequence* seq)
 }
 
 // A minimized lane: the background, and a line (60% opaque) coloured by the values where there are any
-// (velocity yellow -> red per note; controllers blue -> magenta, held until the next event)
+// (velocity per note; controllers held until the next point, or along a ramp)
 void PianoRollView::paintMinimizedLane (juce::Graphics& g, juce::Rectangle<int> strip, const lanes::Lane& lane,
                                         const MidiSequence* seq)
 {
@@ -2248,16 +2666,32 @@ void PianoRollView::paintMinimizedLane (juce::Graphics& g, juce::Rectangle<int> 
     }
 
     const MidiSequence::Control* previous = nullptr;
+    const auto colourFor = [&lane] (int value) { return lanes::valueColour (lane.kind, (float) value / (float) lane.maxValue()).withAlpha (0.6f); };
 
-    const auto drawHeld = [&] (const MidiSequence::Control& from, int untilX)
+    // A step holds its colour; a ramp's colour follows its curve (in small pieces)
+    const auto drawSegment = [&] (const MidiSequence::Control& from, const MidiSequence::Control* to, int untilX)
     {
         const auto x = juce::jmax (strip.getX(), tickToX (from.tick));
         const auto right = juce::jmin (strip.getRight(), untilX);
 
-        if (right > x)
+        if (right <= x)
+            return;
+
+        if (to == nullptr || ! from.ramp)
         {
-            g.setColour (lanes::valueColour (lane.kind, (float) from.value / (float) lane.maxValue()).withAlpha (0.6f));
+            g.setColour (colourFor (from.value));
             g.fillRect (x, line.getY(), right - x, line.getHeight());
+            return;
+        }
+
+        const auto startX = tickToX (from.tick), endX = tickToX (to->tick);
+
+        for (auto px = x; px < right; px += 3)
+        {
+            const auto t = (float) (px - startX) / (float) juce::jmax (1, endX - startX);
+            const auto v = (float) from.value + (float) (to->value - from.value) * MidiSequence::rampShape (t, from.bend);
+            g.setColour (colourFor (juce::roundToInt (v)));
+            g.fillRect (px, line.getY(), juce::jmin (3, right - px), line.getHeight());
         }
     };
 
@@ -2267,13 +2701,13 @@ void PianoRollView::paintMinimizedLane (juce::Graphics& g, juce::Rectangle<int> 
             continue;
 
         if (previous != nullptr)
-            drawHeld (*previous, tickToX (control.tick));
+            drawSegment (*previous, &control, tickToX (control.tick));
 
         previous = &control;
     }
 
     if (previous != nullptr)
-        drawHeld (*previous, strip.getRight());
+        drawSegment (*previous, nullptr, strip.getRight());
 }
 
 void PianoRollView::paint (juce::Graphics& g)

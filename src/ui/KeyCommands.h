@@ -39,7 +39,7 @@ namespace keys
             { "edit.redo",            "Global", "Redo",                                        { K ('y', ctrl, 0), K ('z', ctrl | shift, 0) } },
 
             { "editor.noteInput",     "MIDI editor", "Note input on / off",                    { K ('n') } },
-            { "editor.delete",        "MIDI editor", "Delete the selected notes",              { K (K::deleteKey), K (K::backspaceKey) } },
+            { "editor.delete",        "MIDI editor", "Delete the selected notes (or CC points)", { K (K::deleteKey), K (K::backspaceKey) } },
             { "editor.selectAll",     "MIDI editor", "Select all notes",                       { K ('a', ctrl, 0) } },
             { "editor.copy",          "MIDI editor", "Copy the selected notes",                { K ('c', ctrl, 0) } },
             { "editor.cut",           "MIDI editor", "Cut the selected notes",                 { K ('x', ctrl, 0) } },
