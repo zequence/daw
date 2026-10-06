@@ -1,5 +1,6 @@
 #include "../src/api/CommandDispatcher.h"
 #include "../src/model/PhraseBlocks.h"
+#include "../src/model/PlayheadSteps.h"
 
 namespace
 {
@@ -77,6 +78,22 @@ public:
             expectEquals ((int) blocks.size(), 1);
             expectEquals (blocks[0].startTick, (juce::int64) 0);   // the bar of the first controller
             expectEquals (blocks[0].noteCount, 0);
+        }
+
+        beginTest ("Left/Right playhead stops: note ends ahead, note starts behind, else a grid step");
+        {
+            // Parallel notes at 0 (Q long and 2Q long), one at 4Q
+            const auto seq = sequenceOf ({ { 0, Q, 1, 60, 100 }, { 0, 2 * Q, 1, 64, 100 }, { 4 * Q, Q, 1, 62, 100 } });
+            const auto grid = Q / 4;
+
+            expectEquals (nextPlayheadStop (0, true, seq.get(), grid), Q);              // the closer end
+            expectEquals (nextPlayheadStop (Q, true, seq.get(), grid), 2 * Q);
+            expectEquals (nextPlayheadStop (2 * Q, true, seq.get(), grid), 5 * Q);      // the next note's end
+            expectEquals (nextPlayheadStop (5 * Q, true, seq.get(), grid), 5 * Q + grid); // nothing ahead
+            expectEquals (nextPlayheadStop (5 * Q, false, seq.get(), grid), 4 * Q);     // a start behind
+            expectEquals (nextPlayheadStop (4 * Q, false, seq.get(), grid), (juce::int64) 0);
+            expectEquals (nextPlayheadStop (0, false, seq.get(), grid), (juce::int64) 0); // clamps at the start
+            expectEquals (nextPlayheadStop (Q, false, nullptr, grid), Q - grid);
         }
 
         beginTest ("empty sequence yields no blocks");

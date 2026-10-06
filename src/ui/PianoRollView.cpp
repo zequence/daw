@@ -1298,6 +1298,13 @@ void PianoRollView::mouseWheelMove (const juce::MouseEvent& event, const juce::M
 
 // Note input: keys 1-9 set the note length (1 = whole, 2 = half ... 9 = 1/256: the length
 // box's items in order), 0 enters a rest (the playhead moves on by the length)
+void PianoRollView::stepPlayhead (bool forward)
+{
+    auto& transport = engine.getTransport();
+    const auto seq = sequence();
+    transport.locate (nextPlayheadStop (transport.getPositionTicks(), forward, seq.get(), juce::jmax ((juce::int64) 1, gridTicks())));
+}
+
 bool PianoRollView::noteInputKey (const juce::KeyPress& key)
 {
     if (key == juce::KeyPress ('n'))   // toggles note input
@@ -1391,8 +1398,16 @@ bool PianoRollView::keyPressed (const juce::KeyPress& key)
         return true;
     }
 
+    // Left/right move the transport line (note to note, or a grid step)
+    if (! key.getModifiers().isAltDown() && ! key.getModifiers().isCtrlDown()
+         && (key.isKeyCode (juce::KeyPress::leftKey) || key.isKeyCode (juce::KeyPress::rightKey)))
+    {
+        stepPlayhead (key.isKeyCode (juce::KeyPress::rightKey));
+        return true;
+    }
+
     // Arrow keys nudge the selection: up/down transpose a half step (Ctrl = octave),
-    // left/right move by the grid division.
+    // Alt+left/right move by the grid division.
     if (! selection.empty())
     {
         const auto octave = key.getModifiers().isCtrlDown() ? 12 : 1;
