@@ -724,6 +724,45 @@ Real audio regions (recording, takes, fades, clip gain), device inputs on audio
 channels, summing buses. Audio channels default-name from an instrument input
 only; manual renames always win.
 
+## Audio mixer (drafted 2026-10-06)
+
+A mixer for the audio channels: names, level faders, pan, solo, mute, meters,
+aux sends, insert effects and output selection. M opens it where the MIDI editor
+shows: full-size, or docked under the arrangement with the same handle.
+
+Today an audio channel is one stereo strip per instrument (gain, mute, a block
+peak) wired straight to the device's stereo output, and only the instrument's
+first output pair is used (VE Pro's other outputs are dropped). Effects are
+scanned but filtered out.
+
+- **Channels.** A channel gets a name (defaulting to its source; a rename wins),
+  a fader (dB), pan (stereo balance, -3 dB centre), solo, mute, a colour and an
+  output. Every instrument OUTPUT PAIR can have its own channel, so a VE Pro
+  instance with 16 stereo outputs gives 16 strips (named from VE Pro's channel
+  names when the sync knows them).
+- **Buses.** Aux buses (stereo channels with no source of their own, fed by sends)
+  and a master bus that every channel goes to by default. Output selection per
+  channel: the master, a bus, or a pair of device outputs directly.
+- **Sends.** Per channel, sends to aux buses: a level each, pre- or post-fader.
+- **Inserts.** Per channel and bus, a list of effect plugins (the effects the
+  scanner already finds), in order, each with bypass and its own window. Added
+  from a menu of the scanned effects.
+- **Solo.** Solo works across the mixer (in-place: everything not soloed goes
+  silent, except buses fed by a soloed channel). Solo-safe for buses.
+- **Meters.** Peak and RMS per strip, with a peak-hold line and a clip
+  indicator (click to reset); the master shows them too.
+- **The view.** Vertical strips side by side, scrolling sideways: name, inserts,
+  sends, pan, fader with meter, solo/mute, output. Strips follow the sidebar's
+  folder order; buses and the master at the right. The selected track's channel
+  is highlighted, and selecting a strip selects its channel.
+- **Model, file, undo.** Channels, buses, sends and inserts (with plugin state)
+  are saved in the project; every change is an undoable history entry; commands
+  for all of it in the API (`mixer.*`).
+
+Phases, each usable on its own: (1) the strip basics - names, fader, pan, solo,
+mute, meters, master bus, the view and M; (2) output selection and multi-output
+instruments; (3) aux buses and sends; (4) insert effects.
+
 ## Non-linear patching (far field)
 
 Generator/logic nodes patched together, running live (DESIGN.md pillar 2).
