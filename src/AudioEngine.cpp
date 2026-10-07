@@ -995,6 +995,7 @@ void AudioEngine::addInsert (AudioChannelId channelId, int slot, const juce::Plu
             insert.node = graph.addNode (std::move (instance), std::nullopt, updateKind())->nodeID;
             it->second.inserts[slot] = insert;
             rewireChannelInputs (channelId);
+            applyInsertBypass (channelId);   // a new effect in a switched-off section is off too
             emitChannelChanged (channelId, "inserts");
 
             if (callback) callback (true, {});
@@ -1019,12 +1020,33 @@ void AudioEngine::setInsertBypassed (AudioChannelId channelId, int slot, bool by
         if (auto insert = it->second.inserts.find (slot); insert != it->second.inserts.end())
         {
             insert->second.bypassed = bypassed;
-
-            if (auto* node = graph.getNodeForId (insert->second.node))
-                node->setBypassed (bypassed);
-
+            applyInsertBypass (channelId);
             emitChannelChanged (channelId, "inserts");
         }
+}
+
+void AudioEngine::setInsertsEnabled (AudioChannelId channelId, bool enabled)
+{
+    if (auto it = audioChannels.find (channelId); it != audioChannels.end() && it->second.insertsOn != enabled)
+    {
+        it->second.insertsOn = enabled;
+        applyInsertBypass (channelId);
+        emitChannelChanged (channelId, "inserts");
+    }
+}
+
+bool AudioEngine::areInsertsEnabled (AudioChannelId channelId) const
+{
+    const auto it = audioChannels.find (channelId);
+    return it == audioChannels.end() || it->second.insertsOn;
+}
+
+void AudioEngine::applyInsertBypass (AudioChannelId channelId)
+{
+    if (auto it = audioChannels.find (channelId); it != audioChannels.end())
+        for (auto& [slot, insert] : it->second.inserts)
+            if (auto* node = graph.getNodeForId (insert.node))
+                node->setBypassed (insert.bypassed || ! it->second.insertsOn);
 }
 
 std::vector<AudioEngine::InsertInfo> AudioEngine::getInserts (AudioChannelId channelId) const
@@ -2626,6 +2648,7 @@ bool AudioEngine::saveProject (const juce::File& file)
             {
                 a->setAttribute ("position", it->second.position);
                 a->setAttribute ("soloed", it->second.soloed);
+                a->setAttribute ("insertsOn", it->second.insertsOn);
 
                 if (it->second.named)
                     a->setAttribute ("name", it->second.name);
@@ -2924,6 +2947,9 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
                 }
 
                 // Its inserts (loaded one after another), then the next instrument
+                if (auto* a = element->getChildByName ("AUDIOCHANNEL"))
+                    setInsertsEnabled (getAudioChannelForInstrument (newId), a->getBoolAttribute ("insertsOn", true));
+
                 restoreInserts (getAudioChannelForInstrument (newId), element->getChildByName ("AUDIOCHANNEL"), [step] { (*step)(); });
             });
     };

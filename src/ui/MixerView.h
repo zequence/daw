@@ -234,7 +234,15 @@ private:
 
             insertsIn.led = true;
             insertsIn.setToggleState (true, juce::dontSendNotification);
-            insertsIn.setTooltip ("All the inserts on / off - " + placeholderTip);
+            if (kind == Kind::channel)
+            {
+                insertsIn.setTooltip ("All the inserts on / off (each keeps its own bypass)");
+                insertsIn.onClick = [this] { owner.engine.setInsertsEnabled (channelId, insertsIn.getToggleState()); };
+            }
+            else
+            {
+                insertsIn.setTooltip ("All the inserts on / off - " + placeholderTip);
+            }
             // In the INSERTS flip button, beside its text (the master, with no flip: in the inserts' box)
             if (kind == Kind::master)
                 inserts.addAndMakeVisible (insertsIn);
@@ -561,6 +569,8 @@ private:
                     names[(size_t) insert.slot] = insert.name;
                     bypassed[(size_t) insert.slot] = insert.bypassed;
                 }
+
+            insertsIn.setToggleState (owner.engine.areInsertsEnabled (channelId), juce::dontSendNotification);
 
             if (names != inserts.names || bypassed != inserts.bypassed)
             {
@@ -1191,6 +1201,7 @@ private:
         {
             strip->tick();
             strip->syncControls();
+            strip->syncInserts();
             sync();
         }
 

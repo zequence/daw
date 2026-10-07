@@ -408,6 +408,8 @@ public:
     void addInsert (AudioChannelId, int slot, const juce::PluginDescription&, InsertCallback = {});   // replaces what is in the slot
     void removeInsert (AudioChannelId, int slot);
     void setInsertBypassed (AudioChannelId, int slot, bool);
+    void setInsertsEnabled (AudioChannelId, bool);       // the whole section on / off (each insert keeps its own bypass)
+    bool areInsertsEnabled (AudioChannelId) const;
 
     struct InsertInfo
     {
@@ -512,6 +514,7 @@ private:
     {
         NodeID node;
         std::map<int, Insert> inserts;              // slot -> effect, in series before the strip
+        bool insertsOn = true;                      // the section's IN: off bypasses every insert
         InstrumentId input = 0;                     // 0 = none (device inputs later)
         juce::String name;
         bool named = false;                         // renamed in the mixer: the source's name no longer applies
@@ -648,6 +651,7 @@ private:
     void applySolo();   // silences the channels that aren't soloed while any is
     void emitChannelChanged (AudioChannelId, const juce::String& change);
     void rewireChannelInputs (AudioChannelId);   // source -> inserts (slot order) -> strip
+    void applyInsertBypass (AudioChannelId);     // each insert's node: bypassed if it is, or the section is off
     void restoreInserts (AudioChannelId, const juce::XmlElement* audioChannelXml, std::function<void()> done);
     std::unique_ptr<MidiRecorder> recorder;
     bool recordingSawPlayback = false;
