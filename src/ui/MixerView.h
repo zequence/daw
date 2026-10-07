@@ -696,21 +696,13 @@ private:
                 {
                     begin (aux, nullptr);
 
-                    // The sends (46 px knobs): the same zigzag, at the same angle as the EQ's, crammed
-                    // closer - their columns nearer the middle - and carrying on from the dynamics
-                    constexpr int auxW = 48, auxH = 55, auxDx = 39, auxStep = 27;   // auxStep / auxDx = stagger / column distance
-                    const auto x0 = left + (right - left - auxW - auxDx) / 2;
-                    auto first = true;
-
+                    // The sends (46 px knobs) on the EQ and dynamics' grid - the same zigzag, the same y -
+                    // each at the top of its slot, centred across it
                     for (auto& k : auxKnobs)
                     {
-                        const auto y = juce::jmax (columnY[next], lastY + (first ? stagger + 1 : auxStep));
-                        placed.push_back ({ k.get(), { x0 + next * auxDx, y, auxW, auxH } });
-                        mark (next, y, y + auxH);
-                        columnY[next] = y + auxH;
-                        lastY = y;
-                        next = 1 - next;
-                        first = false;
+                        knob (k.get());
+                        auto& r = placed.back().second;
+                        r = { r.getX() + (r.getWidth() - 48) / 2, r.getY(), 48, 55 };
                     }
                 }
 
@@ -734,7 +726,7 @@ private:
             if (kind != Kind::master)   // drive and pan, side by side, by the level
             {
                 auto knobs = area.removeFromTop (64);   // pan as big as the EQ's knobs, drive 46 px
-                drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2).withSizeKeepingCentre (48, 55).withY (knobs.getY() + 4));
+                drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2).withSizeKeepingCentre (48, 55).withY (knobs.getY()));
                 pan.setBounds (knobs.withSizeKeepingCentre (58, 64));
                 area.removeFromTop (4);
             }
