@@ -1173,6 +1173,112 @@ void AudioEngine::restoreInserts (AudioChannelId channelId, const juce::XmlEleme
     (*next) (0);
 }
 
+//==============================================================================
+AudioEngine::AudioChannelId AudioEngine::addBus (const juce::String& name)
+{
+    AudioChannel bus;
+    bus.node = graph.addNode (std::make_unique<AudioChannelProcessor>(), std::nullopt, updateKind())->nodeID;
+    bus.name = name.trim().isNotEmpty() ? name.trim() : "Bus " + juce::String ((int) buses.size() + 1);
+    bus.named = true;
+    bus.position = (int) buses.size();
+    routeStrip (bus.node, 0);
+
+    const auto id = nextAudioChannelId++;
+    buses[id] = bus;
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    data->setProperty ("name", bus.name);
+    emitEvent ("busAdded", data);
+    return id;
+}
+
+void AudioEngine::removeBus (AudioChannelId id)
+{
+    auto it = buses.find (id);
+
+    if (it == buses.end())
+        return;
+
+    for (auto& [channelId, channel] : audioChannels)   // its sources go to the master
+        if (channel.output == id)
+            setAudioChannelOutput (channelId, 0);
+
+    for (auto& [busId, bus] : buses)
+        if (bus.output == id)
+            setAudioChannelOutput (busId, 0);
+
+    graph.removeNode (it->second.node, updateKind());
+    buses.erase (it);
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    emitEvent ("busRemoved", data);
+}
+
+std::vector<AudioEngine::AudioChannelId> AudioEngine::getBusIds() const
+{
+    std::vector<std::pair<int, AudioChannelId>> ordered;
+
+    for (auto& [id, bus] : buses)
+        ordered.push_back ({ bus.position, id });
+
+    std::sort (ordered.begin(), ordered.end());
+    std::vector<AudioChannelId> result;
+
+    for (auto& [position, id] : ordered)
+        result.push_back (id);
+
+    return result;
+}
+
+bool AudioEngine::isBus (AudioChannelId id) const   { return buses.count (id) > 0; }
+
+// A strip's audio out: its connections to the master and the buses go, one to the target is made
+void AudioEngine::routeStrip (NodeID node, AudioChannelId target)
+{
+    auto targetNode = masterNode;
+
+    if (auto it = buses.find (target); it != buses.end())
+        targetNode = it->second.node;
+
+    std::set<NodeID> outputs { masterNode };
+
+    for (auto& [id, bus] : buses)
+        outputs.insert (bus.node);
+
+    for (auto& connection : graph.getConnections())
+        if (connection.source.nodeID == node && outputs.count (connection.destination.nodeID) > 0)
+            graph.removeConnection (connection, updateKind());
+
+    for (int ch = 0; ch < 2; ++ch)
+        graph.addConnection ({ { node, ch }, { targetNode, ch } }, updateKind());
+}
+
+bool AudioEngine::setAudioChannelOutput (AudioChannelId id, AudioChannelId target)
+{
+    if (target != 0 && buses.count (target) == 0)
+        return false;
+
+    auto* channel = audioChannels.count (id) > 0 ? &audioChannels[id] : (buses.count (id) > 0 ? &buses[id] : nullptr);
+
+    if (channel == nullptr || id == target || (buses.count (id) > 0 && target != 0))   // buses go to the master (for now)
+        return false;
+
+    channel->output = target;
+    routeStrip (channel->node, target);
+    emitChannelChanged (id, "output");
+    return true;
+}
+
+AudioEngine::AudioChannelId AudioEngine::getAudioChannelOutput (AudioChannelId id) const
+{
+    if (auto it = audioChannels.find (id); it != audioChannels.end())
+        return it->second.output;
+
+    return 0;
+}
+
 // The master bus to the device's first two outputs. The output node has no channels until the
 // graph is configured for a device - a connection asked for earlier is refused - so this is called
 // once the device runs, and again when instruments are added (it does nothing when connected)
@@ -1201,6 +1307,12 @@ void AudioEngine::setAudioChannelName (AudioChannelId id, const juce::String& na
     {
         it->second.name = name.trim();
         it->second.named = true;
+        emitChannelChanged (id, "name");
+    }
+
+    if (auto it = buses.find (id); it != buses.end() && name.trim().isNotEmpty())
+    {
+        it->second.name = name.trim();
         emitChannelChanged (id, "name");
     }
 }
@@ -1252,6 +1364,10 @@ void AudioEngine::applySolo()
 AudioChannelProcessor* AudioEngine::getAudioChannel (AudioChannelId id) const
 {
     if (auto it = audioChannels.find (id); it != audioChannels.end())
+        if (auto* node = graph.getNodeForId (it->second.node))
+            return dynamic_cast<AudioChannelProcessor*> (node->getProcessor());
+
+    if (auto it = buses.find (id); it != buses.end())
         if (auto* node = graph.getNodeForId (it->second.node))
             return dynamic_cast<AudioChannelProcessor*> (node->getProcessor());
 
@@ -1364,6 +1480,9 @@ std::vector<AudioEngine::AudioChannelId> AudioEngine::getAudioChannelIds() const
 juce::String AudioEngine::getAudioChannelName (AudioChannelId id) const
 {
     if (auto it = audioChannels.find (id); it != audioChannels.end())
+        return it->second.name;
+
+    if (auto it = buses.find (id); it != buses.end())
         return it->second.name;
 
     return {};
@@ -2365,6 +2484,10 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
             if (placed.count (id) == 0 && tracksOfInstrument[id].empty())
                 pushInstrument (id, 0, 0);
 
+    if (midiDomain)   // the buses, last (audio rows of their own)
+        for (auto id : getBusIds())
+            items.push_back ({ 0, 0, 0, 0, 0, id });
+
     return items;
 }
 
@@ -2724,6 +2847,25 @@ bool AudioEngine::saveProject (const juce::File& file)
             view->setAttribute (value.name, value.value.toString());
     }
 
+    for (auto id : getBusIds())
+    {
+        auto& bus = buses[id];
+        auto* b = root.createNewChildElement ("BUS");
+        b->setAttribute ("id", id);
+        b->setAttribute ("name", bus.name);
+
+        if (auto* processor = getAudioChannel (id))
+        {
+            b->setAttribute ("gain", processor->getGain());
+            b->setAttribute ("muted", processor->isMuted());
+            b->setAttribute ("pan", processor->getPan());
+
+            for (int param = 0; param < AnalogStrip::numParams; ++param)
+                if (const auto value = processor->getStrip().get (param); value != AnalogStrip::info (param).initial)
+                    b->setAttribute (AnalogStrip::info (param).name, value);
+        }
+    }
+
     for (auto& [id, instrument] : instruments)
     {
         auto* e = root.createNewChildElement ("INSTRUMENT");
@@ -2785,6 +2927,9 @@ bool AudioEngine::saveProject (const juce::File& file)
                 a->setAttribute ("position", it->second.position);
                 a->setAttribute ("soloed", it->second.soloed);
                 a->setAttribute ("insertsOn", it->second.insertsOn);
+
+                if (it->second.output != 0)
+                    a->setAttribute ("output", it->second.output);
 
                 if (it->second.named)
                     a->setAttribute ("name", it->second.name);
@@ -2884,6 +3029,11 @@ void AudioEngine::clearProject()
     audioChannels.clear();
     viewState.clear();
 
+    for (auto& [id, bus] : buses)
+        graph.removeNode (bus.node);
+
+    buses.clear();
+
     armedTrack = 0;
     armedTracks.clear();
     markers.clear();
@@ -2951,9 +3101,30 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
         for (int i = 0; i < view->getNumAttributes(); ++i)
             viewState.set (view->getAttributeName (i), view->getAttributeValue (i));
 
+    // Buses: made now (they have no plugins), so channels can be routed to them as they load
+    std::map<int, AudioChannelId> busIdMap;
+
+    for (auto* b : xml->getChildWithTagNameIterator ("BUS"))
+    {
+        const auto id = addBus (b->getStringAttribute ("name"));
+        busIdMap[b->getIntAttribute ("id")] = id;
+
+        if (auto* processor = getAudioChannel (id))
+        {
+            processor->setGain ((float) b->getDoubleAttribute ("gain", 1.0));
+            processor->setMuted (b->getBoolAttribute ("muted"));
+            processor->setPan ((float) b->getDoubleAttribute ("pan", 0.0));
+
+            for (int param = 0; param < AnalogStrip::numParams; ++param)
+                if (b->hasAttribute (AnalogStrip::info (param).name))
+                    processor->getStrip().set (param, (float) b->getDoubleAttribute (AnalogStrip::info (param).name));
+        }
+    }
+
     struct LoadState
     {
         std::unique_ptr<juce::XmlElement> xml;
+        std::map<int, AudioChannelId> busIdMap;
         std::vector<juce::XmlElement*> instrumentElements;
         size_t next = 0;
         std::map<int, InstrumentId> idMap;
@@ -2966,6 +3137,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
     auto state = std::make_shared<LoadState>();
     state->xml = std::move (xml);
     state->folderIdMap = std::move (folderIdMap);
+    state->busIdMap = std::move (busIdMap);
     state->path = file.getFullPathName();
     state->done = std::move (done);
 
@@ -3080,6 +3252,9 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
                     if (a->getBoolAttribute ("soloed"))
                         setAudioChannelSoloed (channelId, true);
+
+                    if (auto bus = state->busIdMap.find (a->getIntAttribute ("output")); bus != state->busIdMap.end())
+                        setAudioChannelOutput (channelId, bus->second);
 
                     if (a->hasAttribute ("name"))
                         setAudioChannelName (channelId, a->getStringAttribute ("name"));

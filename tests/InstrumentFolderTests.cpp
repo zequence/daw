@@ -96,7 +96,26 @@ public:
             expect (std::any_of (open.begin(), open.end(), [&] (auto& item) { return item.instrument == (int) instrument && item.parent == folder; }));
         }
 
-        beginTest ("membership follows routing");
+        beginTest ("buses: made on request, listed last, channels routed to them, back to the master when one goes");
+        {
+            expect (engine.getBusIds().empty(), "no buses until one is made");
+            const auto bus = engine.addBus ("Strings bus");
+            expect (engine.isBus (bus));
+            expectEquals (engine.getAudioChannelName (bus), juce::String ("Strings bus"));
+
+            const auto items = engine.getSidebarItems (true, true);
+            expectEquals (items.back().channel, bus);
+
+            expect (engine.setAudioChannelOutput (channel, bus));
+            expectEquals (engine.getAudioChannelOutput (channel), bus);
+            expect (! engine.setAudioChannelOutput (bus, bus), "not into itself");
+
+            engine.removeBus (bus);
+            expectEquals (engine.getAudioChannelOutput (channel), 0);
+            expect (engine.getBusIds().empty());
+        }
+
+                beginTest ("membership follows routing");
         {
             engine.clearTrackOutputs (second);
             expect (engine.getInstrumentTracks (instrument) == std::vector<AudioEngine::TrackId> { first });

@@ -787,6 +787,23 @@ empty slots are blank panels that offer the effects; Esc or INSERTS again goes b
 buses' and the master's inserts, undo, the API commands, the section's IN switch).
 Later: the mixer docked under the arrangement like the MIDI editor.
 
+## Track types and routing (planned 2026-10-07)
+
+One Add Track dialog for every kind - folder, MIDI, instrument, audio, bus - with a count (several:
+named automatically) and a name. Steps, each usable on its own:
+
+1. The dialog; folders, MIDI tracks, instruments (the plugin chosen there, its MIDI track routed to it)
+   and buses work (DONE 2026-10-07).
+2. Buses and output routing: any number of buses, made only on request, removed only by hand; a
+   channel's output (the mixer strip's output button) goes to the master or a bus ("New bus" too); a
+   bus goes to the master (DONE 2026-10-07; bus to bus later).
+3. Folder groups: a folder's group button routes the audio inside it to a bus of its own (named as the
+   folder); the mixer then shows that one strip, the folder row gets level, solo and mute.
+4. Audio tracks: mono or stereo, a device input, an output (bus / master); rows in the tree, strips.
+5. Audio regions: wave files imported, played from disk, drawn in the arrangement.
+6. Audio recording onto armed audio tracks (wave files in the project's folder).
+7. MIDI tracks' MIDI in (a device / port) and MIDI out (an external port).
+
 ## Rack and plugin GUI stress test (planned 2026-10-07)
 
 The mixer's rack shows a channel's inserts with every plugin editor open at once, and the last

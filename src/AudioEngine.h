@@ -431,6 +431,19 @@ public:
     void connectMasterOutput();   // the master bus to the device (once the graph has channels)
 
     //==============================================================================
+    // Buses: as many as wanted, each a strip of its own (getAudioChannel works on them, and their
+    // names with get/setAudioChannelName) summing what is routed to it, out to the master. Ids share
+    // the audio channels' numbering, so an output target is one id: 0 = the master, else a bus.
+    AudioChannelId addBus (const juce::String& name = {});
+    void removeBus (AudioChannelId);                 // what was routed to it goes to the master
+    std::vector<AudioChannelId> getBusIds() const;   // in the order they were made
+    bool isBus (AudioChannelId) const;
+
+    // Where a channel's strip goes: the master (0) or a bus
+    bool setAudioChannelOutput (AudioChannelId, AudioChannelId target);
+    AudioChannelId getAudioChannelOutput (AudioChannelId) const;
+
+    //==============================================================================
     // Inserts: a channel's effect plugins, in slots 0 - 15, in series between its source (the
     // instrument) and its strip (pan, fader) - pre-fader. Adding loads the plugin asynchronously.
     static constexpr int insertSlots = 16;
@@ -546,6 +559,7 @@ private:
     {
         NodeID node;
         std::map<int, Insert> inserts;              // slot -> effect, in series before the strip
+        AudioChannelId output = 0;                  // 0 = the master, else a bus
         bool insertsOn = false;                     // the section's IN: off bypasses every insert (on with the first one added)
         InstrumentId input = 0;                     // 0 = none (device inputs later)
         juce::String name;
@@ -683,6 +697,8 @@ private:
     void applySolo();   // silences the channels that aren't soloed while any is
     void emitChannelChanged (AudioChannelId, const juce::String& change);
     void rewireChannelInputs (AudioChannelId);   // source -> inserts (slot order) -> strip
+    std::map<AudioChannelId, AudioChannel> buses;   // (their own map: they aren't sidebar channels)
+    void routeStrip (NodeID node, AudioChannelId target);   // a strip's output to the master or a bus
     void applyInsertBypass (AudioChannelId);     // each insert's node: bypassed if it is, or the section is off
     void restoreInserts (AudioChannelId, const juce::XmlElement* audioChannelXml, std::function<void()> done);
     std::unique_ptr<MidiRecorder> recorder;

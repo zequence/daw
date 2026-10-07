@@ -511,10 +511,12 @@ private:
                     p->setMuted (mute.getToggleState());
             };
 
-            output.setTooltip (kind == Kind::master ? "The audio device" : placeholderTip);
+            output.setTooltip (kind == Kind::master ? "The audio device" : kind == Kind::channel ? "Where it goes: click for the master or a bus"
+                                                                                                  : placeholderTip);
             output.setText (kind == Kind::master ? juce::String ("Device out") : juce::String::fromUTF8 ("\xe2\x86\x92 Master"),
                             juce::dontSendNotification);
             output.setJustificationType (juce::Justification::centred);
+            output.onClick = [this] { if (kind == Kind::channel) chooseOutput(); };
             output.setFont (juce::FontOptions (10.5f));
             output.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.5f));
             output.setColour (juce::Label::outlineColourId, juce::Colours::white.withAlpha (0.12f));
@@ -542,6 +544,8 @@ private:
 
         void refreshName()
         {
+            refreshOutput();
+
             if (name.isBeingEdited())
                 return;
 
@@ -1070,7 +1074,56 @@ private:
         const AudioEngine::AudioChannelId channelId;   // channels
         const int auxNumber;                           // Aux buses: 1-6
         mixer::TapeLabel name;
-        juce::Label level, output;
+        juce::Label level;
+
+        // The output: where the strip goes (the master or a bus); a click chooses (channels)
+        struct OutputLabel final : juce::Label
+        {
+            std::function<void()> onClick;
+            void mouseUp (const juce::MouseEvent& event) override
+            {
+                if (onClick && ! event.mods.isPopupMenu() && getLocalBounds().contains (event.getPosition()))
+                    onClick();
+            }
+        } output;
+
+        void refreshOutput()
+        {
+            if (kind != Kind::channel)
+                return;
+
+            const auto target = owner.engine.getAudioChannelOutput (channelId);
+            output.setText (juce::String::fromUTF8 ("\xe2\x86\x92 ") + (target == 0 ? juce::String ("Master") : owner.engine.getAudioChannelName (target)),
+                            juce::dontSendNotification);
+        }
+
+        void chooseOutput()
+        {
+            auto& engine = owner.engine;
+            const auto current = engine.getAudioChannelOutput (channelId);
+            const auto isBus = engine.isBus (channelId);
+            const auto id = channelId;
+            juce::PopupMenu menu;
+
+            menu.addItem ("Master", true, current == 0, [&engine, id] { engine.setAudioChannelOutput (id, 0); });
+
+            if (! isBus)   // (a bus goes to the master, for now)
+            {
+                const auto buses = engine.getBusIds();
+
+                if (! buses.empty())
+                    menu.addSeparator();
+
+                for (auto bus : buses)
+                    menu.addItem (engine.getAudioChannelName (bus), true, current == bus,
+                                  [&engine, id, bus] { engine.setAudioChannelOutput (id, bus); });
+
+                menu.addSeparator();
+                menu.addItem ("New bus", [&engine, id] { engine.setAudioChannelOutput (id, engine.addBus()); });
+            }
+
+            menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&output));
+        }
         mixer::Placeholder inserts { "Inserts", 8 };
         mixer::LitButton flip { "INSERTS", juce::Colour (0xff9fb3c8) };
         mixer::LitButton insertsIn { {}, juce::Colour (0xff62d26f) };   // the whole insert section on/off

@@ -697,14 +697,81 @@ MainComponent::~MainComponent()
 }
 
 //==============================================================================
+// Add track: the dialog asks what (a folder, MIDI tracks, instruments, audio tracks, buses), how many and
+// the name (several: the name and a number, or the default names)
 void MainComponent::addTrack()
 {
-    const auto id = engine.addTrack();
-    selectTrack (id, false);
+    AddTrackDialog::show (this, engine.getInstrumentTypes(),
+                          [safe = juce::Component::SafePointer<MainComponent> (this)] (const AddTrackDialog::Choice& choice)
+    {
+        if (safe != nullptr)
+            safe->addTracks (choice);
+    });
+}
 
-    // Ask where the new track should send its MIDI.
-    juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MainComponent> (this), id]
-                                     { if (safe != nullptr) safe->chooseTrackOutput (id); });
+void MainComponent::addTracks (const AddTrackDialog::Choice& choice)
+{
+    const auto nameOf = [&choice] (int i) -> juce::String
+    {
+        if (choice.name.isEmpty())
+            return {};
+
+        return choice.count > 1 ? choice.name + " " + juce::String (i + 1) : choice.name;
+    };
+
+    using Kind = AddTrackDialog::Kind;
+
+    for (int i = 0; i < choice.count; ++i)
+    {
+        switch (choice.kind)
+        {
+            case Kind::folder:
+                engine.addFolder (true, nameOf (i));
+                break;
+
+            case Kind::midi:
+                selectTrack (engine.addTrack (nameOf (i)), false);
+                break;
+
+            case Kind::bus:
+                engine.addBus (nameOf (i));
+                break;
+
+            case Kind::instrument:   // the plugin, its MIDI track routed to it (its audio comes with it)
+                statusLabel.setText ("Loading " + choice.plugin.name + "...", juce::dontSendNotification);
+                engine.addInstrument (choice.plugin,
+                    [safe = juce::Component::SafePointer<MainComponent> (this), name = nameOf (i)] (auto instrumentId, const juce::String& error)
+                    {
+                        if (safe == nullptr)
+                            return;
+
+                        safe->statusLabel.setText ("", juce::dontSendNotification);
+
+                        if (instrumentId == 0)
+                        {
+                            safe->statusLabel.setText ("Couldn't load the instrument: " + error, juce::dontSendNotification);
+                            return;
+                        }
+
+                        if (name.isNotEmpty())
+                            safe->engine.setInstrumentName (instrumentId, name);
+
+                        const auto track = safe->engine.addTrack (name);
+                        safe->engine.addTrackOutput (track, instrumentId, 1);
+
+                        if (name.isEmpty())
+                            safe->autoNameTrackForOutput (track, instrumentId);
+
+                        safe->selectTrack (track, false);
+                    });
+                break;
+
+            case Kind::audio:   // (coming: audio tracks)
+                break;
+        }
+    }
+
+    trackList.refresh();
 }
 
 void MainComponent::removeTrack (AudioEngine::TrackId id)

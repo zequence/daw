@@ -3,6 +3,7 @@
 #include "AudioEngine.h"
 #include "UserData.h"
 #include "PluginWindow.h"
+#include "ui/AddTrackDialog.h"
 #include "PluginScanProcess.h"
 #include "diagnostics/PerformancePanel.h"
 #include "ui/TrackList.h"
@@ -65,6 +66,7 @@ private:
     void autoNameTrackForOutput (AudioEngine::TrackId, AudioEngine::InstrumentId);
     void chooseNewInstrumentFor (AudioEngine::TrackId);
     void openPluginWindow (AudioEngine::InstrumentId);
+    void addTracks (const AddTrackDialog::Choice&);
     void openInsertWindow (AudioEngine::AudioChannelId, int slot);
     void closeInsertWindows (AudioEngine::AudioChannelId, int slot);   // slot -1: all
     void openTrackPluginWindow (AudioEngine::TrackId);   // toggles the track's (first) instrument GUI
