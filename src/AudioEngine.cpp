@@ -990,6 +990,9 @@ void AudioEngine::addInsert (AudioChannelId channelId, int slot, const juce::Plu
             if (auto old = it->second.inserts.find (slot); old != it->second.inserts.end())
                 graph.removeNode (old->second.node, updateKind());
 
+            if (it->second.inserts.empty())   // the first effect switches the section on
+                it->second.insertsOn = true;
+
             Insert insert;
             insert.name = name;
             insert.node = graph.addNode (std::move (instance), std::nullopt, updateKind())->nodeID;
@@ -1123,10 +1126,13 @@ void AudioEngine::restoreInserts (AudioChannelId channelId, const juce::XmlEleme
             elements->push_back (i);
 
     auto next = std::make_shared<std::function<void (size_t)>>();
-    *next = [this, channelId, elements, next, done] (size_t index)
+    const auto savedOn = audioChannelXml != nullptr && audioChannelXml->getBoolAttribute ("insertsOn", false);
+    *next = [this, channelId, elements, next, done, savedOn] (size_t index)
     {
         if (index >= elements->size())
         {
+            // The section as it was saved (adding the first insert switched it on)
+            setInsertsEnabled (channelId, savedOn);
             done();
             juce::MessageManager::callAsync ([next] { *next = nullptr; });   // break the self-reference (not from inside it)
             return;

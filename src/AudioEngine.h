@@ -514,7 +514,7 @@ private:
     {
         NodeID node;
         std::map<int, Insert> inserts;              // slot -> effect, in series before the strip
-        bool insertsOn = true;                      // the section's IN: off bypasses every insert
+        bool insertsOn = false;                     // the section's IN: off bypasses every insert (on with the first one added)
         InstrumentId input = 0;                     // 0 = none (device inputs later)
         juce::String name;
         bool named = false;                         // renamed in the mixer: the source's name no longer applies
