@@ -727,7 +727,7 @@ only; manual renames always win.
 ## Audio mixer (drafted 2026-10-06)
 
 A mixer for the audio channels: names, level faders, pan, solo, mute, meters,
-aux sends, insert effects and output selection. F4 opens it (F1 MIDI arrangement,
+aux sends, insert effects and output selection. F3 opens it, in the panel under the arrangement (F1 the arrangement alone,
 F2 MIDI editor); M stays mute.
 
 Today an audio channel is one stereo strip per instrument (gain, mute, a block

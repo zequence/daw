@@ -139,8 +139,21 @@ private:
         explicit DockHandle (MainComponent& o) : owner (o)
         {
             setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
-            setTooltip ("The MIDI editor and the mixer: a tab opens its page here (again: closes), a click elsewhere "
-                        "opens or closes the panel, a drag sets its height");
+        }
+
+        // Over a tab: its page and its keys
+        juce::String getTooltip() override
+        {
+            const auto position = getMouseXYRelative();
+            const auto keysOf = [] (const char* id) { return keys::Bindings::describe (keys::Bindings::get().keysFor (id)); };
+
+            if (tabArea (DockPage::editor).contains (position))
+                return "MIDI editor (" + keysOf ("view.midiEditor") + ")";
+
+            if (tabArea (DockPage::mixer).contains (position))
+                return "Mixer (" + keysOf ("view.mixer") + ")";
+
+            return {};
         }
 
         // The tabs, small, at the handle's left
