@@ -296,6 +296,7 @@ private:
         {
             owner.sidebarWidth = juce::jlimit (150, juce::jmax (200, owner.getWidth() / 2),
                                                startWidth + event.getDistanceFromDragStartX());
+            owner.engine.setViewValue ("sidebarWidth", owner.sidebarWidth);   // kept with the project
             owner.resized();
         }
 

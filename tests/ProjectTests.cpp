@@ -128,11 +128,13 @@ public:
         // --- Save ---
         const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory)
                               .getChildFile ("OrchestralDAWRoundTrip.odaw");
+        engine.setViewValue ("sidebarWidth", 321);   // the project's view
         expect (engine.saveProject (file), "save failed");
 
         // --- Clear and verify emptiness ---
         engine.clearProject();
         expect (engine.getTrackIds().empty() && engine.getInstruments().empty());
+        expect (engine.getViewValue ("sidebarWidth").isVoid(), "a new project has the default view");
 
         // --- Load ---
         std::atomic<int> loadDone { 0 };
@@ -146,6 +148,7 @@ public:
 
         expect (loadDone == 1, "load failed");
         expectEquals (loadWarnings, juce::String());
+        expectEquals ((int) engine.getViewValue ("sidebarWidth", 0), 321);
 
         // --- Verify ---
         const auto trackIds = engine.getTrackIds();

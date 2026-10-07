@@ -279,6 +279,14 @@ public:
     void setInstrumentExpanded (InstrumentId, bool);
     std::vector<TrackId> getInstrumentTracks (InstrumentId) const;   // whose first output it is, in tree order
     InstrumentId getTrackInstrument (TrackId) const;                 // its first output's instrument (0: none)
+
+    // The project's view (the sidebar's width, ...): plain values the UI keeps with the project. Saved
+    // and loaded with it, cleared by a new project; not history.
+    void setViewValue (const juce::Identifier& name, const juce::var& value)   { viewState.set (name, value); }
+    juce::var getViewValue (const juce::Identifier& name, const juce::var& fallback = {}) const
+    {
+        return viewState.getWithDefault (name, fallback);
+    }
     float takeTrackMidiActivity (TrackId);                           // its loudest note-on velocity (0..1) since asked; for its meter
 
     // Only an instrument folder itself takes a colour (its tape): inside it, the rows have the theme's
@@ -708,6 +716,7 @@ private:
     std::vector<Marker> markers;
     std::vector<ExpressionMap> expressionMaps;   // project data; instrument channels refer to them by name
     std::map<AudioChannelId, AudioChannel> audioChannels;
+    juce::NamedValueSet viewState;   // see setViewValue
     std::map<FolderId, Folder> folders;
     TrackId nextTrackId = 1;
     InstrumentId nextInstrumentId = 1;

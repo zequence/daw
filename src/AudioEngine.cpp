@@ -2716,6 +2716,14 @@ bool AudioEngine::saveProject (const juce::File& file)
         f->setAttribute ("colour", folder.colour);
     }
 
+    if (! viewState.isEmpty())   // the project's view (the UI's values)
+    {
+        auto* view = root.createNewChildElement ("VIEW");
+
+        for (auto& value : viewState)
+            view->setAttribute (value.name, value.value.toString());
+    }
+
     for (auto& [id, instrument] : instruments)
     {
         auto* e = root.createNewChildElement ("INSTRUMENT");
@@ -2874,6 +2882,7 @@ void AudioEngine::clearProject()
         graph.removeNode (channel.node);
 
     audioChannels.clear();
+    viewState.clear();
 
     armedTrack = 0;
     armedTracks.clear();
@@ -2937,6 +2946,10 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
         folders[id].colour = f->getStringAttribute ("colour");
     }
+
+    if (auto* view = xml->getChildByName ("VIEW"))   // the project's view, before the UI hears of the load
+        for (int i = 0; i < view->getNumAttributes(); ++i)
+            viewState.set (view->getAttributeName (i), view->getAttributeValue (i));
 
     struct LoadState
     {

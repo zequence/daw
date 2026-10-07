@@ -1252,6 +1252,8 @@ void MainComponent::newProject()
         safe->engine.clearProject();
         safe->currentProjectFile = juce::File();
         safe->selectedTrack = 0;
+        safe->sidebarWidth = 0;   // the default width (the view goes with the project)
+        safe->resized();
         safe->loopButton.setToggleState (false, juce::dontSendNotification);
         safe->bpmLabel.setText (juce::String (safe->engine.getTempoBpm(), 1), juce::dontSendNotification);
         safe->trackList.setSelectedTrack (0);
@@ -1295,6 +1297,10 @@ void MainComponent::loadProjectDialog()
 void MainComponent::applyLoadedProject (const juce::File& file, bool ok, const juce::String& warnings)
 {
     currentProjectFile = ok ? file : juce::File();
+
+    // The project's view: the sidebar's width (0 = the default)
+    sidebarWidth = (int) engine.getViewValue ("sidebarWidth", 0);
+    resized();
 
     loopButton.setToggleState (false, juce::dontSendNotification);
     bpmLabel.setText (juce::String (engine.getTempoBpm(), 1), juce::dontSendNotification);
