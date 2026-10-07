@@ -38,6 +38,57 @@ namespace sidebar
         return juce::roundToInt (font.getHeight() * 0.5f - visualCentreFromTop);
     }
 
+    // A track's kind, as a small line symbol at the left of its row (after Cubase): an instrument is a
+    // keyboard, a MIDI track the 5-pin MIDI plug, an audio track a waveform. Folders have none.
+    enum class TrackKind { instrument, midi, audio };
+    constexpr int iconWidth = 14;
+
+    inline void drawTrackIcon (juce::Graphics& g, juce::Rectangle<float> box, TrackKind kind, juce::Colour colour)
+    {
+        g.setColour (colour);
+        const auto c = box.getCentre();
+
+        if (kind == TrackKind::instrument)   // a keyboard: three white keys, two black ones between them
+        {
+            const auto keys = juce::Rectangle<float> (13.0f, 9.0f).withCentre (c);
+            g.drawRoundedRectangle (keys, 1.2f, 1.1f);
+
+            for (auto i : { 1, 2 })
+                g.fillRect (keys.getX() + keys.getWidth() * (float) i / 3.0f - 0.5f, keys.getY() + 4.5f, 1.0f, keys.getHeight() - 4.5f);
+
+            for (auto i : { 1, 2 })
+                g.fillRect (keys.getX() + keys.getWidth() * (float) i / 3.0f - 1.5f, keys.getY(), 3.0f, 5.0f);
+        }
+        else if (kind == TrackKind::midi)   // the MIDI plug: a ring, five pins in an arc, the key at the top
+        {
+            const auto radius = 5.5f;
+            g.drawEllipse (juce::Rectangle<float> (radius * 2.0f, radius * 2.0f).withCentre (c), 1.1f);
+            g.fillRect (c.x - 1.0f, c.y - radius - 0.5f, 2.0f, 2.0f);
+
+            for (auto degrees : { 180.0f, 135.0f, 90.0f, 45.0f, 0.0f })   // the lower half's arc
+            {
+                const auto a = juce::degreesToRadians (degrees);
+                const auto pin = c + juce::Point<float> (std::cos (a), std::sin (a)) * (radius * 0.55f);
+                g.fillEllipse (juce::Rectangle<float> (1.7f, 1.7f).withCentre (pin));
+            }
+        }
+        else   // audio: a short waveform
+        {
+            juce::Path wave;
+            const float heights[] { 0.15f, 0.55f, 1.0f, 0.4f, 0.8f, 0.3f, 0.6f, 0.15f };
+            const auto step = 12.0f / 7.0f, left = c.x - 6.0f;
+
+            for (int i = 0; i < 8; ++i)
+            {
+                const auto x = left + (float) i * step, h = heights[i] * 5.0f;
+                wave.startNewSubPath (x, c.y - h);
+                wave.lineTo (x, c.y + h);
+            }
+
+            g.strokePath (wave, juce::PathStrokeType (1.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
+    }
+
     inline const juce::Colour rowTextColour { 0xffd4d6da };   // the rows' names: a very light grey, not white
 
     inline juce::Font rowFont (float height, bool folder)

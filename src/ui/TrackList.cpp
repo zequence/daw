@@ -117,6 +117,8 @@ public:
             g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
         }
 
+        sidebar::drawTrackIcon (g, iconBox.toFloat(), sidebar::TrackKind::midi, sidebar::rowTextColour.withAlpha (0.8f));
+
         // Shown in the MIDI editor: a bar on the right edge - wider and brighter for the edited one
         const auto& shown = owner.editorTracks;
 
@@ -138,6 +140,8 @@ public:
         area.removeFromRight (5);   // the editor bar's room
         armButton.setBounds (area.removeFromRight (20));
         area.removeFromRight (6);
+        iconBox = area.removeFromLeft (sidebar::iconWidth);   // its kind: the MIDI plug
+        area.removeFromLeft (5);
         meter.setBounds (area.removeFromLeft (7));
         area.removeFromLeft (1);
         soloButton.setBounds (area.removeFromLeft (20));
@@ -155,6 +159,7 @@ private:
     juce::Label nameLabel;
     juce::TextButton armButton { "R" }, soloButton { "S" }, muteButton { "M" };
     mixer::MidiMeter meter;
+    juce::Rectangle<int> iconBox;
     bool selected = false, subselected = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Row)
@@ -344,9 +349,11 @@ public:
 
     void resized() override
     {
-        // After the arrow, one unit: its level (a vertical meter as tall as the buttons), S, M; then the tape
-        // (the same room on both sides of the unit: arrow | 6 | meter S M | 6 | tape)
+        // The arrow furthest left, then its kind (a keyboard), one unit - its level (a vertical meter as
+        // tall as the buttons), S, M - and the tape: arrow | 6 | keyboard | 5 | meter S M | 6 | tape
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 20).reduced (0, 4);
+        iconBox = area.removeFromLeft (sidebar::iconWidth);
+        area.removeFromLeft (5);
         meter.setBounds (area.removeFromLeft (7).withSizeKeepingCentre (7, 20));
         area.removeFromLeft (1);
         soloButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20));
@@ -438,6 +445,7 @@ public:
 
         g.setColour (juce::Colours::white.withAlpha (0.7f));
         g.fillPath (triangle);
+        sidebar::drawTrackIcon (g, iconBox.toFloat(), sidebar::TrackKind::instrument, sidebar::rowTextColour.withAlpha (0.8f));
 
         auto text = getLocalBounds().withLeft (tapeLeft).reduced (0, 2);   // the tape, after the level and S|M
 
@@ -457,6 +465,7 @@ private:
     juce::TextButton soloButton { "S" }, muteButton { "M" };
     mixer::LevelMeter meter { false };
     int tapeLeft = 0;
+    juce::Rectangle<int> iconBox;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InstrumentRow)
 };
@@ -525,6 +534,8 @@ public:
 
         theme::paintTrackBox (g, bounds, theme::Token::trackAudioBg, selected, subselected);
 
+        sidebar::drawTrackIcon (g, iconBox.toFloat(), sidebar::TrackKind::audio, sidebar::rowTextColour.withAlpha (0.8f));
+
         const auto font = sidebar::folderFont (15.0f);   // the typewriter, as the MIDI tracks
         g.setColour (sidebar::rowTextColour);
         g.setFont (font);
@@ -534,8 +545,10 @@ public:
 
     void resized() override
     {
-        // One unit: its level (a vertical meter as tall as the buttons), S, M; then the name
+        // Its kind (a waveform), one unit - its level (a vertical meter as tall as the buttons), S, M - the name
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 6).reduced (8, 4);
+        iconBox = area.removeFromLeft (sidebar::iconWidth);
+        area.removeFromLeft (5);
         meter.setBounds (area.removeFromLeft (7).withSizeKeepingCentre (7, 20));
         area.removeFromLeft (1);
         soloButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20));
@@ -551,7 +564,7 @@ private:
     const int depth;
     juce::TextButton soloButton { "S" }, muteButton { "M" };
     mixer::LevelMeter meter { false };
-    juce::Rectangle<int> nameArea;
+    juce::Rectangle<int> nameArea, iconBox;
     bool subselected = false, selected = false;
 
 public:
