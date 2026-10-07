@@ -94,6 +94,53 @@ public:
             expect (std::abs (gainDb (quiet, 200.0, 0.01f)) < 0.1);
         }
 
+        beginTest ("the oversampling: flat through the audio band, aliases far down");
+        {
+            // Up and down again: a tone's level (RMS of the settled half), in dB
+            const auto roundTrip = [] (double frequency)
+            {
+                AnalogStrip::Upsampler up;
+                AnalogStrip::Downsampler down;
+                const auto samples = (int) rate;
+                double sumIn = 0.0, sumOut = 0.0;
+
+                for (int i = 0; i < samples; ++i)
+                {
+                    const auto x = std::sin (juce::MathConstants<double>::twoPi * frequency * i / rate);
+                    const auto [a, b] = up.process (x, 0);
+                    const auto y = down.process (a, b, 0);
+
+                    if (i >= samples / 2)
+                    {
+                        sumIn += x * x;
+                        sumOut += y * y;
+                    }
+                }
+
+                return 10.0 * std::log10 (sumOut / sumIn);
+            };
+
+            expectWithinAbsoluteError (roundTrip (1000.0), 0.0, 0.01);
+            expectWithinAbsoluteError (roundTrip (18000.0), 0.0, 0.1);
+
+            // A 30 kHz tone at the doubled rate would fold to 18 kHz: the down-sampler removes it
+            AnalogStrip::Downsampler down;
+            double sumOut = 0.0;
+
+            for (int i = 0; i < (int) rate; ++i)
+            {
+                const auto t0 = std::sin (juce::MathConstants<double>::twoPi * 30000.0 * (2 * i) / (rate * 2.0));
+                const auto t1 = std::sin (juce::MathConstants<double>::twoPi * 30000.0 * (2 * i + 1) / (rate * 2.0));
+                const auto y = down.process (t0, t1, 0);
+
+                if (i >= (int) rate / 2)
+                    sumOut += y * y;
+            }
+
+            const auto aliasDb = 10.0 * std::log10 (sumOut / (rate / 2.0) / 0.5);
+            expect (aliasDb < -70.0, "the alias: " + juce::String (aliasDb, 1) + " dB");
+        }
+
         beginTest ("drive is clean and level at low levels, rounds the peaks when pushed");
         {
             AnalogStrip strip;

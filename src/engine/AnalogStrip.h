@@ -18,6 +18,9 @@
 //  - Drive pushes a soft, slightly asymmetric clipper (odd and some even harmonics, like a console
 //    channel driven hot); level-compensated, so at low levels it stays clean and the same loudness.
 //
+// It all runs at twice the sample rate (a polyphase IIR half-band filter up and down: no latency),
+// so boosts near the top keep their analogue shape and the harmonics of drive don't fold back down.
+//
 // Parameters are atomics set from the message thread; the audio thread smooths them (no zipper
 // noise) and recomputes the filters every few samples. EQ IN and DYN IN crossfade. At its neutral
 // settings each part is skipped, so a flat strip costs almost nothing and changes nothing.
@@ -71,7 +74,8 @@ public:
 
     void prepare (double newSampleRate)
     {
-        sampleRate = newSampleRate;
+        baseRate = newSampleRate;
+        sampleRate = newSampleRate * 2.0;   // the processing runs oversampled
 
         for (int p = 0; p < numParams; ++p)
             smoothed[(size_t) p] = get (p);
@@ -88,6 +92,8 @@ public:
 
         envelopeDb = 0.0;
         for (auto& d : dcState) d = {};
+        up.reset();
+        down.reset();
     }
 
     void process (juce::AudioBuffer<float>& buffer)
@@ -101,13 +107,29 @@ public:
             smoothParams (count);
             updateFilters (false);
 
+            if (isNeutral())   // nothing to do: untouched (and without the oversampling's phase shift)
+            {
+                lastReductionDb = 0.0;
+                continue;
+            }
+
             for (int i = start; i < start + count; ++i)
             {
-                std::array<float, 2> frame { buffer.getSample (0, i), channels > 1 ? buffer.getSample (1, i) : buffer.getSample (0, i) };
-                processFrame (frame);
+                const std::array<double, 2> in { buffer.getSample (0, i), channels > 1 ? buffer.getSample (1, i) : buffer.getSample (0, i) };
+                std::array<std::array<float, 2>, 2> frames {};   // two samples at the doubled rate
+
+                for (int ch = 0; ch < 2; ++ch)
+                {
+                    const auto [a, b] = up.process (in[(size_t) ch], ch);
+                    frames[0][(size_t) ch] = (float) a;
+                    frames[1][(size_t) ch] = (float) b;
+                }
+
+                processFrame (frames[0]);
+                processFrame (frames[1]);
 
                 for (int ch = 0; ch < channels; ++ch)
-                    buffer.setSample (ch, i, frame[(size_t) ch]);
+                    buffer.setSample (ch, i, (float) down.process (frames[0][(size_t) ch], frames[1][(size_t) ch], ch));
             }
         }
 
@@ -115,6 +137,118 @@ public:
     }
 
 private:
+    //==========================================================================
+    // The half-band filter for 2x oversampling: two parallel chains of first-order allpasses (at the
+    // low rate), a polyphase IIR design - minimum phase, no latency. The coefficients come from an
+    // elliptic design for the transition band and the number of stages (the formula after Valenzuela
+    // and Constantinides): 8 stages, flat to about 20 kHz at 44.1 / 48 kHz, images and aliases far down.
+    struct HalfBand
+    {
+        static constexpr int stages = 8;
+
+        static const std::array<double, stages>& coefficients()
+        {
+            static const auto table = []
+            {
+                std::array<double, stages> c {};
+                const auto transition = 0.04;   // of the doubled rate's Nyquist band
+                auto k = std::tan ((1.0 - transition * 2.0) * juce::MathConstants<double>::pi / 4.0);
+                k *= k;
+                const auto kk = std::pow (1.0 - k * k, 0.25);
+                const auto e = 0.5 * (1.0 - kk) / (1.0 + kk);
+                const auto e4 = e * e * e * e;
+                const auto q = e * (1.0 + e4 * (2.0 + e4 * (15.0 + 150.0 * e4)));
+                const auto order = stages * 2 + 1;
+
+                for (int index = 0; index < stages; ++index)
+                {
+                    const auto cIndex = (double) (index + 1);
+                    double num = 0.0, den = 0.0;
+
+                    for (int i = 0, sign = 1; i < 64; ++i, sign = -sign)
+                    {
+                        const auto term = std::pow (q, (double) (i * (i + 1))) * std::sin ((i * 2 + 1) * cIndex * juce::MathConstants<double>::pi / order) * sign;
+                        num += term;
+                        if (std::abs (term) < 1.0e-100) break;
+                    }
+
+                    for (int i = 1, sign = -1; i < 64; ++i, sign = -sign)
+                    {
+                        const auto term = std::pow (q, (double) (i * i)) * std::cos (i * 2 * cIndex * juce::MathConstants<double>::pi / order) * sign;
+                        den += term;
+                        if (std::abs (term) < 1.0e-100) break;
+                    }
+
+                    const auto ww = num * std::pow (q, 0.25) / (den + 0.5);
+                    const auto wwsq = ww * ww;
+                    const auto x = std::sqrt ((1.0 - wwsq * k) * (1.0 - wwsq / k)) / (1.0 + wwsq);
+                    c[(size_t) index] = (1.0 - x) / (1.0 + x);
+                }
+
+                return c;
+            }();
+
+            return table;
+        }
+
+        // A chain of allpasses y = c (x - y1) + x1: the even coefficients on path 0, the odd on path 1
+        struct Path
+        {
+            std::array<double, stages / 2> x1 {}, y1 {};
+
+            inline double process (double x, int first) noexcept
+            {
+                const auto& c = coefficients();
+
+                for (int s = 0; s < stages / 2; ++s)
+                {
+                    const auto y = c[(size_t) (first + 2 * s)] * (x - y1[(size_t) s]) + x1[(size_t) s];
+                    x1[(size_t) s] = x;
+                    y1[(size_t) s] = y;
+                    x = y;
+                }
+
+                return x;
+            }
+        };
+
+        std::array<std::array<Path, 2>, 2> paths {};   // [channel][path]
+
+        void reset()   { paths = {}; }
+    };
+
+public:
+    struct Upsampler : HalfBand
+    {
+        // One sample in, two out
+        std::pair<double, double> process (double x, int ch) noexcept
+        {
+            return { paths[(size_t) ch][0].process (x, 0), paths[(size_t) ch][1].process (x, 1) };
+        }
+    };
+
+    struct Downsampler : HalfBand
+    {
+        // Two samples in, one out
+        double process (double even, double odd, int ch) noexcept
+        {
+            return 0.5 * (paths[(size_t) ch][0].process (odd, 0) + paths[(size_t) ch][1].process (even, 1));
+        }
+    };
+
+private:
+    Upsampler up;
+    Downsampler down;
+    double baseRate = 48000.0;
+
+    bool isNeutral() const noexcept
+    {
+        const auto& v = smoothed;
+        return v[hpf] <= 16.5 && v[lpf] >= 21900.0
+                 && std::abs (v[hfGain]) <= 0.01 && std::abs (v[hmfGain]) <= 0.01 && std::abs (v[lmfGain]) <= 0.01 && std::abs (v[lfGain]) <= 0.01
+                 && v[ratio] <= 1.001 && v[makeup] <= 0.001 && v[drive] <= 0.001;
+    }
+
     //==========================================================================
     // A biquad (transposed direct form II, double precision: low frequencies at high sample rates)
     struct Coefficients { double b0 = 1, b1 = 0, b2 = 0, a1 = 0, a2 = 0; };
@@ -192,8 +326,8 @@ private:
     //==========================================================================
     void smoothParams (int count)
     {
-        // About 20 ms to settle, whatever the block size
-        const auto k = 1.0 - std::exp (-(double) count / (0.02 * sampleRate));
+        // About 20 ms to settle, whatever the block size (count: samples at the base rate)
+        const auto k = 1.0 - std::exp (-(double) count / (0.02 * baseRate));
 
         for (int p = 0; p < numParams; ++p)
         {
