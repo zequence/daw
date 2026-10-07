@@ -104,7 +104,7 @@ public:
     }
 
     int levelTop = 0;   // where a channel strip's pan and fader begin (the other strips follow it)
-    static constexpr int fitHeight = 1240 + 20;   // a strip, its margins and the channels' scrollbar
+    static constexpr int fitHeight = 1270 + 20;   // a strip, its margins and the channels' scrollbar
     float scale = 0.0f;   // 0 = not yet read from the settings
 
     void paint (juce::Graphics& g) override
@@ -138,7 +138,7 @@ public:
 
 private:
     enum class Kind { channel, aux, master };
-    static constexpr int stripWidth = 118, stripHeight = 1240;
+    static constexpr int stripWidth = 118, stripHeight = 1270;
 
     const mixer::ConsoleStyle& style() const   { return mixer::ConsoleStyle::ssl(); }
 
@@ -705,6 +705,12 @@ private:
                         auto& r = placed.back().second;
                         r = { r.getX() + (r.getWidth() - 48) / 2, r.getY(), 48, 55 };
                     }
+
+                    for (int c = 0; c < 2; ++c)   // the panel ends at the sends' legends, not their slots
+                    {
+                        columnY[c] -= 64 - 55 - 2;
+                        extent[(size_t) c].bottom -= 64 - 55 - 2;
+                    }
                 }
 
                 finish();
@@ -713,7 +719,7 @@ private:
                     pageBottom = aux.getY() - 2;
 
                 inserts.setBounds (getLocalBounds().reduced (4).withTop (pageTop).withBottom (pageBottom));
-                area.setTop (juce::jmax (columnY[0], columnY[1]) + pad + 5);
+                area.setTop (juce::jmax (columnY[0], columnY[1]) + pad + 2);
             }
 
             output.setBounds (area.removeFromBottom (20));
