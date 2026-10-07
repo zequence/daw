@@ -32,7 +32,7 @@ namespace theme
     C (folderBg,         "folder.bg",         "Tracks",   "Folder (instrument) background", -1,                 0xff2e3038, false) \
     C (trackMidiBg,      "track.midi.bg",     "Tracks",   "MIDI track background",     -1,                      0xff3a3e46, false) \
     C (trackAudioBg,     "track.audio.bg",    "Tracks",   "Audio track background",    -1,                      0xff45393b, false) \
-    C (folderText,       "folder.text",       "Tracks",   "Folder name",               -1,                      0xff6cc7d6, false)     C (folderBorder,     "folder.border",     "Tracks",   "Folder border",             -1,                      0x00000000, true)  \
+    C (folderBorder,     "folder.border",     "Tracks",   "Folder border",             -1,                      0x00000000, true)  \
     C (channelBorder,    "channel.border",    "Tracks",   "Track border",              -1,                      0x00000000, true)  \
     N (rowSelectedBrightness, "row.selected.brightness", "Tracks", "Selected: brighter by (1 = white)",          0.16f, 0.0f, 1.0f) \
     N (rowSubselectedBrightness, "row.subselected.brightness", "Tracks", "Subselected (inside a selected folder or instrument): brighter by", 0.07f, 0.0f, 1.0f) \

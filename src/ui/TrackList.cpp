@@ -182,7 +182,7 @@ public:
             if (auto* editor = nameLabel.getCurrentTextEditor())
                 editor->setText (engine.getFolderName (folderId), false);
         };
-        nameLabel.setColour (juce::Label::textColourId, theme::colour (theme::Token::folderText));
+        nameLabel.setColour (juce::Label::textColourId, sidebar::rowTextColour);   // the same white as the others
         nameLabel.onTextChange = [this]
         {
             engine.setFolderName (folderId, nameLabel.getText());
@@ -197,7 +197,6 @@ public:
         if (! nameLabel.isBeingEdited())
             nameLabel.setText (engine.getFolderName (folderId).toUpperCase(), juce::dontSendNotification);
 
-        nameLabel.setColour (juce::Label::textColourId, theme::colour (theme::Token::folderText));   // (the theme may change)
         repaint();
     }
 
@@ -228,7 +227,7 @@ public:
         // inside it, ready for multi-channel work.
         if (! owner.finishRowDrag (folderId))
         {
-            if (event.x < depth * indentPerLevel + 18)
+            if (event.x < iconBox.getRight() + 2)   // the arrow or the folder symbol: open / close
                 engine.setFolderCollapsed (folderId, ! engine.isFolderCollapsed (folderId));
             else
                 owner.selectFolder (folderId);
@@ -269,11 +268,14 @@ public:
 
         g.setColour (juce::Colours::white.withAlpha (0.7f));
         g.fillPath (triangle);
+        sidebar::drawTrackIcon (g, iconBox.toFloat(), sidebar::TrackKind::folder, sidebar::rowTextColour.withAlpha (0.8f));
     }
 
     void resized() override
     {
-        nameLabel.setBounds (getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 17).reduced (0, 2)
+        // The arrow, the folder symbol, then the name (as an instrument's: arrow | 6 | symbol | 5 | name)
+        iconBox = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 20).withWidth (sidebar::iconWidth);
+        nameLabel.setBounds (getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 20 + sidebar::iconWidth + 5).reduced (0, 2)
                                  .translated (0, sidebar::visualCentreOffset (nameLabel.getFont())));
     }
 
@@ -283,6 +285,7 @@ private:
     const AudioEngine::FolderId folderId;
     const int depth;
     juce::Label nameLabel;
+    juce::Rectangle<int> iconBox;
     bool selected = false, subselected = false;
 
 public:

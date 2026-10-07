@@ -29,9 +29,9 @@ namespace sidebar
         return juce::roundToInt (font.getHeight() * 0.5f - visualCentreFromTop);
     }
 
-    // A track's kind, as a small line symbol at the left of its row (after Cubase): an instrument is a
-    // keyboard, a MIDI track the 5-pin MIDI plug, an audio track a waveform. Folders have none.
-    enum class TrackKind { instrument, midi, audio };
+    // A row's kind, as a small line symbol at its left (after Cubase): a folder, an instrument (a
+    // keyboard), a MIDI track (the 5-pin MIDI plug), an audio track (a waveform)
+    enum class TrackKind { folder, instrument, midi, audio };
     constexpr int iconWidth = 14;
 
     inline void drawTrackIcon (juce::Graphics& g, juce::Rectangle<float> box, TrackKind kind, juce::Colour colour)
@@ -39,7 +39,20 @@ namespace sidebar
         g.setColour (colour);
         const auto c = box.getCentre();
 
-        if (kind == TrackKind::instrument)   // a keyboard: three white keys, two black ones between them
+        if (kind == TrackKind::folder)   // a folder: its tab, its body
+        {
+            juce::Path folder;
+            const auto body = juce::Rectangle<float> (13.0f, 9.5f).withCentre (c.translated (0.0f, 0.75f));
+            folder.startNewSubPath (body.getX(), body.getY() - 1.5f);
+            folder.lineTo (body.getX() + 4.5f, body.getY() - 1.5f);
+            folder.lineTo (body.getX() + 6.0f, body.getY());
+            folder.lineTo (body.getRight(), body.getY());
+            folder.lineTo (body.getRight(), body.getBottom());
+            folder.lineTo (body.getX(), body.getBottom());
+            folder.closeSubPath();
+            g.strokePath (folder.createPathWithRoundedCorners (1.2f), juce::PathStrokeType (1.1f));
+        }
+        else if (kind == TrackKind::instrument)   // a keyboard: three white keys, two black ones between them
         {
             const auto keys = juce::Rectangle<float> (13.0f, 9.0f).withCentre (c);
             g.drawRoundedRectangle (keys, 1.2f, 1.1f);
