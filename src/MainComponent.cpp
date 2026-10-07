@@ -1741,17 +1741,23 @@ void MainComponent::toggleSidePane (SidePane pane)
     resized();
 }
 
+// E / D: the MIDI editor in its panel under the arrangement (the drag panel is the editor's page) -
+// open in that mode, or closed again by the same key; the panel keeps the height it was dragged to
 void MainComponent::toggleEditor (bool draw)
 {
-    if (contentView == ContentView::midiEditor && pianoRollView.isDrawMode() == draw)
+    if (isEditorShowing() && pianoRollView.isDrawMode() == draw)
     {
-        showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
+        if (contentView == ContentView::midiEditor)
+            showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
+        else
+            setEditorDocked (false);
+
         return;
     }
 
     pianoRollView.setDrawMode (draw);
 
-    if (contentView == ContentView::midiEditor)
+    if (isEditorShowing())
         updateViewVisibility();
     else
         openEditorOn (tracksToEdit(), selectedTrack);
@@ -1838,7 +1844,13 @@ void MainComponent::openEditorOn (std::vector<AudioEngine::TrackId> tracks, Audi
         if (const auto instrument = engine.getTrackInstrument (track); instrument != 0)
             engine.setInstrumentExpanded (instrument, true);
 
-    showContent (ContentView::midiEditor);
+    // In the panel under the arrangement (at its own height, kept from the last drag)
+    if (contentView != ContentView::midiRegions && contentView != ContentView::midiEditor)
+        showContent (ContentView::midiRegions);
+
+    if (contentView == ContentView::midiRegions)
+        setEditorDocked (true);
+
     pianoRollView.setTracks (std::move (tracks), edited);
 }
 
@@ -1910,6 +1922,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         if (contentView == ContentView::midiEditor)
         {
             showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
+            return true;
+        }
+
+        if (isEditorDockedShowing())   // the editor's panel closes
+        {
+            setEditorDocked (false);
             return true;
         }
 

@@ -190,7 +190,7 @@ private:
     } dockHandle { *this };
 
     int contentAreaHeight = 0;             // the arrangement + docked editor area (set in resized)
-    int maxDockHeight() const              { return contentAreaHeight - dockHandleHeight - 60; }
+    int maxDockHeight() const              { return contentAreaHeight - dockHandleHeight; }   // up to the timeline bar (the arrangement hidden)
     int currentDockHeight() const
     {
         return juce::jlimit (80, juce::jmax (100, maxDockHeight()), dockHeight > 0 ? dockHeight : contentAreaHeight * 2 / 5);
