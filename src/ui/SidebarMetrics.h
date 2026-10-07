@@ -8,13 +8,14 @@
 // and the arrangement both read/write this, so scrolling one scrolls the other.
 namespace sidebar
 {
-    // A track row's height: zoomable (Ctrl+Shift+wheel, + / -), from one line (the smallest) up
-    constexpr int minTrackRowHeight = 26, maxTrackRowHeight = 120;
+    // The zoom (Ctrl+Shift+wheel, + / -) sets the instrument folders' rows; MIDI tracks and audio rows
+    // keep one height (midiRowHeight)
+    constexpr int minTrackRowHeight = 36, maxTrackRowHeight = 160;
+    constexpr int midiRowHeight = 26;
     inline int& trackRowHeightSetting()   { static int height = minTrackRowHeight; return height; }
     inline int trackRowHeight()           { return trackRowHeightSetting(); }
 
     constexpr int folderRowHeight = 28;
-    constexpr int instrumentRowHeight = 36;   // room for its name on tape
     constexpr int indentPerLevel = 10;
 
     // The rows' names (folders, MIDI tracks, audio): Segoe UI - lighter and narrower than the default
@@ -31,7 +32,7 @@ namespace sidebar
 
     inline int heightOf (const AudioEngine::SidebarItem& item)
     {
-        return item.instrument != 0 ? instrumentRowHeight : (item.folder != 0 ? folderRowHeight : trackRowHeight());
+        return item.instrument != 0 ? trackRowHeight() : (item.folder != 0 ? folderRowHeight : midiRowHeight);
     }
 
     // One shared scroll offset; views poll 'revision' from their timers.

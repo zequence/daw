@@ -79,7 +79,7 @@ juce::Rectangle<int> ArrangementView::blockRect (const BlockRef& block, int lane
     // Drawn to the end of its last bar, one pixel short at both ends so the grid line shows through
     const auto x = tickToX (block.startTick) + 1;
     const auto right = tickToX (barEndOf (block.endTick));
-    return { x, laneTop + 4, juce::jmax (6, right - x), sidebar::trackRowHeight() - 8 };   // overlapping ones share it (hatched)
+    return { x, laneTop + 4, juce::jmax (6, right - x), sidebar::midiRowHeight - 8 };   // overlapping ones share it (hatched)
 }
 
 ArrangementView::BlockRef ArrangementView::blockAt (juce::Point<int> position)
