@@ -45,7 +45,7 @@ public:
     void confirmQuit();
 
 private:
-    enum class ContentView { midiRegions, midiEditor, audioRegions, instrumentEditor, expressionMaps, mixer };   // Instruments and History: the side pane
+    enum class ContentView { midiRegions, audioRegions, instrumentEditor, expressionMaps, mixer };   // (the MIDI editor: a panel under the arrangement)   // Instruments and History: the side pane
 
     // Instruments and History open as a pane on the right, beside the arrangement or the editor
     enum class SidePane { none, instruments, history };
@@ -129,7 +129,7 @@ private:
     int dockHeight = 0;                    // 0 = the default (about 40% of the content); saved in the settings
     static constexpr int dockHandleHeight = 7;
     bool isEditorDockedShowing() const      { return editorDocked && contentView == ContentView::midiRegions; }
-    bool isEditorShowing() const            { return contentView == ContentView::midiEditor || isEditorDockedShowing(); }
+    bool isEditorShowing() const            { return isEditorDockedShowing(); }
     void setEditorDocked (bool);
 
     struct DockHandle final : juce::Component, juce::SettableTooltipClient

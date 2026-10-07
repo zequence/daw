@@ -1115,18 +1115,12 @@ void MainComponent::showContent (ContentView view)
 {
     contentView = view;
 
-    if (view == ContentView::midiRegions || view == ContentView::midiEditor || view == ContentView::audioRegions)
+    if (view == ContentView::midiRegions || view == ContentView::audioRegions)
         mainView = view;
-
-    if (view == ContentView::midiEditor)
-        pianoRollView.setTrack (selectedTrack);
 
     updatePlaceholders();
     updateViewVisibility();
-    resized();   // the arrangement shares its area with the docked editor
-
-    if (view == ContentView::midiEditor)
-        pianoRollView.grabKeyboardFocus();
+    resized();   // the arrangement shares its area with the editor's panel
 }
 
 // The MIDI editor docked under the arrangement (the handle opens, closes and sizes it)
@@ -1747,11 +1741,7 @@ void MainComponent::toggleEditor (bool draw)
 {
     if (isEditorShowing() && pianoRollView.isDrawMode() == draw)
     {
-        if (contentView == ContentView::midiEditor)
-            showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
-        else
-            setEditorDocked (false);
-
+        setEditorDocked (false);
         return;
     }
 
@@ -1845,11 +1835,11 @@ void MainComponent::openEditorOn (std::vector<AudioEngine::TrackId> tracks, Audi
             engine.setInstrumentExpanded (instrument, true);
 
     // In the panel under the arrangement (at its own height, kept from the last drag)
-    if (contentView != ContentView::midiRegions && contentView != ContentView::midiEditor)
+    if (contentView != ContentView::midiRegions)
         showContent (ContentView::midiRegions);
 
-    if (contentView == ContentView::midiRegions)
-        setEditorDocked (true);
+    setEditorDocked (true);
+    pianoRollView.grabKeyboardFocus();
 
     pianoRollView.setTracks (std::move (tracks), edited);
 }
@@ -1916,12 +1906,6 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         {
             pianoRollView.setDrawMode (false);
             updateViewVisibility();
-            return true;
-        }
-
-        if (contentView == ContentView::midiEditor)
-        {
-            showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
             return true;
         }
 
@@ -2010,7 +1994,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         if (domain != Domain::midi)
             domain = Domain::midi;
 
-        if (contentView != ContentView::midiEditor)
+        if (! isEditorShowing())
             openEditorOn (tracksToEdit(), selectedTrack);
 
         return true;
