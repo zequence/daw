@@ -35,7 +35,7 @@ namespace
 
 namespace
 {
-    constexpr int rightBarWidth  = 60;   // one transport button wide
+    constexpr int rightBarWidth  = 120;  // two transport buttons wide
     constexpr int topBarHeight   = 44;   // the transport bar along the top or bottom
     constexpr int statusHeight   = 22;
 
@@ -423,7 +423,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     for (auto* c : std::initializer_list<juce::Component*> {
              &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &sidePaneButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
-             &sidebarHeader, &trackList, &channelList, &sidebarResizer, &sidePaneResizer, &dockHandle,
+             &sidebarHeader, &masterMeter, &trackList, &channelList, &sidebarResizer, &sidePaneResizer, &dockHandle,
              &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView, &mixerView,
              &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView, &settingsView,
              &statusLabel })
@@ -1519,6 +1519,9 @@ void MainComponent::timerCallback()
 
     engine.pollRecording();
 
+    if (auto* master = engine.getMasterChannel(); master != nullptr && masterMeter.isVisible())
+        masterMeter.update (master->getLastPeak(), master->getLastRms());
+
 
     // The mixer highlights the selected audio channel (the sidebar's audio list and the mixer share
     // it); while none is selected there, the selected track's channel (its first output's instrument)
@@ -2037,26 +2040,40 @@ void MainComponent::resized()
 
     if (vertical)
     {
-        auto bar = rightBar.reduced (5, 6).withTrimmedLeft (1);
-        sidePaneButton.setBounds (bar.removeFromTop (24));
-        bar.removeFromTop (12);
+        // The master control surface: the side pane's expander and Perf at the top, the readouts, the
+        // output meter filling the middle, the transport at the bottom (two buttons a row)
+        auto bar = rightBar.reduced (6, 6).withTrimmedLeft (1);
+        auto top = bar.removeFromTop (24);
+        sidePaneButton.setBounds (top.removeFromLeft (top.getWidth() / 2).withTrimmedRight (2));
+        perfButton.setBounds (top.withTrimmedLeft (2));
+        bar.removeFromTop (10);
 
-        for (auto* b : transportButtons)
+        positionLabel.setBounds (bar.removeFromTop (24));
+        timeLabel.setBounds (bar.removeFromTop (18));
+        bar.removeFromTop (4);
+        bpmLabel.setBounds (bar.removeFromTop (24).withSizeKeepingCentre (64, 24));
+        bar.removeFromTop (10);
+
+        const std::array<std::pair<juce::Component*, juce::Component*>, 3> rows {{ { &playButton, &recordButton },
+                                                                                     { &rtzButton, &loopButton },
+                                                                                     { &returnOnStopButton, &snapButton } }};
+
+        for (auto it = rows.rbegin(); it != rows.rend(); ++it)   // from the bottom up
         {
-            b->setBounds (bar.removeFromTop (30));
-            bar.removeFromTop (4);
+            auto row = bar.removeFromBottom (30);
+            it->first->setBounds (row.removeFromLeft (row.getWidth() / 2).withTrimmedRight (2));
+            it->second->setBounds (row.withTrimmedLeft (2));
+            bar.removeFromBottom (4);
         }
 
-        bar.removeFromTop (8);
-        positionLabel.setBounds (bar.removeFromTop (22));
-        timeLabel.setBounds (bar.removeFromTop (16));
-        bar.removeFromTop (4);
-        bpmLabel.setBounds (bar.removeFromTop (22));
-        perfButton.setBounds (bar.removeFromBottom (24));
+        bar.removeFromBottom (6);
+        masterMeter.setBounds (bar.withSizeKeepingCentre (18, bar.getHeight()));   // the audio out
+        masterMeter.setVisible (true);
     }
     else
     {
         auto bar = rightBar.reduced (8, 7);
+        masterMeter.setVisible (false);   // (only on the right bar for now)
         sidePaneButton.setBounds (bar.removeFromRight (36));
         bar.removeFromRight (8);
         perfButton.setBounds (bar.removeFromRight (50));
@@ -2075,9 +2092,9 @@ void MainComponent::resized()
         bpmLabel.setBounds (bar.removeFromLeft (56));
     }
 
-    positionLabel.setFont (juce::FontOptions (vertical ? 14.0f : 18.0f, juce::Font::bold));
+    positionLabel.setFont (juce::FontOptions (18.0f, juce::Font::bold));
     positionLabel.setJustificationType (vertical ? juce::Justification::centred : juce::Justification::centredRight);
-    timeLabel.setFont (juce::FontOptions (vertical ? 10.5f : 14.0f));
+    timeLabel.setFont (juce::FontOptions (14.0f));
     timeLabel.setJustificationType (vertical ? juce::Justification::centred : juce::Justification::centredLeft);
     timeLabel.setMinimumHorizontalScale (0.7f);
 

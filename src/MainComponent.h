@@ -116,6 +116,7 @@ private:
     TransportPlace transportPlace = TransportPlace::right;   // where the transport bar is (the main menu; saved in the settings)
     void setTransportPlace (TransportPlace);
     juce::TextButton sidePaneButton;       // the right bar's top: expands the side pane (its tabs: Instruments, History)
+    mixer::Meter masterMeter;              // the audio out (the master bus), on the right bar
     juce::Rectangle<int> rightBar;         // the transport bar on the right (painted)
     juce::Rectangle<int> paneTabs;         // the side pane's tab row (painted)
     int sidePaneEdge = -1;                 // the side pane's left edge (a line is painted there)
