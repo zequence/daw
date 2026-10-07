@@ -20,6 +20,14 @@ namespace sidebar
 
     // The rows' names (folders, MIDI tracks, audio): Segoe UI - lighter and narrower than the default
     // sans, orderly - regular for tracks and audio, semibold for folders (instruments are on tape)
+    // A folder's name: typed, like the label on an archive box (Courier New, bold, a little spaced)
+    inline juce::Font folderFont (float height)
+    {
+        static const auto hasCourier = juce::Font::findAllTypefaceNames().contains ("Courier New");
+        return juce::Font (juce::FontOptions (hasCourier ? juce::String ("Courier New") : juce::Font::getDefaultMonospacedFontName(),
+                                              height, juce::Font::bold).withKerningFactor (0.06f));
+    }
+
     inline const juce::Colour rowTextColour { 0xffd4d6da };   // the rows' names: a very light grey, not white
 
     inline juce::Font rowFont (float height, bool folder)
