@@ -414,7 +414,7 @@ public:
 
         if (! owner.finishRowDrag (0))
         {
-            if (event.x < depth * indentPerLevel + 18)
+            if (event.x < iconBox.getRight() + 2)   // the arrow or the keyboard symbol: open / close
                 engine.setInstrumentExpanded (instrumentId, ! engine.isInstrumentExpanded (instrumentId));
             else
                 owner.selectInstrument (instrumentId);
@@ -423,7 +423,7 @@ public:
 
     void mouseDoubleClick (const juce::MouseEvent& event) override   // the editor on all its tracks
     {
-        if (event.x >= depth * indentPerLevel + 18 && owner.onOpenEditorOnTracks)
+        if (event.x >= iconBox.getRight() + 2 && owner.onOpenEditorOnTracks)
             if (const auto tracks = engine.getInstrumentTracks (instrumentId); ! tracks.empty())
                 owner.onOpenEditorOnTracks (tracks);
     }
