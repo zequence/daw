@@ -41,7 +41,7 @@ public:
     {
         auto freshItems = engine.getSidebarItems (false, true);
 
-        if (freshItems != items)
+        if (freshItems != items || fixedRows.empty())
         {
             items = std::move (freshItems);
             rebuildRows();
@@ -59,6 +59,10 @@ public:
             else if (auto* folderRow = dynamic_cast<FolderRow*> (row.get()))
                 folderRow->refresh();
         }
+
+        for (auto& row : fixedRows)
+            if (auto* busRow = dynamic_cast<BusRow*> (row.get()))
+                busRow->refresh();
     }
 
     void resized() override
@@ -71,13 +75,6 @@ public:
     {
         g.fillAll (juce::Colour (0xff232529));
 
-        if (rowComponents.empty())
-        {
-            g.setColour (juce::Colours::grey);
-            g.setFont (juce::FontOptions (13.0f));
-            g.drawFittedText ("No audio channels yet.\nAdd an instrument and its channel appears here.",
-                              getLocalBounds().reduced (12), juce::Justification::centredTop, 4);
-        }
     }
 
 private:
@@ -232,6 +229,129 @@ private:
     };
 
     //==========================================================================
+    // Under the channels (which can be mixed: instruments' outputs, later recording inputs): the
+    // buses, the six Aux buses and the master - fixed, in that order (not moved, not in folders)
+    struct SectionHeader final : juce::Component
+    {
+        SectionHeader (const juce::String& titleToUse, const juce::String& noteToUse) : title (titleToUse), note (noteToUse)
+        {
+            setInterceptsMouseClicks (false, false);
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            auto area = getLocalBounds().reduced (8, 0);
+            g.setColour (juce::Colours::white.withAlpha (0.12f));
+            g.fillRect (area.getX(), 3, area.getWidth(), 1);
+            g.setColour (juce::Colours::white.withAlpha (0.55f));
+            g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+            g.drawText (title.toUpperCase(), area, juce::Justification::centredLeft);
+
+            if (note.isNotEmpty())
+            {
+                g.setColour (juce::Colours::grey);
+                g.setFont (juce::FontOptions (11.0f));
+                g.drawText (note, area.withTrimmedLeft (juce::roundToInt (juce::GlyphArrangement::getStringWidth (
+                                juce::Font (juce::FontOptions (11.0f, juce::Font::bold)), title.toUpperCase())) + 8),
+                            juce::Justification::centredLeft);
+            }
+        }
+
+        juce::String title, note;
+    };
+
+    // An Aux bus (a placeholder until the buses work: MILESTONES.md "Audio mixer", phase 3) or the master
+    struct BusRow final : juce::Component
+    {
+        BusRow (AudioEngine& e, int auxNumberToUse) : engine (e), auxNumber (auxNumberToUse)
+        {
+            muteButton.setClickingTogglesState (true);
+            theme::setButtonRole (muteButton, "mute");
+            muteButton.setWantsKeyboardFocus (false);
+            muteButton.onClick = [this]
+            {
+                if (auto* p = processor())
+                    p->setMuted (muteButton.getToggleState());
+            };
+            addAndMakeVisible (muteButton);
+
+            volumeSlider.setRange (-60.0, 6.0, 0.1);
+            volumeSlider.setValue (0.0, juce::dontSendNotification);
+            volumeSlider.setDoubleClickReturnValue (true, 0.0);
+            volumeSlider.setSkewFactorFromMidPoint (-12.0);
+            volumeSlider.setWantsKeyboardFocus (false);
+            volumeSlider.onValueChange = [this]
+            {
+                if (auto* p = processor())
+                    p->setGain (juce::Decibels::decibelsToGain ((float) volumeSlider.getValue(), -60.0f));
+            };
+            addAndMakeVisible (volumeSlider);
+
+            muteButton.setEnabled (auxNumber == 0);   // the Aux buses: not working yet
+            volumeSlider.setEnabled (auxNumber == 0);
+        }
+
+        AudioChannelProcessor* processor() const   { return auxNumber == 0 ? engine.getMasterChannel() : nullptr; }
+
+        void refresh()
+        {
+            if (auto* p = processor())
+            {
+                muteButton.setToggleState (p->isMuted(), juce::dontSendNotification);
+
+                if (! volumeSlider.isMouseButtonDown())
+                    volumeSlider.setValue (juce::Decibels::gainToDecibels (p->getGain(), -60.0f), juce::dontSendNotification);
+
+                meterLevel = juce::jmax (p->getLastPeak(), meterLevel * 0.85f);
+                repaint();
+            }
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            theme::paintRowBox (g, getLocalBounds().toFloat().reduced (2.0f, 1.5f), false, false);
+            auto area = getLocalBounds().reduced (8, 4);
+
+            g.setColour (juce::Colours::white.withAlpha (auxNumber == 0 ? 0.9f : 0.5f));
+            g.setFont (juce::FontOptions (14.0f));
+            g.drawText (auxNumber == 0 ? juce::String ("Master") : "Aux " + juce::String (auxNumber), area.removeFromTop (18), juce::Justification::centredLeft);
+
+            g.setColour (juce::Colours::grey);
+            g.setFont (juce::FontOptions (11.0f));
+            g.drawText (auxNumber == 0 ? juce::String::fromUTF8 ("all channels \xe2\x86\x92 the audio device")
+                                       : juce::String ("coming: sends from the channels"),
+                        area.removeFromTop (14), juce::Justification::centredLeft);
+
+            auto meter = getLocalBounds().reduced (8, 4).removeFromBottom (5).toFloat();
+            g.setColour (juce::Colours::black.withAlpha (0.5f));
+            g.fillRect (meter);
+
+            const auto db = juce::Decibels::gainToDecibels (meterLevel, -60.0f);
+            g.setColour (meterLevel >= 1.0f ? juce::Colours::red : juce::Colours::limegreen);
+            g.fillRect (meter.withWidth (meter.getWidth() * juce::jlimit (0.0f, 1.0f, juce::jmap (db, -60.0f, 0.0f, 0.0f, 1.0f))));
+        }
+
+        void resized() override
+        {
+            auto area = getLocalBounds().reduced (8, 4);
+            area.removeFromTop (34);
+            area.removeFromBottom (7);
+            muteButton.setBounds (area.removeFromLeft (24));
+            area.removeFromLeft (4);
+            volumeSlider.setBounds (area);
+        }
+
+        AudioEngine& engine;
+        const int auxNumber;   // 0: the master
+        juce::TextButton muteButton { "M" };
+        juce::Slider volumeSlider { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
+        float meterLevel = 0.0f;
+    };
+
+    std::vector<std::unique_ptr<juce::Component>> fixedRows;   // the headers, the Aux buses and the master
+    static constexpr int headerHeight = 24;
+
+    //==========================================================================
     struct FolderRow final : juce::Component
     {
         FolderRow (AudioChannelList& ownerToUse, AudioEngine::FolderId id, int depthToUse)
@@ -329,6 +449,7 @@ private:
     void rebuildRows()
     {
         rowComponents.clear();
+        fixedRows.clear();
 
         for (auto& item : items)
         {
@@ -343,6 +464,21 @@ private:
             rowComponents.push_back (std::move (row));
         }
 
+        if (items.empty())
+            fixedRows.push_back (std::make_unique<SectionHeader> ("Channels", "none yet - add an instrument"));
+
+        fixedRows.push_back (std::make_unique<SectionHeader> ("Buses", "none yet"));
+        fixedRows.push_back (std::make_unique<SectionHeader> ("Aux", juce::String()));
+
+        for (int aux = 1; aux <= 6; ++aux)
+            fixedRows.push_back (std::make_unique<BusRow> (engine, aux));
+
+        fixedRows.push_back (std::make_unique<SectionHeader> ("Master", juce::String()));
+        fixedRows.push_back (std::make_unique<BusRow> (engine, 0));
+
+        for (auto& row : fixedRows)
+            rowContainer.addAndMakeVisible (*row);
+
         layoutRows();
         repaint();
     }
@@ -356,6 +492,13 @@ private:
         {
             rowComponents[i]->setBounds (0, y, width, heightOfItem (items[i]));
             y += heightOfItem (items[i]);
+        }
+
+        for (auto& row : fixedRows)
+        {
+            const auto height = dynamic_cast<SectionHeader*> (row.get()) != nullptr ? headerHeight : rowHeight;
+            row->setBounds (0, y, width, height);
+            y += height;
         }
 
         // At least viewport height, so right-clicking the empty area reaches the container
