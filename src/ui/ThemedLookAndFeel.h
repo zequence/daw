@@ -136,6 +136,11 @@ private:
         setColour (juce::ComboBox::textColourId, text);
         setColour (juce::ComboBox::arrowColourId, text);
 
+        // Alert boxes (save before closing?, remove...?): the app's panels, not JUCE's own blue-grey
+        setColour (juce::AlertWindow::backgroundColourId, theme::colour (T::surfacePanel));
+        setColour (juce::AlertWindow::textColourId, juce::Colours::white.withAlpha (0.88f));
+        setColour (juce::AlertWindow::outlineColourId, theme::colour (T::borderSubtle));
+
         // Popup menus (the hamburger menu, right-click menus, combo box lists)
         setColour (juce::PopupMenu::backgroundColourId, theme::colour (T::menuBg));
         setColour (juce::PopupMenu::textColourId, theme::colour (T::menuText));
