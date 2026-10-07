@@ -2123,9 +2123,10 @@ void MainComponent::resized()
     sidebarTop = sidebarTop.withSizeKeepingCentre (sidebarTop.getWidth(), juce::jmin (28, sidebarTop.getHeight() - 4));
     sidebarHeader.setVisible (false);
     menuButton.setBounds (sidebarTop.removeFromLeft (40));
-    sidebarTop.removeFromLeft (6);
-    midiDomainButton.setBounds (sidebarTop.removeFromLeft (sidebarTop.getWidth() / 2).withTrimmedRight (2));
-    audioDomainButton.setBounds (sidebarTop.withTrimmedLeft (2));
+
+    // One page for everything (MIDI and audio together): no domain buttons
+    midiDomainButton.setVisible (false);
+    audioDomainButton.setVisible (false);
 
     trackList.setBounds (sidebar);
     channelList.setBounds (sidebar);
