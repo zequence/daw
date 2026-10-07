@@ -80,6 +80,22 @@ public:
             expect (engine.getInstrumentTracks (instrument) == std::vector<AudioEngine::TrackId> { first, second });
         }
 
+        beginTest ("its tracks in a collapsed folder: it stays there (not listed at the end)");
+        {
+            const auto folder = engine.addFolder (true, "Strings");
+            engine.setTrackFolder (first, folder);
+            engine.setTrackFolder (second, folder);
+            engine.setFolderCollapsed (folder, true);
+            const auto items = engine.getSidebarItems (true, true);
+
+            for (auto& item : items)
+                expect (item.instrument != (int) instrument, "listed outside its collapsed folder");
+
+            engine.setFolderCollapsed (folder, false);
+            const auto open = engine.getSidebarItems (true, true);
+            expect (std::any_of (open.begin(), open.end(), [&] (auto& item) { return item.instrument == (int) instrument && item.parent == folder; }));
+        }
+
         beginTest ("membership follows routing");
         {
             engine.clearTrackOutputs (second);

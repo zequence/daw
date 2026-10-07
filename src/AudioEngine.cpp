@@ -2358,9 +2358,9 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
 
     visit (0, 0);
 
-    if (midiDomain)   // instruments no track plays yet: at the end
+    if (midiDomain)   // instruments no track plays yet: at the end (not those whose tracks are in a collapsed folder)
         for (auto& [id, instrument] : instruments)
-            if (placed.count (id) == 0)
+            if (placed.count (id) == 0 && tracksOfInstrument[id].empty())
                 pushInstrument (id, 0, 0);
 
     return items;
