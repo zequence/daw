@@ -9,8 +9,7 @@
 
 #if JUCE_WINDOWS
 // For the rack: which native window has the keys (a plugin editor embedded in ours can take them)
-extern "C" __declspec (dllimport) void* __stdcall GetFocus();
-extern "C" __declspec (dllimport) int __stdcall IsChild (void* parent, void* child);
+extern "C" __declspec (dllimport) void* __stdcall GetForegroundWindow();
 #endif
 
 namespace
@@ -1419,8 +1418,10 @@ void MainComponent::timerCallback()
     // plugin's own text field in the rack does not work because of this; its own window does.)
     if (contentView == ContentView::mixer && mixerView.isRackOpen()
         && ! juce::ModifierKeys::getCurrentModifiersRealtime().isAnyMouseButtonDown())
+        // Our window is the active one, but the keyboard is not ours: a plugin inside it has it (some
+        // plugins run their windows on their own thread, so asking "who has the focus" can't see them)
         if (auto* peer = getPeer())
-            if (auto* focus = GetFocus(); focus != nullptr && focus != peer->getNativeHandle() && IsChild (peer->getNativeHandle(), focus) != 0)
+            if (GetForegroundWindow() == peer->getNativeHandle() && ! peer->isFocused())
             {
                 peer->grabFocus();      // the native focus (JUCE may still think it has it)
                 grabKeyboardFocus();
