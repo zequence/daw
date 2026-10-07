@@ -335,12 +335,13 @@ public:
     void resized() override
     {
         // After the arrow, one unit: its level (a vertical meter as tall as the buttons), S, M; then the tape
-        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 17).reduced (0, 4);
+        // (the same room on both sides of the unit: arrow | 6 | meter S M | 6 | tape)
+        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 20).reduced (0, 4);
         meter.setBounds (area.removeFromLeft (7).withSizeKeepingCentre (7, 20));
         area.removeFromLeft (1);
         soloButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20));
         muteButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20).expanded (1, 0).withTrimmedRight (1));
-        tapeLeft = area.getX() + 8;
+        tapeLeft = area.getX() + 6;
     }
 
     AudioEngine::InstrumentId getInstrumentId() const noexcept { return instrumentId; }
