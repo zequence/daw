@@ -43,7 +43,6 @@ public:
             expect (m.colour (theme::Token::arrangeBg) == juce::Colour (0xff1a1c1f));
             expect (m.colour (theme::Token::arrangeBarline) == juce::Colour (0xff2e3136));
             expect (theme::rowColour (juce::Colour (0xff000000), true, false) == juce::Colour (0xff000000).interpolatedWith (juce::Colours::white, 0.16f));   // selected: brighter
-            expect (m.colour (theme::Token::trackInstrumentBg) == m.colour (theme::Token::folderBg));   // follows the folder background
 
             const auto track = juce::Colour (0xff56b58c);
             const auto normal = theme::regionStyle (track, false);

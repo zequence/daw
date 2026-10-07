@@ -413,7 +413,7 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
-        theme::paintTrackBox (g, bounds, theme::Token::trackInstrumentBg, selected, subselected);
+        theme::paintTrackBox (g, bounds, theme::Token::folderBg, selected, subselected);
 
         const auto tracks = engine.getInstrumentTracks (instrumentId);
 

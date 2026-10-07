@@ -386,7 +386,7 @@ private:
                               RowDef { "Brass", false, true, brass } })
             {
                 auto bounds = rowArea.removeFromTop (rowH).toFloat().reduced (2.0f, 1.5f);
-                theme::paintRowBox (g, bounds, def.folder, def.selected);
+                theme::paintTrackBox (g, bounds, def.folder ? theme::Token::folderBg : theme::Token::trackMidiBg, def.selected);
                 g.setColour (def.colour);
                 g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
                 g.setColour (juce::Colours::white.withAlpha (0.8f));

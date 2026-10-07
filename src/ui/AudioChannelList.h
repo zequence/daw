@@ -181,7 +181,7 @@ private:
         void paint (juce::Graphics& g) override
         {
             auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
-            theme::paintRowBox (g, bounds, false, selected);
+            theme::paintTrackBox (g, bounds, theme::Token::trackAudioBg, selected);
 
             auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).reduced (8, 4);
 
@@ -309,7 +309,7 @@ private:
 
         void paint (juce::Graphics& g) override
         {
-            theme::paintRowBox (g, getLocalBounds().toFloat().reduced (2.0f, 1.5f), false, false);
+            theme::paintTrackBox (g, getLocalBounds().toFloat().reduced (2.0f, 1.5f), theme::Token::trackAudioBg, false);
             auto area = getLocalBounds().reduced (8, 4);
 
             g.setColour (juce::Colours::white.withAlpha (auxNumber == 0 ? 0.9f : 0.5f));
@@ -415,7 +415,7 @@ private:
         void paint (juce::Graphics& g) override
         {
             auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
-            theme::paintRowBox (g, bounds, true, false);
+            theme::paintTrackBox (g, bounds, theme::Token::folderBg, false);
 
             g.setColour (AudioEngine::colourFromHex (engine.getFolderColour (folderId), juce::Colour (0xff6d7178)));
             g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
