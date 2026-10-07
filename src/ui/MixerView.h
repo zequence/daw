@@ -233,7 +233,7 @@ private:
             const auto placeholderTip = juce::String ("Placeholder - not working yet (MILESTONES.md \"Audio mixer\")");
 
             name.setJustificationType (juce::Justification::centred);
-            name.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+            name.setFont (mixer::TapeLabel::markerFont());   // (for its rename editor; the tape draws its own)
             name.setEditable (false, kind == Kind::channel);   // double-click renames a channel
             name.setTooltip (kind == Kind::channel ? "Double-click to rename" : kind == Kind::master ? "The master bus" : placeholderTip);
             name.onTextChange = [this]
@@ -933,7 +933,8 @@ private:
         const Kind kind;
         const AudioEngine::AudioChannelId channelId;   // channels
         const int auxNumber;                           // Aux buses: 1-6
-        juce::Label name, level, output;
+        mixer::TapeLabel name;
+        juce::Label level, output;
         mixer::Placeholder inserts { "Inserts", 8 };
         mixer::LitButton flip { "INSERTS", juce::Colour (0xff9fb3c8) };
         mixer::LitButton insertsIn { {}, juce::Colour (0xff62d26f) };   // the whole insert section on/off

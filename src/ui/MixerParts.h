@@ -248,6 +248,71 @@ struct LitButton : juce::Button
 };
 
 //==========================================================================
+// A strip's name on a bit of masking tape: cream, a little crooked, torn at both ends, written in
+// marker. Each name gets its own small tilt and tear (from its text), like tape stuck on by hand.
+struct TapeLabel final : juce::Label
+{
+    static juce::Font markerFont()
+    {
+        static const auto hasPrint = juce::Font::findAllTypefaceNames().contains ("Segoe Print");
+        return juce::Font (juce::FontOptions (hasPrint ? juce::String ("Segoe Print") : juce::String(), 12.5f, juce::Font::bold));
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        if (isBeingEdited())
+            return;
+
+        const auto text = getText();
+        const auto font = markerFont();
+        const auto area = getLocalBounds().toFloat().reduced (3.0f, 2.5f);
+        const auto width = juce::jmin (area.getWidth(), juce::GlyphArrangement::getStringWidth (font, text) + 18.0f);
+        const auto tape = area.withSizeKeepingCentre (width, area.getHeight());
+        juce::Random random (text.hashCode());
+
+        // The outline: straight along the top and bottom, torn (zigzag) at the ends
+        juce::Path path;
+        path.startNewSubPath (tape.getX(), tape.getY());
+        path.lineTo (tape.getRight(), tape.getY());
+
+        for (auto y = tape.getY() + 2.0f; y < tape.getBottom(); y += 2.0f)
+            path.lineTo (tape.getRight() - random.nextFloat() * 2.2f, y);
+
+        path.lineTo (tape.getRight(), tape.getBottom());
+        path.lineTo (tape.getX(), tape.getBottom());
+
+        for (auto y = tape.getBottom() - 2.0f; y > tape.getY(); y -= 2.0f)
+            path.lineTo (tape.getX() + random.nextFloat() * 2.2f, y);
+
+        path.closeSubPath();
+
+        juce::Graphics::ScopedSaveState state (g);
+        g.addTransform (juce::AffineTransform::rotation ((random.nextFloat() - 0.5f) * 0.06f, tape.getCentreX(), tape.getCentreY()));
+
+        g.setColour (juce::Colours::black.withAlpha (0.35f));   // lifted a hair off the panel
+        g.fillPath (path, juce::AffineTransform::translation (0.6f, 1.2f));
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xffeee5c8), tape.getX(), tape.getY(),
+                                                 juce::Colour (0xffd8cba4), tape.getX(), tape.getBottom(), false));
+        g.fillPath (path);
+
+        {
+            juce::Graphics::ScopedSaveState fibres (g);   // the paper's grain
+            g.reduceClipRegion (path);
+
+            for (auto y = tape.getY() + 1.5f; y < tape.getBottom(); y += 1.7f)
+            {
+                g.setColour ((random.nextBool() ? juce::Colours::white : juce::Colour (0xff7a6a48)).withAlpha (0.05f + random.nextFloat() * 0.05f));
+                g.fillRect (tape.getX(), y, tape.getWidth(), 0.7f);
+            }
+        }
+
+        g.setColour (juce::Colour (0xff1c2233));   // marker ink
+        g.setFont (font);
+        g.drawText (text, tape.reduced (5.0f, 0.0f).translated (0.0f, -0.5f), juce::Justification::centred, true);
+    }
+};
+
+//==========================================================================
 // A level meter: peak (bright) over RMS (body), a peak-hold line, a clip light (click resets)
 struct Meter final : juce::Component
 {
