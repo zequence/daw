@@ -302,7 +302,12 @@ public:
     void mouseDown (const juce::MouseEvent& event) override
     {
         if (event.mods.isPopupMenu())
+        {
+            if (owner.onInstrumentMenu)
+                owner.onInstrumentMenu (instrumentId);
+
             return;
+        }
 
         owner.drag = {};
         owner.clearSelectionOnMouseUp = false;
@@ -397,8 +402,8 @@ private:
 class TrackList::AudioRow final : public juce::Component
 {
 public:
-    AudioRow (AudioEngine& engineToUse, AudioEngine::AudioChannelId id, int depthToUse)
-        : engine (engineToUse), channelId (id), depth (depthToUse)
+    AudioRow (TrackList& ownerToUse, AudioEngine& engineToUse, AudioEngine::AudioChannelId id, int depthToUse)
+        : owner (ownerToUse), engine (engineToUse), channelId (id), depth (depthToUse)
     {
         muteButton.setTooltip ("Mute (audio)");
         muteButton.setClickingTogglesState (true);
@@ -410,18 +415,13 @@ public:
                 p->setMuted (muteButton.getToggleState());
         };
         addAndMakeVisible (muteButton);
+    }
 
-        level.setRange (-60.0, 6.0, 0.1);
-        level.setSkewFactorFromMidPoint (-12.0);
-        level.setDoubleClickReturnValue (true, 0.0);
-        level.setWantsKeyboardFocus (false);
-        level.setTooltip ("Level (the mixer's fader)");
-        level.onValueChange = [this]
-        {
-            if (auto* p = engine.getAudioChannel (channelId))
-                p->setGain (level.getValue() <= -59.9 ? 0.0f : juce::Decibels::decibelsToGain ((float) level.getValue()));
-        };
-        addAndMakeVisible (level);
+    void mouseDown (const juce::MouseEvent& event) override
+    {
+        if (event.mods.isPopupMenu() && owner.onInstrumentMenu)
+            if (const auto instrument = engine.getAudioChannelInput (channelId); instrument != 0)
+                owner.onInstrumentMenu (instrument);
     }
 
     void refresh()
@@ -429,11 +429,10 @@ public:
         if (auto* p = engine.getAudioChannel (channelId))
         {
             muteButton.setToggleState (p->isMuted(), juce::dontSendNotification);
-
-            if (! level.isMouseButtonDown())
-                level.setValue (juce::Decibels::gainToDecibels (p->getGain(), -60.0f), juce::dontSendNotification);
-
             meterLevel = juce::jmax (p->getLastPeak(), meterLevel * 0.85f);
+
+            const auto peak = p->getLastPeak();   // the readout holds the peak a moment, then falls
+            heldPeak = peak >= heldPeak ? peak : heldPeak * 0.97f;
         }
 
         repaint();
@@ -451,13 +450,22 @@ public:
         g.setFont (juce::FontOptions (13.0f));
         g.drawText (juce::String::fromUTF8 ("\xe2\x99\xab ") + engine.getAudioChannelName (channelId), nameArea, juce::Justification::centredLeft, true);
 
-        // A thin meter along the bottom
-        auto meter = bounds.reduced (12.0f, 0.0f).removeFromBottom (4.0f).translated (0.0f, -2.0f);
-        g.setColour (juce::Colours::black.withAlpha (0.5f));
-        g.fillRect (meter);
+        // The level in dB: a meter (green, yellow from -12, red at 0) and its peak as a number
+        const auto peakDb = juce::Decibels::gainToDecibels (heldPeak, -60.0f);
+        g.setFont (juce::FontOptions (11.0f));
+        g.setColour (heldPeak >= 1.0f ? juce::Colours::red : juce::Colours::white.withAlpha (0.6f));
+        g.drawText (peakDb <= -59.9f ? juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e dB")) : juce::String (peakDb, 1) + " dB",
+                    readoutArea, juce::Justification::centredRight, false);
+
+        auto meter = meterArea.toFloat();
+        g.setColour (juce::Colours::black.withAlpha (0.55f));
+        g.fillRoundedRectangle (meter, 1.5f);
         const auto db = juce::Decibels::gainToDecibels (meterLevel, -60.0f);
-        g.setColour (meterLevel >= 1.0f ? juce::Colours::red : juce::Colours::limegreen);
-        g.fillRect (meter.withWidth (meter.getWidth() * juce::jlimit (0.0f, 1.0f, juce::jmap (db, -60.0f, 0.0f, 0.0f, 1.0f))));
+        const auto fill = meter.withWidth (meter.getWidth() * juce::jlimit (0.0f, 1.0f, juce::jmap (db, -60.0f, 0.0f, 0.0f, 1.0f)));
+        juce::ColourGradient colours (juce::Colours::limegreen, meter.getX(), 0.0f, juce::Colours::red, meter.getRight(), 0.0f, false);
+        colours.addColour (0.8, juce::Colours::yellow);   // -12 dB
+        g.setGradientFill (colours);
+        g.fillRect (fill);
     }
 
     void resized() override
@@ -466,18 +474,21 @@ public:
         area = area.withSizeKeepingCentre (area.getWidth(), 20).translated (0, -2);
         muteButton.setBounds (area.removeFromLeft (20));
         area.removeFromLeft (6);
-        level.setBounds (area.removeFromRight (juce::jmin (90, area.getWidth() / 2)));
+        readoutArea = area.removeFromRight (52);
+        area.removeFromRight (4);
+        meterArea = area.removeFromRight (juce::jmin (110, area.getWidth() / 2)).withSizeKeepingCentre (juce::jmin (110, area.getWidth() / 2), 6);
+        area.removeFromRight (6);
         nameArea = area;
     }
 
 private:
+    TrackList& owner;
     AudioEngine& engine;
     const AudioEngine::AudioChannelId channelId;
     const int depth;
     juce::TextButton muteButton { "M" };
-    juce::Slider level { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
-    juce::Rectangle<int> nameArea;
-    float meterLevel = 0.0f;
+    juce::Rectangle<int> nameArea, meterArea, readoutArea;
+    float meterLevel = 0.0f, heldPeak = 0.0f;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioRow)
 };
@@ -690,7 +701,7 @@ void TrackList::realizeVisibleRows()
             else if (item.instrument != 0)
                 row = std::make_unique<InstrumentRow> (*this, engine, item.instrument, item.depth);
             else if (item.channel != 0)
-                row = std::make_unique<AudioRow> (engine, item.channel, item.depth);
+                row = std::make_unique<AudioRow> (*this, engine, item.channel, item.depth);
             else
                 row = std::make_unique<Row> (*this, engine, item.member, item.depth);
 

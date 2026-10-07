@@ -295,6 +295,15 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     // Double-click on a folder's region: the editor on the folder's tracks
     arrangementView.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
     trackList.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
+    trackList.onInstrumentMenu = [this] (AudioEngine::InstrumentId instrument)   // an instrument folder or its audio row
+    {
+        const auto safe = juce::Component::SafePointer<MainComponent> (this);
+        juce::PopupMenu menu;
+        menu.addItem ("Open the instrument's window", [safe, instrument] { if (safe != nullptr) safe->openPluginWindow (instrument); });
+        menu.addSeparator();
+        menu.addItem ("Remove instrument...", [safe, instrument] { if (safe != nullptr) safe->removeInstrumentAsking (instrument); });
+        menu.showMenuAsync (juce::PopupMenu::Options());
+    };
 
     // The editor's dropdown picked another of its tracks: that one is selected
     pianoRollView.onEditedTrackChanged = [this] (auto id) { selectTrack (id, false); };
@@ -548,9 +557,11 @@ bool MainComponent::triggerArticulation (const std::function<std::optional<Expre
     return true;
 }
 
-// Remove an instrument; when tracks play it, ask whether they go too (ISSUES.md "Instruments")
+// Remove an instrument and all its MIDI (the tracks that play it). Asks first - "Are you sure?" with a
+// "Don't ask again" toggle (the setting askRemoveInstrument)
 void MainComponent::removeInstrumentAsking (AudioEngine::InstrumentId id)
 {
+    const auto name = engine.getInstrumentName (id);
     juce::StringArray playing;
 
     for (auto trackId : engine.getTrackIds())
@@ -561,16 +572,14 @@ void MainComponent::removeInstrumentAsking (AudioEngine::InstrumentId id)
                 break;
             }
 
-    const auto name = engine.getInstrumentName (id);
-
-    const auto remove = [safe = juce::Component::SafePointer<MainComponent> (this), id, name] (bool removeTracks)
+    const auto remove = [safe = juce::Component::SafePointer<MainComponent> (this), id, name]
     {
         if (safe == nullptr)
             return;
 
         auto params = new juce::DynamicObject();
         params->setProperty ("instrumentId", id);
-        params->setProperty ("removeTracks", removeTracks);
+        params->setProperty ("removeTracks", true);
         const auto reply = safe->commandDispatcher.run ("instrument.remove", juce::var (params));
 
         if (! (bool) reply["ok"])
@@ -584,27 +593,46 @@ void MainComponent::removeInstrumentAsking (AudioEngine::InstrumentId id)
         if (std::find (trackIds.begin(), trackIds.end(), safe->selectedTrack) == trackIds.end())
             safe->selectTrack (trackIds.empty() ? 0 : trackIds.front(), false);
 
+        safe->trackList.refresh();
         safe->statusLabel.setText ("Removed " + name, juce::dontSendNotification);
     };
 
-    if (playing.isEmpty())
+    if (! engine.getSettingsFile().getBoolValue ("askRemoveInstrument", true))
     {
-        juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, "Remove instrument",
-                                            "Remove '" + name + "'? No tracks play it.", "Remove", "Cancel", this,
-                                            juce::ModalCallbackFunction::create ([remove] (int result) { if (result == 1) remove (false); }));
+        remove();
         return;
     }
 
-    juce::AlertWindow::showYesNoCancelBox (juce::MessageBoxIconType::QuestionIcon, "Remove instrument",
-                                           "'" + name + "' is played by " + juce::String (playing.size())
-                                               + (playing.size() == 1 ? " track: " : " tracks: ") + playing.joinIntoString (", ")
-                                               + ".\n\nRemove those tracks too, or keep them without an output?",
-                                           "Remove the tracks too", "Keep the tracks", "Cancel", this,
-                                           juce::ModalCallbackFunction::create ([remove] (int result)
-                                           {
-                                               if (result == 1)       remove (true);
-                                               else if (result == 2)  remove (false);
-                                           }));
+    const auto message = "Remove '" + name + "'"
+                           + (playing.isEmpty() ? juce::String ("?")
+                                                : " and its " + juce::String (playing.size()) + (playing.size() == 1 ? " track" : " tracks")
+                                                    + " (" + playing.joinIntoString (", ") + ")?")
+                           + "\n\nThe instrument's settings and its MIDI go with it.";
+
+    auto* window = new juce::AlertWindow ("Remove instrument", message, juce::MessageBoxIconType::QuestionIcon, this);
+    auto* neverAsk = new juce::ToggleButton ("Don't ask again");
+    neverAsk->setSize (240, 24);
+    window->addCustomComponent (neverAsk);
+    window->addButton ("Remove", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    window->addButton ("Cancel", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+
+    window->enterModalState (true, juce::ModalCallbackFunction::create (
+        [safe = juce::Component::SafePointer<MainComponent> (this), remove, neverAsk] (int result)
+        {
+            const auto dontAsk = neverAsk->getToggleState();
+            delete neverAsk;   // (not owned by the window)
+
+            if (safe == nullptr || result != 1)
+                return;
+
+            if (dontAsk)
+            {
+                safe->engine.getSettingsFile().setValue ("askRemoveInstrument", false);
+                safe->engine.getSettingsFile().saveIfNeeded();
+            }
+
+            remove();
+        }), true);
 }
 
 MainComponent::~MainComponent()
@@ -698,6 +726,10 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     juce::PopupMenu menu;
 
     menu.addItem ("Set output...", [safe, id] { if (safe != nullptr) safe->chooseTrackOutput (id); });
+
+    if (const auto instrument = engine.getTrackInstrument (id); instrument != 0)   // its instrument folder's
+        menu.addItem ("Remove instrument '" + engine.getInstrumentName (instrument) + "'...",
+                      [safe, instrument] { if (safe != nullptr) safe->removeInstrumentAsking (instrument); });
     menu.addItem ("Open / close instrument GUI (" + keys::Bindings::describe (keys::Bindings::get().keysFor ("track.instrumentGui")) + ")",
                   ! engine.getTrackOutputs (id).empty(), false,
                   [safe, id] { if (safe != nullptr) safe->openTrackPluginWindow (id); });
