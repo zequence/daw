@@ -1420,8 +1420,11 @@ void MainComponent::timerCallback()
         && ! juce::ModifierKeys::getCurrentModifiersRealtime().isAnyMouseButtonDown())
         // Our window is the active one, but the keyboard is not ours: a plugin inside it has it (some
         // plugins run their windows on their own thread, so asking "who has the focus" can't see them)
+        // Also when nothing of ours has the keys: opening the rack hides the strips that had them
         if (auto* peer = getPeer())
-            if (GetForegroundWindow() == peer->getNativeHandle() && ! peer->isFocused())
+            if (auto* focused = juce::Component::getCurrentlyFocusedComponent();
+                GetForegroundWindow() == peer->getNativeHandle()
+                  && (! peer->isFocused() || focused == nullptr || (focused != this && ! isParentOf (focused))))
             {
                 peer->grabFocus();      // the native focus (JUCE may still think it has it)
                 grabKeyboardFocus();
