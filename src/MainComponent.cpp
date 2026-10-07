@@ -295,6 +295,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     // Double-click on a folder's region: the editor on the folder's tracks
     arrangementView.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
     trackList.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
+    trackList.onGroupSelected = [this] { arrangementView.clearSelection(); };
     trackList.onInstrumentMenu = [this] (AudioEngine::InstrumentId instrument)   // an instrument folder or its audio row
     {
         const auto safe = juce::Component::SafePointer<MainComponent> (this);
@@ -1526,7 +1527,7 @@ void MainComponent::timerCallback()
     // The mixer highlights the selected audio channel (the sidebar's audio list and the mixer share
     // it); while none is selected there, the selected track's channel (its first output's instrument)
     {
-        auto channel = channelList.getCurrentChannel();
+        auto channel = trackList.getSelectedChannel() != 0 ? trackList.getSelectedChannel() : channelList.getCurrentChannel();
 
         if (channel == 0)
             if (const auto outputs = engine.getTrackOutputs (selectedTrack); ! outputs.empty())

@@ -482,10 +482,20 @@ public:
 
     void mouseDown (const juce::MouseEvent& event) override
     {
-        if (event.mods.isPopupMenu() && owner.onInstrumentMenu)
+        if (! event.mods.isPopupMenu())
+        {
+            owner.selectChannel (channelId);
+            return;
+        }
+
+        if (owner.onInstrumentMenu)
             if (const auto instrument = engine.getAudioChannelInput (channelId); instrument != 0)
                 owner.onInstrumentMenu (instrument);
     }
+
+    AudioEngine::AudioChannelId getChannelId() const noexcept   { return channelId; }
+
+    void setSelected (bool should)   { if (selected != should) { selected = should; repaint(); } }
 
     void refresh()
     {
@@ -502,7 +512,7 @@ public:
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
 
-        theme::paintTrackBox (g, bounds, theme::Token::trackAudioBg, false, subselected);
+        theme::paintTrackBox (g, bounds, theme::Token::trackAudioBg, selected, subselected);
 
         g.setColour (sidebar::rowTextColour);
         g.setFont (sidebar::rowFont (14.0f, false));
@@ -529,7 +539,7 @@ private:
     juce::TextButton soloButton { "S" }, muteButton { "M" };
     mixer::LevelMeter meter { false };
     juce::Rectangle<int> nameArea;
-    bool subselected = false;
+    bool subselected = false, selected = false;
 
 public:
     void setSubselected (bool should)   { if (subselected != should) { subselected = should; repaint(); } }
@@ -550,6 +560,7 @@ void TrackList::setSelectedTrack (AudioEngine::TrackId id)
     {
         selectedFolder = 0;   // a track chosen (e.g. a folder opened in the editor: its first track) ends the folder selection
         selectedInstrument = 0;
+        selectedChannel = 0;
     }
 
     refresh();
@@ -617,7 +628,7 @@ void TrackList::refresh()
         const auto sub = subselectedRows.count (key) > 0;
 
         if (auto* trackRow = dynamic_cast<Row*> (component.get()))
-            trackRow->refresh (! groupSelected
+            trackRow->refresh (! groupSelected && selectedChannel == 0   // (an audio row chosen: no track shows selected)
                                  && (multiSelection.empty() ? trackRow->getTrackId() == selectedTrack
                                                             : multiSelection.count (trackRow->getTrackId()) > 0),
                                engine.isTrackArmed (trackRow->getTrackId()), sub);
@@ -634,6 +645,7 @@ void TrackList::refresh()
         else if (auto* audioRow = dynamic_cast<AudioRow*> (component.get()))
         {
             audioRow->setSubselected (sub);
+            audioRow->setSelected (audioRow->getChannelId() == selectedChannel);
             audioRow->refresh();
         }
     }
@@ -645,11 +657,16 @@ void TrackList::selectInstrument (AudioEngine::InstrumentId instrumentId)
 {
     multiSelection.clear();
     selectedFolder = 0;
+    selectedChannel = 0;
 
     if (const auto tracks = engine.getInstrumentTracks (instrumentId); ! tracks.empty() && onSelect)
         onSelect (tracks.front());
 
     selectedInstrument = instrumentId;   // (after onSelect: choosing the track clears it)
+
+    if (onGroupSelected)
+        onGroupSelected();
+
     refresh();
 }
 
@@ -665,15 +682,37 @@ void TrackList::setEditedTracks (std::vector<AudioEngine::TrackId> shown, AudioE
         component->repaint();
 }
 
+// The selection: one thing at a time - a track (or several, Ctrl / Shift), a folder, an instrument
+// folder, or an audio row. A folder or an instrument selects everything inside it (subselected);
+// choosing any one of them clears everything else, the arrangement's regions too.
 void TrackList::selectFolder (AudioEngine::FolderId folderId)
 {
-    // Only the folder itself is selected (ISSUES.md: no auto-selecting its
-    // tracks, and any track selection goes away)
-    selectedFolder = folderId;
     multiSelection.clear();
+    selectedInstrument = 0;
+    selectedChannel = 0;
+    selectedFolder = folderId;
 
     if (onSelectionChanged)
         onSelectionChanged (multiSelection);
+
+    if (onGroupSelected)
+        onGroupSelected();
+
+    refreshSoon();
+}
+
+void TrackList::selectChannel (AudioEngine::AudioChannelId channelId)
+{
+    multiSelection.clear();
+    selectedFolder = 0;
+    selectedInstrument = 0;
+    selectedChannel = channelId;
+
+    if (onSelectionChanged)
+        onSelectionChanged (multiSelection);
+
+    if (onGroupSelected)
+        onGroupSelected();
 
     refreshSoon();
 }

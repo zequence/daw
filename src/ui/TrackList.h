@@ -32,6 +32,8 @@ public:
     AudioEngine::TrackId editorTrack = 0;
     AudioEngine::FolderId getSelectedFolder() const noexcept { return selectedFolder; }
     AudioEngine::InstrumentId getSelectedInstrument() const noexcept { return selectedInstrument; }
+    AudioEngine::AudioChannelId getSelectedChannel() const noexcept { return selectedChannel; }
+    std::function<void()> onGroupSelected;   // a folder, an instrument or an audio row chosen (the regions' selection goes)
     std::function<void (std::vector<AudioEngine::TrackId>)> onOpenEditorOnTracks;   // an instrument folder double-clicked
     std::function<void (AudioEngine::InstrumentId)> onInstrumentMenu;                 // right-click on an instrument folder or its audio
 
@@ -65,6 +67,7 @@ private:
     void refreshSoon();                   // deferred refresh, safe from row callbacks
     void selectFolder (AudioEngine::FolderId);   // highlights the folder (its tracks stay unselected)
     void selectInstrument (AudioEngine::InstrumentId);
+    void selectChannel (AudioEngine::AudioChannelId);   // an audio row
     void setSubtreeCollapsed (AudioEngine::FolderId, bool collapsed);   // folder + all subfolders
     void showFolderMenu (AudioEngine::FolderId);
     void showBackgroundMenu();            // right-click on the empty area
@@ -107,6 +110,7 @@ private:
     std::set<AudioEngine::TrackId> multiSelection;
     AudioEngine::FolderId selectedFolder = 0;
     AudioEngine::InstrumentId selectedInstrument = 0;
+    AudioEngine::AudioChannelId selectedChannel = 0;
     AudioEngine::TrackId shiftAnchor = 0;
     bool clearSelectionOnMouseUp = false;
 
