@@ -43,7 +43,7 @@ A key that is typed into a text field goes to the field.
 | Solo the selected track | S | `track.solo` |
 | Mute the selected track | M | `track.mute` |
 | Open / close the selected track's instrument GUI | G | `track.instrumentGui` |
-| Undo (the editor's own, else the selected track's) | Ctrl+Z | `edit.undo` |
+| Undo (the mixer's or the editor's own, else the selected track's) | Ctrl+Z | `edit.undo` |
 | Redo | Ctrl+Y, Ctrl+Shift+Z | `edit.redo` |
 
 Esc steps back one level: the expression map editor goes back to the instrument

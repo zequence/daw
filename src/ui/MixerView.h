@@ -657,8 +657,26 @@ private:
             }
         }
 
+        // A gesture on the strip (for the mixer's undo): from the press to the release
+        AudioEngine::AudioChannelId undoId() const   { return kind == Kind::master ? 0 : channelId; }
+
+        void mouseUp (const juce::MouseEvent&) override
+        {
+            if (kind != Kind::aux)
+                owner.endGesture();
+        }
+
+        void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override
+        {
+            if (kind != Kind::aux)
+                owner.wheelGesture (undoId());
+        }
+
         void mouseDown (const juce::MouseEvent&) override
         {
+            if (kind != Kind::aux)
+                owner.beginGesture (undoId());
+
             if (kind == Kind::channel)
             {
                 owner.setHighlightedChannel (channelId);
@@ -1321,6 +1339,168 @@ private:
     };
 
     std::unique_ptr<Rack> rack;
+
+    //==========================================================================
+    // The mixer's undo: each gesture on a strip (a knob or fader drag, a button, a double-click reset,
+    // a burst of mouse-wheel turns) is one step - what the strip was before and after it. Channels and
+    // the master; Ctrl+Z / Ctrl+Y while the mixer shows (MainComponent).
+    struct Mix
+    {
+        float gain = 1.0f, pan = 0.0f;
+        bool muted = false, soloed = false;
+        std::array<float, AnalogStrip::numParams> strip {};
+
+        bool operator== (const Mix&) const = default;
+    };
+
+    AudioChannelProcessor* processorFor (AudioEngine::AudioChannelId id) const   // 0: the master
+    {
+        return id == 0 ? engine.getMasterChannel() : engine.getAudioChannel (id);
+    }
+
+    std::optional<Mix> captureMix (AudioEngine::AudioChannelId id) const
+    {
+        auto* p = processorFor (id);
+
+        if (p == nullptr)
+            return std::nullopt;
+
+        Mix mix;
+        mix.gain = p->getGain();
+        mix.pan = p->getPan();
+        mix.muted = p->isMuted();
+        mix.soloed = id != 0 && engine.isAudioChannelSoloed (id);
+
+        for (int param = 0; param < AnalogStrip::numParams; ++param)
+            mix.strip[(size_t) param] = p->getStrip().get (param);
+
+        return mix;
+    }
+
+    void applyMix (AudioEngine::AudioChannelId id, const Mix& mix)
+    {
+        auto* p = processorFor (id);
+
+        if (p == nullptr)
+            return;
+
+        p->setGain (mix.gain);
+        p->setMuted (mix.muted);
+
+        if (id != 0)
+        {
+            engine.setAudioChannelPan (id, mix.pan);
+            engine.setAudioChannelSoloed (id, mix.soloed);
+        }
+        else
+        {
+            p->setPan (mix.pan);
+        }
+
+        for (int param = 0; param < AnalogStrip::numParams; ++param)
+            p->getStrip().set (param, mix.strip[(size_t) param]);
+
+        for (auto& strip : channelStrips)   // the controls follow at once
+            strip->syncControls();
+
+        master->syncControls();
+
+        if (rack != nullptr)
+            rack->strip->syncControls();
+    }
+
+    struct MixEdit
+    {
+        AudioEngine::AudioChannelId id = 0;
+        Mix before, after;
+    };
+
+    struct Gesture
+    {
+        bool active = false;
+        AudioEngine::AudioChannelId id = 0;
+        Mix before;
+        juce::uint32 wheelEnds = 0;   // a wheel gesture ends once the wheel has rested a moment
+    } gesture;
+
+    std::vector<MixEdit> undoStack, redoStack;
+
+    void beginGesture (AudioEngine::AudioChannelId id)
+    {
+        if (gesture.active && gesture.id == id)
+            return;
+
+        endGesture();
+
+        if (const auto mix = captureMix (id))
+            gesture = { true, id, *mix, 0 };
+    }
+
+    void endGesture()
+    {
+        if (! gesture.active)
+            return;
+
+        gesture.active = false;
+
+        if (const auto after = captureMix (gesture.id); after.has_value() && ! (*after == gesture.before))
+        {
+            undoStack.push_back ({ gesture.id, gesture.before, *after });
+            redoStack.clear();
+
+            if (undoStack.size() > 500)
+                undoStack.erase (undoStack.begin());
+        }
+    }
+
+    void wheelGesture (AudioEngine::AudioChannelId id)
+    {
+        beginGesture (id);
+        gesture.wheelEnds = juce::Time::getMillisecondCounter() + 600;
+    }
+
+public:
+    bool undo()
+    {
+        endGesture();
+
+        while (! undoStack.empty())
+        {
+            const auto edit = undoStack.back();
+            undoStack.pop_back();
+
+            if (processorFor (edit.id) != nullptr)   // (a channel removed since: skipped)
+            {
+                applyMix (edit.id, edit.before);
+                redoStack.push_back (edit);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    bool redo()
+    {
+        endGesture();
+
+        while (! redoStack.empty())
+        {
+            const auto edit = redoStack.back();
+            redoStack.pop_back();
+
+            if (processorFor (edit.id) != nullptr)
+            {
+                applyMix (edit.id, edit.after);
+                undoStack.push_back (edit);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+private:
     std::map<AudioEngine::AudioChannelId, std::pair<juce::Point<int>, juce::Point<int>>> rackScroll;   // each channel's rack and strip scroll (this session)
 
 public:
@@ -1484,6 +1664,9 @@ private:
             rack->tick();
             revealRackWhenSettled();
         }
+
+        if (gesture.active && gesture.wheelEnds != 0 && juce::Time::getMillisecondCounter() > gesture.wheelEnds)
+            endGesture();   // the wheel has rested: one undo step
         master->syncControls();
     }
 

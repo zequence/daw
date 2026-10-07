@@ -45,7 +45,7 @@ namespace keys
             { "track.solo",           "Global", "Solo the selected track",                     { K ('s') } },
             { "track.mute",           "Global", "Mute the selected track",                     { K ('m') } },
             { "track.instrumentGui",  "Global", "Open / close the selected track's instrument GUI", { K ('g') } },
-            { "edit.undo",            "Global", "Undo (the editor's own, else the selected track's)", { K ('z', ctrl, 0) } },
+            { "edit.undo",            "Global", "Undo (the mixer's or the editor's own, else the selected track's)", { K ('z', ctrl, 0) } },
             { "edit.redo",            "Global", "Redo",                                        { K ('y', ctrl, 0), K ('z', ctrl | shift, 0) } },
 
             { "editor.noteInput",     "MIDI editor", "Note input on / off",                    { K ('n') } },

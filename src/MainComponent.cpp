@@ -1917,11 +1917,13 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
     }
 
     // Global clip undo/redo on the selected track (the piano roll consumes its own first)
-    if (keys::matches ("edit.undo", key))
-        return selectedTrack != 0 && engine.undoTrackSequence (selectedTrack);
+    if (keys::matches ("edit.undo", key))   // in the mixer: its own undo (the strips' settings)
+        return contentView == ContentView::mixer ? mixerView.undo()
+                                                 : selectedTrack != 0 && engine.undoTrackSequence (selectedTrack);
 
     if (keys::matches ("edit.redo", key))
-        return selectedTrack != 0 && engine.redoTrackSequence (selectedTrack);
+        return contentView == ContentView::mixer ? mixerView.redo()
+                                                 : selectedTrack != 0 && engine.redoTrackSequence (selectedTrack);
 
     return false;
 }
