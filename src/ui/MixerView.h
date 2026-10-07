@@ -91,7 +91,7 @@ public:
         applyScale();
 
         if (rack != nullptr)
-            rack->setBounds (rackPending ? getLocalBounds().translated (getWidth() + 64, 0) : getLocalBounds());
+            rack->setBounds (rackPending ? getLocalBounds().translated (20000, 0) : getLocalBounds());   // pending: beyond any window edge
     }
 
     void fitSize()
@@ -955,7 +955,7 @@ private:
             column.rack = this;
             view.setViewedComponent (&column, false);
             addAndMakeVisible (view);
-            sync();
+            // (the editors are made by sync(), once the rack has been placed out of sight)
         }
 
         ~Rack() override
@@ -1249,7 +1249,8 @@ public:
             safe->rackOpenedAt = juce::Time::getMillisecondCounter();
             safe->rack = std::make_unique<Rack> (*safe, id);
             safe->addAndMakeVisible (*safe->rack);
-            safe->resized();
+            safe->resized();          // far outside the window first: the editors' native windows can't show
+            safe->rack->sync();       // then the editors load
 
             if (auto it = safe->rackScroll.find (id); it != safe->rackScroll.end())   // where it was left
             {
