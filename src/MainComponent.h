@@ -118,6 +118,7 @@ private:
     juce::TextButton sidePaneButton;       // the right bar's top: expands the side pane (its tabs: Instruments, History)
     mixer::LevelMeter masterMeter { false, true, true };   // the audio out (the master bus), on the right bar: a dB scale and readout
     juce::Rectangle<int> rightBar;         // the transport bar on the right (painted)
+    juce::Rectangle<int> sidebarArea;      // the sidebar, its top strip included (painted)
     juce::Rectangle<int> paneTabs;         // the side pane's tab row (painted)
     int sidePaneEdge = -1;                 // the side pane's left edge (a line is painted there)
     int sidePaneWidth = 0;                 // 0 = the default (about a third of the window); saved in the settings

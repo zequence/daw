@@ -20,55 +20,66 @@ namespace theme
     // (name, id, group, label, default, min, max)
     // A parent must be listed before the tokens that use it.
    #define THEME_TOKENS(C, N)                                                                                        \
-    C (surfaceWindow,    "surface.window",    "Common",   "Window background",         -1,                      0xff1d1f23, false) \
-    C (surfaceContent,   "surface.content",   "Common",   "Content area background",   -1,                      0xff1a1c1f, false) \
-    C (surfacePanel,     "surface.panel",     "Common",   "Panel background",          -1,                      0xff232529, false) \
-    C (borderSubtle,     "border.subtle",     "Common",   "Subtle border / grid line", -1,                      0xff2e3136, false) \
-    C (selectionBg,      "selection.bg",      "Common",   "Selected row background",   -1,                      0xff39404d, false) \
-    C (selectionBorder,  "selection.border",  "Common",   "Selection outline",         -1,                      0xff6c87b5, false) \
-    C (transportLine,    "transport.line",    "Transport", "Transport line (playhead)", -1,                     0xb3ffffff, true)  \
-    C (transportRtzBg,   "transport.rtz.bg",  "Transport", "Return-to-start button",     -1,                      0xff3a3e46, false) \
-    C (transportPlayBg,  "transport.play.bg", "Transport", "Play button",                -1,                      0xff2b4634, false) \
-    C (transportPlayOn,  "transport.play.on", "Transport", "Play button (playing)",      -1,                      0xff006400, false) \
-    C (transportRecordBg,"transport.record.bg","Transport","Record button",              -1,                      0xff4a2e2e, false) \
-    C (transportRecordOn,"transport.record.on","Transport","Record button (recording)", -1,                      0xff8b0000, false) \
-    C (transportLoopBg,  "transport.loop.bg", "Transport", "Loop button",                -1,                      0xff2e3b4a, false) \
-    C (transportLoopOn,  "transport.loop.on", "Transport", "Loop button (looping)",      -1,                      0xff4682b4, false) \
-    C (arrangeBg,        "arrange.bg",        "Arrange / audio", "Background",         (int) Token::surfaceContent, 0xff1a1c1f, false) \
-    C (arrangeLaneEven,  "arrange.lane.even", "Arrange / audio", "Track lane (even)",  -1,                      0xff202327, false) \
-    C (arrangeLaneOdd,   "arrange.lane.odd",  "Arrange / audio", "Track lane (odd)",   -1,                      0xff24272c, false) \
-    C (arrangeLaneFolder,"arrange.lane.folder","Arrange / audio","Folder lane",        -1,                      0xff1d2024, false) \
-    C (arrangeBarline,   "arrange.barline",   "Arrange / audio", "Bar line",           (int) Token::borderSubtle, 0xff2e3136, false) \
-    C (arrangeMarkerLine,"arrange.markerline","Arrange / audio", "Marker line",        -1,                      0x59ffd700, true)  \
-    C (arrangeGutterBg,  "arrange.gutter.bg", "Arrange / audio", "Name gutter background", (int) Token::surfaceWindow, 0xff1d1f23, false) \
-    C (arrangeGutterBorder, "arrange.gutter.border", "Arrange / audio", "Name gutter border", (int) Token::borderSubtle, 0xff2e3136, false) \
-    C (channelBorder,    "channel.border",    "Tracks",   "Track border",              -1,                      0x00000000, true)  \
-\
-    C (channelEdited,    "channel.edited",    "Tracks",   "Shown in the MIDI editor (right edge)", -1,           0xff3aa6c4, false) \
-    C (folderBg,         "folder.bg",         "Tracks",   "Folder (instrument) background", -1,                      0xff2e3038, false) \
+    /* General: the window's surfaces, lines and selection - other settings follow these until changed */           \
+    C (surfaceWindow,    "surface.window",    "General",  "Window background",         -1,                      0xff1d1f23, false) \
+    C (surfaceContent,   "surface.content",   "General",  "Content area background",   -1,                      0xff1a1c1f, false) \
+    C (surfacePanel,     "surface.panel",     "General",  "Panel background",          -1,                      0xff232529, false) \
+    C (borderSubtle,     "border.subtle",     "General",  "Subtle border / grid line", -1,                      0xff2e3136, false) \
+    C (selectionBg,      "selection.bg",      "General",  "Selection background (lists, menus)", -1,            0xff39404d, false) \
+    C (selectionBorder,  "selection.border",  "General",  "Selection outline",         -1,                      0xff6c87b5, false) \
+    /* The sidebar and its tracks */                                                                                  \
+    C (sidebarBg,        "sidebar.bg",        "Sidebar",  "Sidebar background",        (int) Token::surfacePanel, 0xff232529, false) \
+    C (folderBg,         "folder.bg",         "Tracks",   "Folder (instrument) background", -1,                 0xff2e3038, false) \
     C (trackMidiBg,      "track.midi.bg",     "Tracks",   "MIDI track background",     -1,                      0xff3a3e46, false) \
     C (trackAudioBg,     "track.audio.bg",    "Tracks",   "Audio track background",    -1,                      0xff45393b, false) \
     C (folderBorder,     "folder.border",     "Tracks",   "Folder border",             -1,                      0x00000000, true)  \
-    N (rowSelectedBrightness, "row.selected.brightness",  "Tracks",      "Selected: brighter by (1 = white)",    0.16f, 0.0f, 1.0f) \
-    N (rowSubselectedBrightness,"row.subselected.brightness","Tracks",   "Subselected (inside a selected folder or instrument): brighter by", 0.07f, 0.0f, 1.0f) \
+    C (channelBorder,    "channel.border",    "Tracks",   "Track border",              -1,                      0x00000000, true)  \
+    N (rowSelectedBrightness, "row.selected.brightness", "Tracks", "Selected: brighter by (1 = white)",          0.16f, 0.0f, 1.0f) \
+    N (rowSubselectedBrightness, "row.subselected.brightness", "Tracks", "Subselected (inside a selected folder or instrument): brighter by", 0.07f, 0.0f, 1.0f) \
+    C (channelEdited,    "channel.edited",    "Tracks",   "Shown in the MIDI editor (right edge)", -1,           0xff3aa6c4, false) \
+    C (trackArmOn,       "track.arm.on",      "Track buttons", "Record arm (armed)",   -1,                      0xffd50000, false) \
+    C (trackSoloOn,      "track.solo.on",     "Track buttons", "Solo (soloed)",        -1,                      0xffdaa520, false) \
+    C (trackMuteOn,      "track.mute.on",     "Track buttons", "Mute (muted)",         -1,                      0xffc47f00, false) \
+    /* The arrangement and its regions */                                                                             \
+    C (arrangeBg,        "arrange.bg",        "Arrangement", "Background",             (int) Token::surfaceContent, 0xff1a1c1f, false) \
+    C (arrangeLaneEven,  "arrange.lane.even", "Arrangement", "Track lane (even)",      -1,                      0xff202327, false) \
+    C (arrangeLaneOdd,   "arrange.lane.odd",  "Arrangement", "Track lane (odd)",       -1,                      0xff24272c, false) \
+    C (arrangeLaneFolder,"arrange.lane.folder","Arrangement", "Folder lane",           -1,                      0xff1d2024, false) \
+    C (arrangeBarline,   "arrange.barline",   "Arrangement", "Bar line",               (int) Token::borderSubtle, 0xff2e3136, false) \
+    C (transportLine,    "transport.line",    "Arrangement", "Playhead",               -1,                      0xb3ffffff, true)  \
+    C (arrangeMarkerLine,"arrange.markerline","Arrangement", "Marker line",            -1,                      0x59ffd700, true)  \
+    C (arrangeGutterBg,  "arrange.gutter.bg", "Arrangement", "Name gutter background", (int) Token::surfaceWindow, 0xff1d1f23, false) \
+    C (arrangeGutterBorder, "arrange.gutter.border", "Arrangement", "Name gutter border", (int) Token::borderSubtle, 0xff2e3136, false) \
+    N (regionBgOpacity,       "region.bg.opacity",        "MIDI regions", "Background opacity",                   0.6f,  0.0f, 1.0f) \
+    N (regionBgBrightness,    "region.bg.brightness",     "MIDI regions", "Background brightness",                1.2f,  0.3f, 2.0f) \
+    N (regionBorderOpacity,   "region.border.opacity",    "MIDI regions", "Border opacity",                       1.0f,  0.0f, 1.0f) \
+    N (regionBorderBrightness,"region.border.brightness", "MIDI regions", "Border brightness",                    1.0f,  0.3f, 2.0f) \
+    N (regionBgSelectedOpacity,"region.bg.selopacity",    "MIDI regions", "Selected: background opacity",         0.95f, 0.0f, 1.0f) \
+    N (regionBgSelectedBrightness,"region.bg.selbrightness","MIDI regions","Selected: background brightness",     1.2f,  0.3f, 2.0f) \
+    N (regionBorderSelectedOpacity,"region.border.selopacity","MIDI regions","Selected: border opacity",          1.0f,  0.0f, 1.0f) \
+    N (regionBorderSelectedBrightness,"region.border.selbrightness","MIDI regions","Selected: border brightness", 1.6f,  0.3f, 2.0f) \
+    /* The transport bar */                                                                                           \
+    C (transportPlayBg,  "transport.play.bg", "Transport", "Play",                       -1,                      0xff2b4634, false) \
+    C (transportPlayOn,  "transport.play.on", "Transport", "Play (playing)",             -1,                      0xff006400, false) \
+    C (transportRecordBg,"transport.record.bg","Transport","Record",                     -1,                      0xff4a2e2e, false) \
+    C (transportRecordOn,"transport.record.on","Transport","Record (recording)",         -1,                      0xff8b0000, false) \
+    C (transportLoopBg,  "transport.loop.bg", "Transport", "Loop",                       -1,                      0xff2e3b4a, false) \
+    C (transportLoopOn,  "transport.loop.on", "Transport", "Loop (looping)",             -1,                      0xff4682b4, false) \
+    C (transportRtzBg,   "transport.rtz.bg",  "Transport", "Return to start",            -1,                      0xff3a3e46, false) \
+    /* Controls everywhere */                                                                                         \
     C (buttonBg,         "button.bg",         "Buttons",  "Button background",         -1,                      0xff263238, false) \
     C (buttonOn,         "button.on",         "Buttons",  "Button background (on / selected)", -1,              0xff181f22, false) \
-    C (buttonAccentOn,   "button.accent.on",  "Buttons",  "Toggle button background (on)", -1,                  0xff4682b4, false) \
+    C (buttonAccentOn,   "button.accent.on",  "Buttons",  "Toggle button (on)",        -1,                      0xff4682b4, false) \
     C (buttonBorder,     "button.border",     "Buttons",  "Button and field border",   -1,                      0xff8e989b, false) \
     C (buttonText,       "button.text",       "Buttons",  "Button text",               -1,                      0xffffffff, false) \
-    C (topbarButtonBg,   "topbar.button.bg",  "Top bar",  "Top bar button background", (int) Token::buttonBg,   0xff263238, false) \
-    C (topbarButtonOn,   "topbar.button.on",  "Top bar",  "Top bar button (on / selected)", (int) Token::buttonOn, 0xff181f22, false) \
-    C (trackArmOn,       "track.arm.on",      "Track buttons", "Record-arm button (armed)", -1,                 0xffd50000, false) \
-    C (trackSoloOn,      "track.solo.on",     "Track buttons", "Solo button (soloed)",  -1,                     0xffdaa520, false) \
-    C (trackMuteOn,      "track.mute.on",     "Track buttons", "Mute button (muted)",   -1,                     0xffc47f00, false)     C (menuBg,           "menu.bg",           "Menus",    "Menu background",           (int) Token::surfacePanel, 0xff232529, false)     C (menuText,         "menu.text",         "Menus",    "Menu text",                 -1,                      0xffe6e8eb, false)     C (menuHeaderText,   "menu.header.text",  "Menus",    "Menu section header text",  -1,                      0xff8e959e, false)     C (menuHighlightBg,  "menu.highlight.bg", "Menus",    "Highlighted item background", (int) Token::selectionBg, 0xff39404d, false)     C (menuHighlightText,"menu.highlight.text","Menus",   "Highlighted item text",     -1,                      0xffffffff, false)     C (menuBorder,       "menu.border",       "Menus",    "Menu border",               -1,                      0xff3a3e45, false) \
-    N (regionBgOpacity,       "region.bg.opacity",        "MIDI region", "Background opacity",                   0.6f,  0.0f, 1.0f) \
-    N (regionBgBrightness,    "region.bg.brightness",     "MIDI region", "Background brightness",                1.2f,  0.3f, 2.0f) \
-    N (regionBgSelectedOpacity,"region.bg.selopacity",    "MIDI region", "Selected background opacity",          0.95f, 0.0f, 1.0f) \
-    N (regionBgSelectedBrightness,"region.bg.selbrightness","MIDI region","Selected background brightness",     1.2f,  0.3f, 2.0f) \
-    N (regionBorderOpacity,   "region.border.opacity",    "MIDI region", "Border opacity",                       1.0f,  0.0f, 1.0f) \
-    N (regionBorderBrightness,"region.border.brightness", "MIDI region", "Border brightness",                    1.0f,  0.3f, 2.0f) \
-    N (regionBorderSelectedOpacity,"region.border.selopacity","MIDI region","Selected border opacity",           1.0f,  0.0f, 1.0f) \
-    N (regionBorderSelectedBrightness,"region.border.selbrightness","MIDI region","Selected border brightness", 1.6f,  0.3f, 2.0f)
+    C (topbarButtonBg,   "topbar.button.bg",  "Buttons",  "Bar button (menu, views)",  (int) Token::buttonBg,   0xff263238, false) \
+    C (topbarButtonOn,   "topbar.button.on",  "Buttons",  "Bar button (on / selected)", (int) Token::buttonOn,  0xff181f22, false) \
+    C (menuBg,           "menu.bg",           "Menus",    "Menu background",           (int) Token::surfacePanel, 0xff232529, false) \
+    C (menuText,         "menu.text",         "Menus",    "Menu text",                 -1,                      0xffe6e8eb, false) \
+    C (menuHeaderText,   "menu.header.text",  "Menus",    "Section header text",       -1,                      0xff8e959e, false) \
+    C (menuHighlightBg,  "menu.highlight.bg", "Menus",    "Highlighted item background", (int) Token::selectionBg, 0xff39404d, false) \
+    C (menuHighlightText,"menu.highlight.text","Menus",   "Highlighted item text",     -1,                      0xffffffff, false) \
+    C (menuBorder,       "menu.border",       "Menus",    "Menu border",               -1,                      0xff3a3e45, false)
 
     enum class Token : int
     {

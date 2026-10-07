@@ -1165,5 +1165,5 @@ void TrackList::resized()
 
 void TrackList::paint (juce::Graphics& g)
 {
-    g.fillAll (juce::Colour (0xff232529));
+    g.fillAll (theme::colour (theme::Token::sidebarBg));
 }

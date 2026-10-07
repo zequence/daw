@@ -2004,6 +2004,9 @@ void MainComponent::paint (juce::Graphics& g)
 {
     g.fillAll (juce::Colour (0xff1d1f23));
 
+    g.setColour (theme::colour (theme::Token::sidebarBg));
+    g.fillRect (sidebarArea);
+
     // The transport bar on the right, and the side pane's tab row
     g.setColour (juce::Colour (0xff2a2d33));
     g.fillRect (rightBar);
@@ -2133,6 +2136,7 @@ void MainComponent::resized()
     // The top strip: the timeline bar's rows; the sidebar header fits into the same height
     const auto timelineHeight = timelineBar.getPreferredHeight();   // the header block fits into it
     auto sidebar = area.removeFromLeft (sidebarWidth);
+    sidebarArea = sidebar;   // (painted in the sidebar's background, the top strip included)
 
     // The sidebar lists start at the same y as the content views (below the
     // timeline bar), so their rows share the arrangement's Y axis exactly.

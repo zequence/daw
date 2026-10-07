@@ -73,7 +73,7 @@ public:
 
     void paint (juce::Graphics& g) override
     {
-        g.fillAll (juce::Colour (0xff232529));
+        g.fillAll (theme::colour (theme::Token::sidebarBg));
 
     }
 
