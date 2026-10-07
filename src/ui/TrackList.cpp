@@ -55,9 +55,10 @@ public:
 
     AudioEngine::TrackId getTrackId() const noexcept { return trackId; }
 
-    void refresh (bool isSelected, bool isArmed)
+    void refresh (bool isSelected, bool isArmed, bool isSubselected = false)
     {
         selected = isSelected;
+        subselected = isSubselected;
         armButton.setToggleState (isArmed, juce::dontSendNotification);
         muteButton.setToggleState (engine.isTrackMuted (trackId), juce::dontSendNotification);
         soloButton.setToggleState (engine.isTrackSoloed (trackId), juce::dontSendNotification);
@@ -105,13 +106,14 @@ public:
         if (engine.getTrackInstrument (trackId) != 0)   // in an instrument folder: the whole row its dark blue-grey
         {
             // Selected: the theme's selected-track colour (as any track)
-            g.setColour (selected ? theme::colour (theme::Token::channelSelectedBg)
-                                  : AudioEngine::colourFromHex (AudioEngine::instrumentTrackColour, juce::Colours::grey));
+            g.setColour (selected      ? theme::colour (theme::Token::channelSelectedBg)
+                         : subselected ? theme::colour (theme::Token::channelSubselectedBg)
+                                       : AudioEngine::colourFromHex (AudioEngine::instrumentTrackColour, juce::Colours::grey));
             g.fillRoundedRectangle (bounds, theme::corner);
         }
         else
         {
-            theme::paintRowBox (g, bounds, false, selected);
+            theme::paintRowBox (g, bounds, false, selected, subselected);
 
             // The track color shows as a left border only; uncolored = grey (ISSUES.md)
             g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (trackId), juce::Colour (0xff6d7178)));
@@ -153,7 +155,7 @@ private:
 
     juce::Label nameLabel;
     juce::TextButton armButton { "R" }, soloButton { "S" }, muteButton { "M" };
-    bool selected = false;
+    bool selected = false, subselected = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Row)
 };
@@ -223,11 +225,12 @@ public:
         // finishRowDrag already scheduled the refresh (deferred: it may delete this row)
     }
 
-    void setSelected (bool shouldBeSelected)
+    void setSelected (bool shouldBeSelected, bool shouldBeSubselected)
     {
-        if (selected != shouldBeSelected)
+        if (selected != shouldBeSelected || subselected != shouldBeSubselected)
         {
             selected = shouldBeSelected;
+            subselected = shouldBeSubselected;
             repaint();
         }
     }
@@ -241,7 +244,7 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
-        theme::paintRowBox (g, bounds, true, selected);
+        theme::paintRowBox (g, bounds, true, selected, subselected);
 
         // Collapse triangle (folders have no colour: it sits near the edge)
         const auto collapsed = engine.isFolderCollapsed (folderId);
@@ -268,7 +271,7 @@ private:
     const AudioEngine::FolderId folderId;
     const int depth;
     juce::Label nameLabel;
-    bool selected = false;
+    bool selected = false, subselected = false;
 
 public:
     AudioEngine::FolderId getFolderId() const noexcept { return folderId; }
@@ -351,11 +354,12 @@ public:
 
     AudioEngine::InstrumentId getInstrumentId() const noexcept { return instrumentId; }
 
-    void setSelected (bool shouldBeSelected)
+    void setSelected (bool shouldBeSelected, bool shouldBeSubselected)
     {
-        if (selected != shouldBeSelected)
+        if (selected != shouldBeSelected || subselected != shouldBeSubselected)
         {
             selected = shouldBeSelected;
+            subselected = shouldBeSubselected;
             repaint();
         }
     }
@@ -418,7 +422,7 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
-        theme::paintRowBox (g, bounds, true, selected);
+        theme::paintRowBox (g, bounds, true, selected, subselected);
 
         const auto tracks = engine.getInstrumentTracks (instrumentId);
 
@@ -446,7 +450,7 @@ private:
     AudioEngine& engine;
     const AudioEngine::InstrumentId instrumentId;
     const int depth;
-    bool selected = false;
+    bool selected = false, subselected = false;
     mixer::tape::Cached nameTape;
     juce::TextButton soloButton { "S" }, muteButton { "M" };
     mixer::LevelMeter meter { false };
@@ -507,8 +511,9 @@ public:
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
 
-        // An instrument's audio: the whole row its dark red-grey
-        g.setColour (AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey));
+        // An instrument's audio: the whole row its dark red-grey (subselected: that colour)
+        g.setColour (subselected ? theme::colour (theme::Token::channelSubselectedBg)
+                                 : AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey));
         g.fillRoundedRectangle (bounds, theme::corner);
 
         g.setColour (sidebar::rowTextColour);
@@ -536,6 +541,12 @@ private:
     juce::TextButton soloButton { "S" }, muteButton { "M" };
     mixer::LevelMeter meter { false };
     juce::Rectangle<int> nameArea;
+    bool subselected = false;
+
+public:
+    void setSubselected (bool should)   { if (subselected != should) { subselected = should; repaint(); } }
+
+private:
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioRow)
 };
@@ -586,27 +597,55 @@ void TrackList::refresh()
         std::erase_if (multiSelection, [&existing] (auto id) { return existing.count (id) == 0; });
     }
 
-    // Only live (near-visible) rows refresh. A selected folder takes the
-    // selection highlight away from tracks (ISSUES.md).
+    // A selected folder or instrument selects everything inside it: those rows are subselected (the
+    // theme's own colour); the tracks' own selection highlight steps aside meanwhile
+    std::set<RowKey> subselectedRows;
+    const auto groupSelected = selectedFolder != 0 || selectedInstrument != 0;
+
+    if (groupSelected)
+    {
+        int groupDepth = -1;
+
+        for (auto& item : items)
+        {
+            if (groupDepth < 0)
+            {
+                if ((selectedFolder != 0 && item.folder == selectedFolder) || (selectedInstrument != 0 && item.instrument == selectedInstrument))
+                    groupDepth = item.depth;
+
+                continue;
+            }
+
+            if (item.depth <= groupDepth)
+                break;
+
+            subselectedRows.insert ({ item.folder, item.member, item.depth, item.instrument, item.channel });
+        }
+    }
+
+    // Only live (near-visible) rows refresh
     for (auto& [key, component] : liveRows)
     {
+        const auto sub = subselectedRows.count (key) > 0;
+
         if (auto* trackRow = dynamic_cast<Row*> (component.get()))
-            trackRow->refresh (selectedFolder == 0
+            trackRow->refresh (! groupSelected
                                  && (multiSelection.empty() ? trackRow->getTrackId() == selectedTrack
                                                             : multiSelection.count (trackRow->getTrackId()) > 0),
-                               engine.isTrackArmed (trackRow->getTrackId()));
+                               engine.isTrackArmed (trackRow->getTrackId()), sub);
         else if (auto* folderRow = dynamic_cast<FolderRow*> (component.get()))
         {
-            folderRow->setSelected (folderRow->getFolderId() == selectedFolder);
+            folderRow->setSelected (folderRow->getFolderId() == selectedFolder, sub);
             folderRow->refresh();
         }
         else if (auto* instrumentRow = dynamic_cast<InstrumentRow*> (component.get()))
         {
-            instrumentRow->setSelected (instrumentRow->getInstrumentId() == selectedInstrument);
+            instrumentRow->setSelected (instrumentRow->getInstrumentId() == selectedInstrument, sub);
             instrumentRow->refresh();
         }
         else if (auto* audioRow = dynamic_cast<AudioRow*> (component.get()))
         {
+            audioRow->setSubselected (sub);
             audioRow->refresh();
         }
     }

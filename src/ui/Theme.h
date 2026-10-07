@@ -44,6 +44,7 @@ namespace theme
     C (arrangeGutterBorder, "arrange.gutter.border", "Arrange / audio", "Name gutter border", (int) Token::borderSubtle, 0xff2e3136, false) \
     C (channelBg,        "channel.bg",        "Channel",  "Channel background",        -1,                      0xff2b2e33, false) \
     C (channelSelectedBg,"channel.selected.bg","Channel", "Selected channel background",-1,                      0xff4a5363, false) \
+    C (channelSubselectedBg,"channel.subselected.bg","Channel", "Subselected background (inside a selected folder or instrument)", -1, 0xff3a414c, false) \
     C (channelBorder,    "channel.border",    "Channel",  "Channel border",            -1,                      0x00000000, true)  \
 \
     C (channelEdited,    "channel.edited",    "Channel",  "Shown in the MIDI editor (right edge)", -1,           0xff3aa6c4, false) \
@@ -416,10 +417,12 @@ namespace theme
 
     // The rounded box of a channel row or a folder row in the sidebar lists:
     // background, then the always-on border, then the selection outline.
-    inline void paintRowBox (juce::Graphics& g, juce::Rectangle<float> bounds, bool isFolder, bool selected)
+    // subselected: inside a selected folder or instrument (selected with it, in its own colour)
+    inline void paintRowBox (juce::Graphics& g, juce::Rectangle<float> bounds, bool isFolder, bool selected, bool subselected = false)
     {
-        g.setColour (isFolder ? (selected ? colour (Token::selectionBg) : colour (Token::folderBg))
-                              : colour (selected ? Token::channelSelectedBg : Token::channelBg));
+        g.setColour (selected ? colour (isFolder ? Token::selectionBg : Token::channelSelectedBg)
+                              : subselected ? colour (Token::channelSubselectedBg)
+                                            : colour (isFolder ? Token::folderBg : Token::channelBg));
         g.fillRoundedRectangle (bounds, corner);
 
         g.setColour (colour (isFolder ? Token::folderBorder : Token::channelBorder));
