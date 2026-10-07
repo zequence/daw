@@ -128,6 +128,9 @@ private:   // where a channel strip's pan and fader begin (the other strips foll
     // (drawn once per size into an image - the meters repaint often, and the image is cheaper to lay on)
     void paintOverChildren (juce::Graphics& g) override
     {
+        if (rack != nullptr && ! rackPending)   // the rack is not under the console's lights
+            return;
+
         if (sheenImage.getWidth() != getWidth() || sheenImage.getHeight() != getHeight())
         {
             sheenImage = juce::Image (juce::Image::ARGB, juce::jmax (1, getWidth()), juce::jmax (1, getHeight()), true);
@@ -948,6 +951,7 @@ private:
             stripView.setScrollBarsShown (true, false);
             addAndMakeVisible (stripView);
 
+            setOpaque (true);   // the mixer underneath is not painted while the rack covers it
             column.rack = this;
             view.setViewedComponent (&column, false);
             addAndMakeVisible (view);
@@ -1256,8 +1260,7 @@ public:
         {
             rackPending = false;
             engine.getBusyStatus().end();
-            outer.setVisible (false);
-            resized();
+            resized();   // over the mixer, which stays as it is underneath (closing the rack needs no redraw)
         }
     }
 
