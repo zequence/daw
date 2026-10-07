@@ -7,6 +7,12 @@
 #include "api/CommandDispatcher.h"
 #include "api/McpProcess.h"
 
+#if JUCE_WINDOWS
+// For the rack: which native window has the keys (a plugin editor embedded in ours can take them)
+extern "C" __declspec (dllimport) void* __stdcall GetFocus();
+extern "C" __declspec (dllimport) int __stdcall IsChild (void* parent, void* child);
+#endif
+
 namespace
 {
     constexpr int rightBarWidth  = 60;   // one transport button wide
@@ -1407,6 +1413,20 @@ void MainComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
 
 void MainComponent::timerCallback()
 {
+#if JUCE_WINDOWS
+    // A click in a plugin editor inside the rack gives that plugin the keyboard, and the transport's
+    // keys stop working. Once the mouse is up, the keys come back to the main window. (Typing into a
+    // plugin's own text field in the rack does not work because of this; its own window does.)
+    if (contentView == ContentView::mixer && mixerView.isRackOpen()
+        && ! juce::ModifierKeys::getCurrentModifiersRealtime().isAnyMouseButtonDown())
+        if (auto* peer = getPeer())
+            if (auto* focus = GetFocus(); focus != nullptr && focus != peer->getNativeHandle() && IsChild (peer->getNativeHandle(), focus) != 0)
+            {
+                peer->grabFocus();      // the native focus (JUCE may still think it has it)
+                grabKeyboardFocus();
+            }
+#endif
+
     engine.pollRecording();
 
 
