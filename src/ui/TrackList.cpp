@@ -349,13 +349,13 @@ public:
 
     void resized() override
     {
-        // At the right: the level, then S|M (the tape takes the rest)
-        auto area = getLocalBounds().reduced (8, 0);
-        auto controls = area.removeFromRight (20 + 20 + 6 + 90).withSizeKeepingCentre (136, 20);
-        muteButton.setBounds (controls.removeFromRight (20).expanded (1, 0).withTrimmedRight (1));
-        soloButton.setBounds (controls.removeFromRight (20));
-        controls.removeFromRight (6);
-        meter.setBounds (controls.withSizeKeepingCentre (controls.getWidth(), 12));
+        // After the arrow: its level (a vertical meter), S|M, then the tape
+        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 29).reduced (0, 4);
+        meter.setBounds (area.removeFromLeft (7));
+        area.removeFromLeft (8);
+        soloButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20));
+        muteButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20).expanded (1, 0).withTrimmedRight (1));
+        tapeLeft = area.getX() + 8;
     }
 
     AudioEngine::InstrumentId getInstrumentId() const noexcept { return instrumentId; }
@@ -442,8 +442,7 @@ public:
         g.setColour (juce::Colours::white.withAlpha (0.7f));
         g.fillPath (triangle);
 
-        auto text = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 29).reduced (0, 2)
-                        .withRight (meter.getX() - 8);   // the tape, up to the level and S|M
+        auto text = getLocalBounds().withLeft (tapeLeft).reduced (0, 2);   // the tape, after the level and S|M
 
         // Its name on tape - the tape takes the instrument's colour (cream without one); drawn once, cached
         const auto colour = AudioEngine::colourFromHex (engine.getInstrumentColour (instrumentId), mixer::tape::cream);
@@ -459,7 +458,8 @@ private:
     bool selected = false;
     mixer::tape::Cached nameTape;
     juce::TextButton soloButton { "S" }, muteButton { "M" };
-    mixer::LevelMeter meter;
+    mixer::LevelMeter meter { false };
+    int tapeLeft = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InstrumentRow)
 };
@@ -527,16 +527,14 @@ public:
 
     void resized() override
     {
-        // Two lines: mute and the name, then the meter and its readout under the name
+        // From the left: its level (a vertical meter), S|M, the name
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 6).reduced (8, 4);
-        auto first = area.removeFromTop (area.getHeight() / 2);
-        soloButton.setBounds (first.removeFromLeft (20).withSizeKeepingCentre (20, 20));
-        muteButton.setBounds (first.removeFromLeft (20).withSizeKeepingCentre (20, 20).expanded (1, 0).withTrimmedRight (1));
-        first.removeFromLeft (6);
-        nameArea = first;
-
-        area.removeFromLeft (46);
-        meter.setBounds (area);
+        meter.setBounds (area.removeFromLeft (7));
+        area.removeFromLeft (8);
+        soloButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20));
+        muteButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20).expanded (1, 0).withTrimmedRight (1));
+        area.removeFromLeft (8);
+        nameArea = area;
     }
 
 private:
@@ -545,7 +543,7 @@ private:
     const AudioEngine::AudioChannelId channelId;
     const int depth;
     juce::TextButton soloButton { "S" }, muteButton { "M" };
-    mixer::LevelMeter meter { true, false, true };
+    mixer::LevelMeter meter { false };
     juce::Rectangle<int> nameArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioRow)
