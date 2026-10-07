@@ -734,8 +734,10 @@ private:
             if (kind != Kind::master)   // drive and pan, side by side, by the level
             {
                 auto knobs = area.removeFromTop (64);   // pan as big as the EQ's knobs, drive 46 px
-                drive.setBounds (knobs.removeFromLeft (knobs.getWidth() / 2).withSizeKeepingCentre (48, 55).withY (knobs.getY()));
-                pan.setBounds (knobs.withSizeKeepingCentre (58, 64));
+                // Centred on the knob columns above (the EQ's, the sends'), so their middles line up
+                const auto leftMiddle = knobs.getX() + 2 + 58 / 2, rightMiddle = knobs.getRight() - 2 - 58 / 2;
+                drive.setBounds (juce::Rectangle<int> (48, 55).withCentre ({ leftMiddle, 0 }).withY (knobs.getY()));
+                pan.setBounds (juce::Rectangle<int> (58, 64).withCentre ({ rightMiddle, 0 }).withY (knobs.getY()));
                 area.removeFromTop (4);
             }
 
