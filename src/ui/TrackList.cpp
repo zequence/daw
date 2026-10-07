@@ -341,6 +341,11 @@ public:
             c->setWantsKeyboardFocus (false);
             addAndMakeVisible (c);
         }
+
+        addChildComponent (nameEditor);
+        nameEditor.onReturnKey = [this] { finishRenaming (true); };
+        nameEditor.onFocusLost = [this] { finishRenaming (true); };
+        nameEditor.onEscapeKey = [this] { finishRenaming (false); };
     }
 
     void refresh()
@@ -430,11 +435,34 @@ public:
         }
     }
 
-    void mouseDoubleClick (const juce::MouseEvent& event) override   // the editor on all its tracks
+    void mouseDoubleClick (const juce::MouseEvent& event) override   // on the name: rename the instrument
     {
-        if (event.x >= iconBox.getRight() + 2 && owner.onOpenEditorOnTracks)
-            if (const auto tracks = engine.getInstrumentTracks (instrumentId); ! tracks.empty())
-                owner.onOpenEditorOnTracks (tracks);
+        if (event.x >= tapeLeft)
+            startRenaming();
+    }
+
+    // The name, edited in place over the tape (Return or clicking away renames; Esc cancels)
+    void startRenaming()
+    {
+        nameEditor.setFont (sidebar::trackNameFont().withHeight (15.0f));
+        nameEditor.setText (engine.getInstrumentName (instrumentId), false);
+        nameEditor.setBounds (getLocalBounds().withLeft (tapeLeft).withRight (getWidth() - 8).withSizeKeepingCentre (getWidth() - 8 - tapeLeft, 22));
+        nameEditor.setVisible (true);
+        nameEditor.grabKeyboardFocus();
+        nameEditor.selectAll();
+    }
+
+    void finishRenaming (bool apply)
+    {
+        if (! nameEditor.isVisible())
+            return;
+
+        nameEditor.setVisible (false);
+
+        if (apply && nameEditor.getText().trim().isNotEmpty())
+            engine.setInstrumentName (instrumentId, nameEditor.getText().trim());
+
+        repaint();
     }
 
     void paint (juce::Graphics& g) override
@@ -473,6 +501,7 @@ private:
     mixer::tape::Cached nameTape;
     juce::TextButton soloButton { "S" }, muteButton { "M" };
     mixer::LevelMeter meter { false };
+    juce::TextEditor nameEditor;
     int tapeLeft = 0;
     juce::Rectangle<int> iconBox;
 
@@ -513,7 +542,7 @@ public:
     {
         if (! event.mods.isPopupMenu())
         {
-            owner.selectChannel (channelId);
+            owner.selectChannel (channelId, event.mods);
             return;
         }
 
@@ -595,7 +624,7 @@ void TrackList::setSelectedTrack (AudioEngine::TrackId id)
     {
         selectedFolder = 0;   // a track chosen (e.g. a folder opened in the editor: its first track) ends the folder selection
         selectedInstrument = 0;
-        selectedChannel = 0;
+        selectedChannels.clear();
     }
 
     refresh();
@@ -663,7 +692,7 @@ void TrackList::refresh()
         const auto sub = subselectedRows.count (key) > 0;
 
         if (auto* trackRow = dynamic_cast<Row*> (component.get()))
-            trackRow->refresh (! groupSelected && selectedChannel == 0   // (an audio row chosen: no track shows selected)
+            trackRow->refresh (! groupSelected && selectedChannels.empty()   // (audio rows chosen: no track shows selected)
                                  && (multiSelection.empty() ? trackRow->getTrackId() == selectedTrack
                                                             : multiSelection.count (trackRow->getTrackId()) > 0),
                                engine.isTrackArmed (trackRow->getTrackId()), sub);
@@ -680,7 +709,7 @@ void TrackList::refresh()
         else if (auto* audioRow = dynamic_cast<AudioRow*> (component.get()))
         {
             audioRow->setSubselected (sub);
-            audioRow->setSelected (audioRow->getChannelId() == selectedChannel);
+            audioRow->setSelected (selectedChannels.count (audioRow->getChannelId()) > 0);
             audioRow->refresh();
         }
     }
@@ -692,7 +721,7 @@ void TrackList::selectInstrument (AudioEngine::InstrumentId instrumentId)
 {
     multiSelection.clear();
     selectedFolder = 0;
-    selectedChannel = 0;
+    selectedChannels.clear();
 
     if (const auto tracks = engine.getInstrumentTracks (instrumentId); ! tracks.empty() && onSelect)
         onSelect (tracks.front());
@@ -724,7 +753,7 @@ void TrackList::selectFolder (AudioEngine::FolderId folderId)
 {
     multiSelection.clear();
     selectedInstrument = 0;
-    selectedChannel = 0;
+    selectedChannels.clear();
     selectedFolder = folderId;
 
     if (onSelectionChanged)
@@ -736,12 +765,56 @@ void TrackList::selectFolder (AudioEngine::FolderId folderId)
     refreshSoon();
 }
 
-void TrackList::selectChannel (AudioEngine::AudioChannelId channelId)
+void TrackList::selectChannel (AudioEngine::AudioChannelId channelId, juce::ModifierKeys mods)
+{
+    auto chosen = selectedChannels;
+
+    if (mods.isCtrlDown())
+    {
+        if (! chosen.erase (channelId))
+            chosen.insert (channelId);
+    }
+    else if (mods.isShiftDown() && channelAnchor != 0)   // the audio rows from the anchor to here
+    {
+        chosen.clear();
+        bool inRange = false;
+
+        for (auto& item : engine.getSidebarItems (true, true))
+        {
+            if (item.channel == 0)
+                continue;
+
+            const auto edge = item.channel == channelAnchor || item.channel == channelId;
+
+            if (edge || inRange)
+                chosen.insert (item.channel);
+
+            if (edge)
+            {
+                if (inRange || channelAnchor == channelId)
+                    break;
+
+                inRange = true;
+            }
+        }
+    }
+    else
+    {
+        chosen = { channelId };
+    }
+
+    if (! mods.isShiftDown())
+        channelAnchor = channelId;
+
+    selectChannels (chosen);
+}
+
+void TrackList::selectChannels (const std::set<AudioEngine::AudioChannelId>& channels)
 {
     multiSelection.clear();
     selectedFolder = 0;
     selectedInstrument = 0;
-    selectedChannel = channelId;
+    selectedChannels = channels;
 
     if (onSelectionChanged)
         onSelectionChanged (multiSelection);
@@ -750,6 +823,13 @@ void TrackList::selectChannel (AudioEngine::AudioChannelId channelId)
         onGroupSelected();
 
     refreshSoon();
+}
+
+void TrackList::renameInstrument (AudioEngine::InstrumentId instrumentId)
+{
+    for (auto& [key, component] : liveRows)
+        if (auto* row = dynamic_cast<InstrumentRow*> (component.get()); row != nullptr && row->getInstrumentId() == instrumentId)
+            row->startRenaming();
 }
 
 void TrackList::setSubtreeCollapsed (AudioEngine::FolderId folderId, bool collapsed)

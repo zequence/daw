@@ -68,18 +68,18 @@ public:
         menu.showMenuAsync (juce::PopupMenu::Options());
     }
 
-    // The selected track's channel is highlighted (0 = none)
-    void setHighlightedChannel (AudioEngine::AudioChannelId id)
+    // The selected channels are highlighted (the sidebar's selection; one is brought into view)
+    void setHighlightedChannels (const std::set<AudioEngine::AudioChannelId>& ids)
     {
-        if (id != highlighted)
+        if (ids != highlighted)
         {
-            highlighted = id;
+            highlighted = ids;
 
             for (auto& strip : channelStrips)
             {
                 strip->repaint();
 
-                if (strip->channelId == id)   // brought into view (selected in the sidebar's list)
+                if (ids.size() == 1 && strip->channelId == *ids.begin())   // brought into view
                 {
                     const auto x = strip->getX();
                     const auto visible = channelsViewport.getViewArea();
@@ -91,9 +91,54 @@ public:
         }
     }
 
-    // A click anywhere on a channel's strip (a knob too) selects that channel - here and in the
-    // sidebar's audio channel list
-    std::function<void (AudioEngine::AudioChannelId)> onChannelSelected;
+    // A click anywhere on a channel's strip (a knob too) selects it - Ctrl adds or removes it, Shift
+    // takes the strips from the last one clicked - here and in the sidebar
+    std::function<void (const std::set<AudioEngine::AudioChannelId>&)> onChannelsSelected;
+    AudioEngine::AudioChannelId selectionAnchor = 0;
+
+    void stripClicked (AudioEngine::AudioChannelId id, juce::ModifierKeys mods)
+    {
+        auto chosen = highlighted;
+
+        if (mods.isCtrlDown())
+        {
+            if (! chosen.erase (id))
+                chosen.insert (id);
+        }
+        else if (mods.isShiftDown() && selectionAnchor != 0)
+        {
+            chosen.clear();
+            bool inRange = false;
+
+            for (auto& strip : channelStrips)
+            {
+                const auto edge = strip->channelId == selectionAnchor || strip->channelId == id;
+
+                if (edge || inRange)
+                    chosen.insert (strip->channelId);
+
+                if (edge)
+                {
+                    if (inRange || selectionAnchor == id)
+                        break;
+
+                    inRange = true;
+                }
+            }
+        }
+        else
+        {
+            chosen = { id };
+        }
+
+        if (! mods.isShiftDown())
+            selectionAnchor = id;
+
+        setHighlightedChannels (chosen);
+
+        if (onChannelsSelected)
+            onChannelsSelected (chosen);
+    }
 
     // The mixer keeps one size (the strips never stretch, so resizing the window only moves the view's
     // edge). Its zoom changes on command only: "Fit size" (the right-click menu) zooms it to the
@@ -236,8 +281,11 @@ private:
             name.setFont (mixer::TapeLabel::markerFont());   // (for its rename editor; the tape draws its own)
             name.setEditable (false, kind == Kind::channel);   // double-click renames a channel
             name.setTooltip (kind == Kind::channel ? "Double-click to rename" : kind == Kind::master ? "The master bus" : placeholderTip);
-            name.onTextChange = [this]
+            name.onTextChange = [this]   // an instrument's channel: renames the instrument (the channel follows)
             {
+                if (const auto instrument = owner.engine.getAudioChannelInput (channelId); instrument != 0)
+                    owner.engine.setInstrumentName (instrument, name.getText());
+
                 owner.engine.setAudioChannelName (channelId, name.getText());
                 refreshName();
             };
@@ -677,18 +725,13 @@ private:
                 owner.wheelGesture (undoId());
         }
 
-        void mouseDown (const juce::MouseEvent&) override
+        void mouseDown (const juce::MouseEvent& event) override
         {
             if (kind != Kind::aux)
                 owner.beginGesture (undoId());
 
-            if (kind == Kind::channel)
-            {
-                owner.setHighlightedChannel (channelId);
-
-                if (owner.onChannelSelected)
-                    owner.onChannelSelected (channelId);
-            }
+            if (kind == Kind::channel && ! event.mods.isPopupMenu())
+                owner.stripClicked (channelId, event.mods);
         }
 
         void tick()
@@ -707,7 +750,7 @@ private:
         void paint (juce::Graphics& g) override
         {
             // The background is drawn once into an image, again only when the size or highlight changes
-            const auto isHighlighted = kind == Kind::channel && channelId == owner.highlighted;
+            const auto isHighlighted = kind == Kind::channel && owner.highlighted.count (channelId) > 0;
 
             if (background.getWidth() != getWidth() || background.getHeight() != getHeight() || isHighlighted != backgroundHighlighted)
             {
@@ -1713,7 +1756,7 @@ private:
     std::vector<std::unique_ptr<Strip>> channelStrips, auxStrips;
     std::unique_ptr<Strip> master;
     std::vector<AudioEngine::AudioChannelId> shownIds;
-    AudioEngine::AudioChannelId highlighted = 0;
+    std::set<AudioEngine::AudioChannelId> highlighted;
     int lastRevision = -1, syncCounter = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MixerView)

@@ -345,6 +345,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         const auto safe = juce::Component::SafePointer<MainComponent> (this);
         juce::PopupMenu menu;
         menu.addItem ("Open the instrument's window", [safe, instrument] { if (safe != nullptr) safe->openPluginWindow (instrument); });
+        menu.addItem ("Rename...", [safe, instrument] { if (safe != nullptr) safe->trackList.renameInstrument (instrument); });
         menu.addSubMenu ("Color", colours::buildMenu (engine.getInstrumentColour (instrument), [safe, instrument] (juce::String hex)
         {
             if (safe != nullptr)
@@ -405,7 +406,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         mixerView.destroyRack();
     };
     mixerView.onOpenInsert = [this] (auto channel, int slot) { openInsertWindow (channel, slot); };
-    mixerView.onChannelSelected = [this] (auto channel) { channelList.selectChannel (channel); };
+    mixerView.onChannelsSelected = [this] (const auto& channels) { trackList.selectChannels (channels); };
     mixerView.onBeforeInsertRemove = [this] (auto channel, int slot) { closeInsertWindows (channel, slot); };
 
     // MIDI controllers (Settings > Audio & MIDI): their assigned controls choose articulations
@@ -1577,13 +1578,22 @@ void MainComponent::timerCallback()
     // The mixer highlights the selected audio channel (the sidebar's audio list and the mixer share
     // it); while none is selected there, the selected track's channel (its first output's instrument)
     {
-        auto channel = trackList.getSelectedChannel() != 0 ? trackList.getSelectedChannel() : channelList.getCurrentChannel();
+        auto channels = trackList.getSelectedChannels();
 
-        if (channel == 0)
-            if (const auto outputs = engine.getTrackOutputs (selectedTrack); ! outputs.empty())
-                channel = engine.getAudioChannelForInstrument (outputs.front().instrument);
+        if (channels.empty())   // the selected tracks' channels (their instruments')
+        {
+            auto tracks = trackList.getMultiSelection();
 
-        mixerView.setHighlightedChannel (channel);
+            if (tracks.empty() && selectedTrack != 0)
+                tracks.insert (selectedTrack);
+
+            for (auto track : tracks)
+                if (const auto outputs = engine.getTrackOutputs (track); ! outputs.empty())
+                    if (const auto channel = engine.getAudioChannelForInstrument (outputs.front().instrument); channel != 0)
+                        channels.insert (channel);
+        }
+
+        mixerView.setHighlightedChannels (channels);
     }
 
     // The side list marks the editor's tracks (none when it is closed), full or docked
