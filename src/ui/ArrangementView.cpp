@@ -579,8 +579,11 @@ void ArrangementView::paintOverChildren (juce::Graphics& g)
     g.drawRect (area, 1.0f);
 }
 
-std::vector<AudioEngine::TrackId> ArrangementView::tracksInFolder (AudioEngine::FolderId folder) const
+std::vector<AudioEngine::TrackId> ArrangementView::tracksInFolder (int folder) const
 {
+    if (folder < 0)   // an instrument folder
+        return engine.getInstrumentTracks (-folder);
+
     std::vector<AudioEngine::TrackId> tracks;
     int folderDepth = -1;
 
@@ -605,7 +608,7 @@ std::vector<AudioEngine::TrackId> ArrangementView::tracksInFolder (AudioEngine::
 }
 
 // The union of the regions of the folder's tracks: overlapping or touching ones join
-std::vector<std::pair<juce::int64, juce::int64>> ArrangementView::folderSpans (AudioEngine::FolderId folder)
+std::vector<std::pair<juce::int64, juce::int64>> ArrangementView::folderSpans (int folder)
 {
     std::vector<std::pair<juce::int64, juce::int64>> spans;
 
@@ -632,14 +635,14 @@ ArrangementView::FolderSpan ArrangementView::folderSpanAt (juce::Point<int> posi
     const auto items = itemsNow();
     const auto index = itemIndexAt (items, position.y);
 
-    if (index < 0 || items[(size_t) index].folder == 0 || position.x < TimeAxis::gutter)
+    if (index < 0 || groupKey (items[(size_t) index]) == 0 || position.x < TimeAxis::gutter)
         return {};
 
     const auto tick = xToTick (position.x);
 
-    for (auto& [start, end] : folderSpans (items[(size_t) index].folder))
+    for (auto& [start, end] : folderSpans (groupKey (items[(size_t) index])))
         if (tick >= start && tick < barEndOf (end))   // as drawn: to the end of the last bar
-            return { items[(size_t) index].folder, start, end };
+            return { groupKey (items[(size_t) index]), start, end };
 
     return {};
 }
@@ -674,14 +677,15 @@ void ArrangementView::mouseDoubleClick (const juce::MouseEvent& event)
     // A folder's region: the editor on the folder's tracks
     const auto items = itemsNow();
 
-    if (const auto index = itemIndexAt (items, event.y); index >= 0 && items[(size_t) index].folder != 0)
+    if (const auto index = itemIndexAt (items, event.y); index >= 0 && groupKey (items[(size_t) index]) != 0)
     {
         const auto tick = xToTick (event.x);
+        const auto group = groupKey (items[(size_t) index]);
 
-        for (auto& [start, end] : folderSpans (items[(size_t) index].folder))
+        for (auto& [start, end] : folderSpans (group))
             if (tick >= start && tick < end && onOpenEditorOnTracks)
             {
-                if (auto tracks = tracksInFolder (items[(size_t) index].folder); ! tracks.empty())
+                if (auto tracks = tracksInFolder (group); ! tracks.empty())
                     onOpenEditorOnTracks (std::move (tracks));
 
                 return;
@@ -820,8 +824,10 @@ void ArrangementView::paint (juce::Graphics& g)
 
             if (y + height > 0 && y < getHeight())
             {
-                if (item.folder != 0)
+                if (groupKey (item) != 0)
                     g.setColour (theme::colour (theme::Token::arrangeLaneFolder));
+                else if (item.channel != 0)   // an instrument's audio: its own, slightly blue lane (no regions yet)
+                    g.setColour (theme::colour (theme::Token::arrangeLaneOdd).interpolatedWith (juce::Colour (0xff3a6fbf), 0.08f));
                 else
                     g.setColour (theme::colour (trackParity % 2 == 0 ? theme::Token::arrangeLaneEven : theme::Token::arrangeLaneOdd));
 
@@ -892,16 +898,19 @@ void ArrangementView::paint (juce::Graphics& g)
         {
             const auto height = sidebar::heightOf (item);
 
-            if (item.member == 0 && item.folder != 0 && y + height > 0 && y < getHeight())
+            if (item.member == 0 && groupKey (item) != 0 && y + height > 0 && y < getHeight())
             {
-                // A folder lane: one region per stretch of content inside it
-                const auto base = AudioEngine::colourFromHex (engine.getFolderColour (item.folder), juce::Colour (0xff8a8f98));
+                // A folder lane (or an instrument folder's): one region per stretch of content inside it
+                const auto group = groupKey (item);
+                const auto folderTracks = tracksInFolder (group);
+                const auto colour = group > 0 ? engine.getFolderColour (group)
+                                              : (folderTracks.empty() ? juce::String() : engine.getTrackColour (folderTracks.front()));
+                const auto base = AudioEngine::colourFromHex (colour, juce::Colour (0xff8a8f98));
                 const auto style = theme::regionStyle (base, false);
-                const auto folderTracks = tracksInFolder (item.folder);
 
-                for (auto [start, end] : folderSpans (item.folder))
+                for (auto [start, end] : folderSpans (group))
                 {
-                    const auto noteShift = draggingFolder.folder == item.folder && draggingFolder.start == start && didDrag
+                    const auto noteShift = draggingFolder.folder == group && draggingFolder.start == start && didDrag
                                              ? dragDeltaTicks : (juce::int64) 0;
                     const auto originalStart = start;
                     start += noteShift;
@@ -913,7 +922,7 @@ void ArrangementView::paint (juce::Graphics& g)
                         continue;
 
                     const auto rect = juce::Rectangle<int> (x + 1, y + 3, juce::jmax (6, right - x - 1), height - 6);   // the grid lines show at its ends
-                    const auto isSelectedSpan = isSelectedFolderSpan ({ item.folder, originalStart, 0 });
+                    const auto isSelectedSpan = isSelectedFolderSpan ({ group, originalStart, 0 });
                     const auto look = isSelectedSpan ? theme::regionStyle (base, true) : style;
                     g.setColour (look.fill.withMultipliedAlpha (0.8f));
                     g.fillRect (rect);
@@ -1082,11 +1091,11 @@ void ArrangementView::paint (juce::Graphics& g)
 
             if (y + height > 0 && y < getHeight())
             {
-                if (item.folder != 0)
+                if (groupKey (item) != 0)
                 {
                     g.setColour (juce::Colours::white.withAlpha (0.55f));
                     g.setFont (juce::FontOptions (10.0f, juce::Font::bold));
-                    g.drawFittedText (engine.getFolderName (item.folder),
+                    g.drawFittedText (item.folder != 0 ? engine.getFolderName (item.folder) : engine.getInstrumentName (item.instrument),
                                       4, y + 2, TimeAxis::gutter - 8, height - 4,
                                       juce::Justification::centredLeft, 2);
                 }
@@ -1094,7 +1103,8 @@ void ArrangementView::paint (juce::Graphics& g)
                 {
                     g.setColour (juce::Colours::white.withAlpha (0.45f));
                     g.setFont (juce::FontOptions (10.0f));
-                    g.drawFittedText (engine.getTrackName (item.member),
+                    g.drawFittedText (item.channel != 0 ? juce::String::fromUTF8 ("♫ ") + engine.getAudioChannelName (item.channel)
+                                                        : engine.getTrackName (item.member),
                                       4, y + 4, TimeAxis::gutter - 8, height - 8,
                                       juce::Justification::topLeft, 3);
                 }

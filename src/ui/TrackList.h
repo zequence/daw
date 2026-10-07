@@ -31,6 +31,8 @@ public:
     std::vector<AudioEngine::TrackId> editorTracks;
     AudioEngine::TrackId editorTrack = 0;
     AudioEngine::FolderId getSelectedFolder() const noexcept { return selectedFolder; }
+    AudioEngine::InstrumentId getSelectedInstrument() const noexcept { return selectedInstrument; }
+    std::function<void (std::vector<AudioEngine::TrackId>)> onOpenEditorOnTracks;   // an instrument folder double-clicked
 
     std::function<void (AudioEngine::TrackId)> onSelect, onArm, onShowContextMenu;
 
@@ -46,6 +48,8 @@ public:
 private:
     class Row;
     class FolderRow;
+    class InstrumentRow;
+    class AudioRow;
 
     struct RowContainer final : juce::Component
     {
@@ -59,6 +63,7 @@ private:
     void layoutRows();
     void refreshSoon();                   // deferred refresh, safe from row callbacks
     void selectFolder (AudioEngine::FolderId);   // highlights the folder (its tracks stay unselected)
+    void selectInstrument (AudioEngine::InstrumentId);
     void setSubtreeCollapsed (AudioEngine::FolderId, bool collapsed);   // folder + all subfolders
     void showFolderMenu (AudioEngine::FolderId);
     void showBackgroundMenu();            // right-click on the empty area
@@ -91,7 +96,7 @@ private:
     int totalHeight = 0;
 
     // Virtualized: components exist only for rows near the visible area
-    using RowKey = std::tuple<int, int, int>;             // (folder, member, depth)
+    using RowKey = std::tuple<int, int, int, int, int>;   // (folder, member, depth, instrument, channel)
     std::map<RowKey, std::unique_ptr<juce::Component>> liveRows;
     void realizeVisibleRows();
 
@@ -100,6 +105,7 @@ private:
     // Multi-select (UI-level; the primary selection stays with MainComponent)
     std::set<AudioEngine::TrackId> multiSelection;
     AudioEngine::FolderId selectedFolder = 0;
+    AudioEngine::InstrumentId selectedInstrument = 0;
     AudioEngine::TrackId shiftAnchor = 0;
     bool clearSelectionOnMouseUp = false;
 

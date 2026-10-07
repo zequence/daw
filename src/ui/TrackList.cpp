@@ -1,6 +1,7 @@
 #include "TrackList.h"
 #include "ColorPalette.h"
 #include "ThemedLookAndFeel.h"
+#include "../engine/AudioChannelProcessor.h"
 
 namespace
 {
@@ -277,6 +278,211 @@ TrackList::TrackList (AudioEngine& e, sidebar::VerticalScroll& v) : engine (e), 
     viewport.addMouseListener (&wheelZoom, true);   // Ctrl+Shift+wheel anywhere in the list: track height
 }
 
+//==============================================================================
+// An instrument folder: its tracks (those whose first output it is) and then its audio. Like a folder
+// row - the arrow opens and closes it, a click selects it (the editor then takes all its tracks),
+// a drag moves all its tracks
+class TrackList::InstrumentRow final : public juce::Component
+{
+public:
+    InstrumentRow (TrackList& ownerToUse, AudioEngine& engineToUse, AudioEngine::InstrumentId id, int depthToUse)
+        : owner (ownerToUse), engine (engineToUse), instrumentId (id), depth (depthToUse) {}
+
+    AudioEngine::InstrumentId getInstrumentId() const noexcept { return instrumentId; }
+
+    void setSelected (bool shouldBeSelected)
+    {
+        if (selected != shouldBeSelected)
+        {
+            selected = shouldBeSelected;
+            repaint();
+        }
+    }
+
+    void mouseDown (const juce::MouseEvent& event) override
+    {
+        if (event.mods.isPopupMenu())
+            return;
+
+        owner.drag = {};
+        owner.clearSelectionOnMouseUp = false;
+    }
+
+    void mouseDrag (const juce::MouseEvent& event) override
+    {
+        if (event.mods.isPopupMenu())
+            return;
+
+        if (! owner.drag.active && getLocalBounds().contains (event.getPosition()))
+            return;
+
+        if (! owner.drag.active)   // the whole instrument: all its tracks together
+        {
+            owner.drag.active = true;
+            owner.drag.sourceIsFolder = false;
+            owner.drag.sourceId = 0;
+            owner.drag.draggedTracks = engine.getInstrumentTracks (instrumentId);
+        }
+
+        owner.computeDropTarget (event.getEventRelativeTo (&owner.rowContainer).getPosition().y);
+        owner.rowContainer.repaint();
+    }
+
+    void mouseUp (const juce::MouseEvent& event) override
+    {
+        if (event.mods.isPopupMenu())
+            return;
+
+        if (! owner.finishRowDrag (0))
+        {
+            if (event.x < depth * indentPerLevel + 26)
+                engine.setInstrumentExpanded (instrumentId, ! engine.isInstrumentExpanded (instrumentId));
+            else
+                owner.selectInstrument (instrumentId);
+        }
+    }
+
+    void mouseDoubleClick (const juce::MouseEvent& event) override   // the editor on all its tracks
+    {
+        if (event.x >= depth * indentPerLevel + 26 && owner.onOpenEditorOnTracks)
+            if (const auto tracks = engine.getInstrumentTracks (instrumentId); ! tracks.empty())
+                owner.onOpenEditorOnTracks (tracks);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
+        theme::paintRowBox (g, bounds, true, selected);
+
+        // Its first track's colour as the left border (grey without one)
+        const auto tracks = engine.getInstrumentTracks (instrumentId);
+        g.setColour (AudioEngine::colourFromHex (tracks.empty() ? juce::String() : engine.getTrackColour (tracks.front()),
+                                                 juce::Colour (0xff6d7178)));
+        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
+
+        juce::Path triangle;
+        const auto cx = bounds.getX() + 18.0f, cy = bounds.getCentreY();
+
+        if (! engine.isInstrumentExpanded (instrumentId))
+            triangle.addTriangle (cx - 3.0f, cy - 5.0f, cx - 3.0f, cy + 5.0f, cx + 5.0f, cy);
+        else
+            triangle.addTriangle (cx - 5.0f, cy - 3.0f, cx + 5.0f, cy - 3.0f, cx, cy + 5.0f);
+
+        g.setColour (juce::Colours::white.withAlpha (0.7f));
+        g.fillPath (triangle);
+
+        auto text = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 29).reduced (0, 2);
+        const auto count = juce::String ((int) tracks.size()) + ((int) tracks.size() == 1 ? " track" : " tracks");
+        g.setFont (juce::FontOptions (11.0f));
+        g.setColour (juce::Colours::white.withAlpha (0.4f));
+        g.drawText (count, text.removeFromRight (64).withTrimmedRight (8), juce::Justification::centredRight, false);
+
+        g.setColour (juce::Colours::white.withAlpha (0.9f));
+        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        g.drawText (engine.getInstrumentName (instrumentId), text, juce::Justification::centredLeft, true);
+    }
+
+private:
+    TrackList& owner;
+    AudioEngine& engine;
+    const AudioEngine::InstrumentId instrumentId;
+    const int depth;
+    bool selected = false;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InstrumentRow)
+};
+
+//==============================================================================
+// An instrument's audio, inside its folder after its tracks: name, mute, level and a meter
+class TrackList::AudioRow final : public juce::Component
+{
+public:
+    AudioRow (AudioEngine& engineToUse, AudioEngine::AudioChannelId id, int depthToUse)
+        : engine (engineToUse), channelId (id), depth (depthToUse)
+    {
+        muteButton.setTooltip ("Mute (audio)");
+        muteButton.setClickingTogglesState (true);
+        theme::setButtonRole (muteButton, "mute");
+        muteButton.setWantsKeyboardFocus (false);
+        muteButton.onClick = [this]
+        {
+            if (auto* p = engine.getAudioChannel (channelId))
+                p->setMuted (muteButton.getToggleState());
+        };
+        addAndMakeVisible (muteButton);
+
+        level.setRange (-60.0, 6.0, 0.1);
+        level.setSkewFactorFromMidPoint (-12.0);
+        level.setDoubleClickReturnValue (true, 0.0);
+        level.setWantsKeyboardFocus (false);
+        level.setTooltip ("Level (the mixer's fader)");
+        level.onValueChange = [this]
+        {
+            if (auto* p = engine.getAudioChannel (channelId))
+                p->setGain (level.getValue() <= -59.9 ? 0.0f : juce::Decibels::decibelsToGain ((float) level.getValue()));
+        };
+        addAndMakeVisible (level);
+    }
+
+    void refresh()
+    {
+        if (auto* p = engine.getAudioChannel (channelId))
+        {
+            muteButton.setToggleState (p->isMuted(), juce::dontSendNotification);
+
+            if (! level.isMouseButtonDown())
+                level.setValue (juce::Decibels::gainToDecibels (p->getGain(), -60.0f), juce::dontSendNotification);
+
+            meterLevel = juce::jmax (p->getLastPeak(), meterLevel * 0.85f);
+        }
+
+        repaint();
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
+        theme::paintRowBox (g, bounds, false, false);
+
+        g.setColour (juce::Colour (0xff3a6fbf).withAlpha (0.8f));   // audio: a blue left border
+        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
+
+        g.setColour (juce::Colours::white.withAlpha (0.85f));
+        g.setFont (juce::FontOptions (13.0f));
+        g.drawText (juce::String::fromUTF8 ("\xe2\x99\xab ") + engine.getAudioChannelName (channelId), nameArea, juce::Justification::centredLeft, true);
+
+        // A thin meter along the bottom
+        auto meter = bounds.reduced (12.0f, 0.0f).removeFromBottom (4.0f).translated (0.0f, -2.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.5f));
+        g.fillRect (meter);
+        const auto db = juce::Decibels::gainToDecibels (meterLevel, -60.0f);
+        g.setColour (meterLevel >= 1.0f ? juce::Colours::red : juce::Colours::limegreen);
+        g.fillRect (meter.withWidth (meter.getWidth() * juce::jlimit (0.0f, 1.0f, juce::jmap (db, -60.0f, 0.0f, 0.0f, 1.0f))));
+    }
+
+    void resized() override
+    {
+        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 6).reduced (8, 0);
+        area = area.withSizeKeepingCentre (area.getWidth(), 20).translated (0, -2);
+        muteButton.setBounds (area.removeFromLeft (20));
+        area.removeFromLeft (6);
+        level.setBounds (area.removeFromRight (juce::jmin (90, area.getWidth() / 2)));
+        nameArea = area;
+    }
+
+private:
+    AudioEngine& engine;
+    const AudioEngine::AudioChannelId channelId;
+    const int depth;
+    juce::TextButton muteButton { "M" };
+    juce::Slider level { juce::Slider::LinearHorizontal, juce::Slider::NoTextBox };
+    juce::Rectangle<int> nameArea;
+    float meterLevel = 0.0f;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioRow)
+};
+
+//==============================================================================
 TrackList::~TrackList() = default;
 
 void TrackList::setSelectedTrack (AudioEngine::TrackId id)
@@ -284,7 +490,10 @@ void TrackList::setSelectedTrack (AudioEngine::TrackId id)
     selectedTrack = id;
 
     if (id != 0)
+    {
         selectedFolder = 0;   // a track chosen (e.g. a folder opened in the editor: its first track) ends the folder selection
+        selectedInstrument = 0;
+    }
 
     refresh();
 }
@@ -333,7 +542,30 @@ void TrackList::refresh()
             folderRow->setSelected (folderRow->getFolderId() == selectedFolder);
             folderRow->refresh();
         }
+        else if (auto* instrumentRow = dynamic_cast<InstrumentRow*> (component.get()))
+        {
+            instrumentRow->setSelected (instrumentRow->getInstrumentId() == selectedInstrument);
+            instrumentRow->repaint();
+        }
+        else if (auto* audioRow = dynamic_cast<AudioRow*> (component.get()))
+        {
+            audioRow->refresh();
+        }
     }
+}
+
+// An instrument folder selected: its first track becomes the selected track (the mixer and the
+// editor follow), and the editor (E / D) takes all its tracks
+void TrackList::selectInstrument (AudioEngine::InstrumentId instrumentId)
+{
+    multiSelection.clear();
+    selectedFolder = 0;
+
+    if (const auto tracks = engine.getInstrumentTracks (instrumentId); ! tracks.empty() && onSelect)
+        onSelect (tracks.front());
+
+    selectedInstrument = instrumentId;   // (after onSelect: choosing the track clears it)
+    refresh();
 }
 
 void TrackList::setEditedTracks (std::vector<AudioEngine::TrackId> shown, AudioEngine::TrackId edited)
@@ -446,7 +678,7 @@ void TrackList::realizeVisibleRows()
         if (rowTops[i] + height < top || rowTops[i] > bottom)
             continue;
 
-        const RowKey key { item.folder, item.member, item.depth };
+        const RowKey key { item.folder, item.member, item.depth, item.instrument, item.channel };
         wanted.insert (key);
 
         auto& row = liveRows[key];
@@ -455,6 +687,10 @@ void TrackList::realizeVisibleRows()
         {
             if (item.folder != 0)
                 row = std::make_unique<FolderRow> (*this, engine, item.folder, item.depth);
+            else if (item.instrument != 0)
+                row = std::make_unique<InstrumentRow> (*this, engine, item.instrument, item.depth);
+            else if (item.channel != 0)
+                row = std::make_unique<AudioRow> (engine, item.channel, item.depth);
             else
                 row = std::make_unique<Row> (*this, engine, item.member, item.depth);
 
@@ -599,8 +835,8 @@ void TrackList::computeDropTarget (int y)
     {
         int index = 0;
 
-        for (size_t j = 0; j < i; ++j)
-            if (items[j].parent == parent && ! isDragged (items[j]))
+        for (size_t j = 0; j < i; ++j)   // (instrument folders and their audio rows aren't the folder's children)
+            if (items[j].parent == parent && items[j].isTreeChild() && ! isDragged (items[j]))
                 ++index;
 
         return index;

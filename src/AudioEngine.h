@@ -251,19 +251,34 @@ public:
     // siblings - folders and members in one sequence - follow their explicit
     // position (set by moveSidebarItems, i.e. dragging). With skipCollapsed, a
     // collapsed folder still appears but its contents don't.
+    // One row of a sidebar tree: a folder, a member (a track, or in the audio tree a channel), or -
+    // in the MIDI tree - an instrument folder (instrument != 0) and, inside it after its tracks, its
+    // audio channel (channel != 0). An instrument folder holds the tracks whose first output is that
+    // instrument (membership follows routing); it stands where its first track would, and its rows
+    // keep that track's parent (moves and drops work among the real folder's children).
     struct SidebarItem
     {
         FolderId folder = 0;
         int member = 0;
         int depth = 0;
         FolderId parent = 0;
+        InstrumentId instrument = 0;
+        AudioChannelId channel = 0;
+
+        bool isTreeChild() const noexcept   { return folder != 0 || member != 0; }   // a folder's real child (positions count these)
 
         bool operator== (const SidebarItem& other) const noexcept
         {
-            return folder == other.folder && member == other.member
-                    && depth == other.depth && parent == other.parent;
+            return folder == other.folder && member == other.member && depth == other.depth && parent == other.parent
+                    && instrument == other.instrument && channel == other.channel;
         }
     };
+
+    // Instrument folders (in the MIDI tree): collapsed by default; saved with the project
+    bool isInstrumentExpanded (InstrumentId) const;
+    void setInstrumentExpanded (InstrumentId, bool);
+    std::vector<TrackId> getInstrumentTracks (InstrumentId) const;   // whose first output it is, in tree order
+    InstrumentId getTrackInstrument (TrackId) const;                 // its first output's instrument (0: none)
 
     std::vector<SidebarItem> getSidebarItems (bool midiDomain, bool skipCollapsed) const;
     std::vector<TrackId> getArrangeTrackOrder() const;   // visible tracks, tree order
@@ -501,6 +516,7 @@ private:
         juce::String name;
         AudioChannelId audioChannel = 0;
         std::vector<MidiChannelInfo> midiChannels;  // named channels (manual + synced)
+        bool expanded = false;                      // its folder in the MIDI tree (collapsed by default)
     };
 
     struct Insert

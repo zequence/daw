@@ -294,6 +294,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     // Double-click on a folder's region: the editor on the folder's tracks
     arrangementView.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
+    trackList.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
 
     // The editor's dropdown picked another of its tracks: that one is selected
     pianoRollView.onEditedTrackChanged = [this] (auto id) { selectTrack (id, false); };
@@ -721,7 +722,7 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
 
         for (auto& item : safe->engine.getSidebarItems (true, false))
         {
-            if (item.parent == parent)
+            if (item.parent == parent && item.isTreeChild())
                 ++index;
 
             if (item.member == id)
@@ -1640,7 +1641,7 @@ void MainComponent::toggleEditor (bool draw)
     if (contentView == ContentView::midiEditor)
         updateViewVisibility();
     else
-        openEditorOn (tracksToEdit());
+        openEditorOn (tracksToEdit(), selectedTrack);
 }
 
 std::vector<AudioEngine::TrackId> MainComponent::inSidebarOrder (const std::set<AudioEngine::TrackId>& tracks) const
@@ -1664,6 +1665,10 @@ std::vector<AudioEngine::TrackId> MainComponent::tracksToEdit() const
 
     if (! lastSelectionInArrangement && trackList.getMultiSelection().size() > 1)
         return inSidebarOrder (trackList.getMultiSelection());
+
+    if (const auto instrument = trackList.getSelectedInstrument(); instrument != 0)   // an instrument folder: all its tracks
+        if (auto tracks = engine.getInstrumentTracks (instrument); ! tracks.empty())
+            return tracks;
 
     if (const auto folder = trackList.getSelectedFolder(); folder != 0)
     {
@@ -1692,6 +1697,12 @@ std::vector<AudioEngine::TrackId> MainComponent::tracksToEdit() const
             return inside;
     }
 
+    // A track in an instrument folder: all the instrument's tracks (multi-edit; it stays the edited one)
+    if (selectedTrack != 0)
+        if (const auto instrument = engine.getTrackInstrument (selectedTrack); instrument != 0)
+            if (auto tracks = engine.getInstrumentTracks (instrument); tracks.size() > 1)
+                return tracks;
+
     if (selectedTrack != 0)
         return { selectedTrack };
 
@@ -1699,13 +1710,20 @@ std::vector<AudioEngine::TrackId> MainComponent::tracksToEdit() const
 }
 
 // The editor on these tracks (top to bottom); the top one is edited
-void MainComponent::openEditorOn (std::vector<AudioEngine::TrackId> tracks)
+void MainComponent::openEditorOn (std::vector<AudioEngine::TrackId> tracks, AudioEngine::TrackId edited)
 {
     if (tracks.empty())
         return;
 
-    const auto edited = tracks.front();
+    if (std::find (tracks.begin(), tracks.end(), edited) == tracks.end())
+        edited = tracks.front();
+
     selectTrack (edited, false);   // the top track is the selected one (a folder: its first track)
+
+    // The instrument folders of the edited tracks open (in the sidebar and the arrangement)
+    for (auto track : tracks)
+        if (const auto instrument = engine.getTrackInstrument (track); instrument != 0)
+            engine.setInstrumentExpanded (instrument, true);
 
     showContent (ContentView::midiEditor);
     pianoRollView.setTracks (std::move (tracks), edited);
@@ -1862,7 +1880,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
             domain = Domain::midi;
 
         if (contentView != ContentView::midiEditor)
-            openEditorOn (tracksToEdit());
+            openEditorOn (tracksToEdit(), selectedTrack);
 
         return true;
     }

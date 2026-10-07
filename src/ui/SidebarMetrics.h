@@ -18,7 +18,7 @@ namespace sidebar
 
     inline int heightOf (const AudioEngine::SidebarItem& item)
     {
-        return item.folder != 0 ? folderRowHeight : trackRowHeight();
+        return item.folder != 0 || item.instrument != 0 ? folderRowHeight : trackRowHeight();
     }
 
     // One shared scroll offset; views poll 'revision' from their timers.

@@ -120,8 +120,10 @@ private:
     void moveSelection();
 
     // Folder lanes show regions spanning the content of every track inside them (subfolders too)
-    std::vector<AudioEngine::TrackId> tracksInFolder (AudioEngine::FolderId) const;
-    std::vector<std::pair<juce::int64, juce::int64>> folderSpans (AudioEngine::FolderId);
+    // A folder-like row's key: a folder's id, or an instrument folder's id negated (0: neither)
+    static int groupKey (const AudioEngine::SidebarItem& item)   { return item.folder != 0 ? item.folder : -item.instrument; }
+    std::vector<AudioEngine::TrackId> tracksInFolder (int group) const;   // (a group key)
+    std::vector<std::pair<juce::int64, juce::int64>> folderSpans (int group);
 
     // A folder region under the mouse (its folder, 0 = none) and dragging one: sideways only,
     // moving everything inside it on every track of the folder

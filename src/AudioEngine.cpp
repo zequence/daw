@@ -2270,6 +2270,43 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
             return a.id < b.id;
         });
 
+    // The MIDI tree's instrument folders: each instrument's tracks in tree order (collapsed folders' too)
+    std::map<InstrumentId, std::vector<TrackId>> tracksOfInstrument;
+
+    if (midiDomain)
+    {
+        const std::function<void (FolderId)> collect = [&] (FolderId parent)
+        {
+            if (const auto found = childrenByParent.find (parent); found != childrenByParent.end())
+                for (auto& child : found->second)
+                {
+                    if (child.isFolder)
+                        collect (child.id);
+                    else if (const auto instrument = getTrackInstrument (child.id); instrument != 0)
+                        tracksOfInstrument[instrument].push_back (child.id);
+                }
+        };
+
+        collect (0);
+    }
+
+    std::set<InstrumentId> placed;
+
+    const auto pushInstrument = [&] (InstrumentId instrument, int depth, FolderId parent)
+    {
+        placed.insert (instrument);
+        items.push_back ({ 0, 0, depth, parent, instrument, 0 });
+
+        if (skipCollapsed && ! isInstrumentExpanded (instrument))
+            return;
+
+        for (auto trackId : tracksOfInstrument[instrument])   // its MIDI tracks, then its audio
+            items.push_back ({ 0, trackId, depth + 1, parent, 0, 0 });
+
+        if (const auto channel = getAudioChannelForInstrument (instrument); channel != 0)
+            items.push_back ({ 0, 0, depth + 1, parent, 0, channel });
+    };
+
     const std::function<void (FolderId, int)> visit = [&] (FolderId parent, int depth)
     {
         const auto found = childrenByParent.find (parent);
@@ -2286,6 +2323,11 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
                 if (! (skipCollapsed && isFolderCollapsed (child.id)))
                     visit (child.id, depth + 1);
             }
+            else if (const auto instrument = midiDomain ? getTrackInstrument (child.id) : 0; instrument != 0)
+            {
+                if (placed.count (instrument) == 0)   // its folder stands where its first track would
+                    pushInstrument (instrument, depth, parent);
+            }
             else
             {
                 items.push_back ({ 0, child.id, depth, parent });
@@ -2294,6 +2336,12 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
     };
 
     visit (0, 0);
+
+    if (midiDomain)   // instruments no track plays yet: at the end
+        for (auto& [id, instrument] : instruments)
+            if (placed.count (id) == 0)
+                pushInstrument (id, 0, 0);
+
     return items;
 }
 
@@ -2371,6 +2419,41 @@ bool AudioEngine::moveSidebarItems (bool midiDomain, const std::vector<FolderId>
     data->setProperty ("count", (int) (folderIds.size() + memberIds.size()));
     emitEvent ("sidebarMoved", data);
     return true;
+}
+
+AudioEngine::InstrumentId AudioEngine::getTrackInstrument (TrackId id) const
+{
+    if (auto* track = findTrack (id); track != nullptr && ! track->outputs.empty())
+        if (instruments.count (track->outputs.front().instrument) > 0)
+            return track->outputs.front().instrument;
+
+    return 0;
+}
+
+std::vector<AudioEngine::TrackId> AudioEngine::getInstrumentTracks (InstrumentId id) const
+{
+    std::vector<TrackId> result;
+
+    for (auto& item : getSidebarItems (true, false))
+        if (item.member != 0 && getTrackInstrument (item.member) == id)
+            result.push_back (item.member);
+
+    return result;
+}
+
+bool AudioEngine::isInstrumentExpanded (InstrumentId id) const
+{
+    const auto it = instruments.find (id);
+    return it != instruments.end() && it->second.expanded;
+}
+
+void AudioEngine::setInstrumentExpanded (InstrumentId id, bool expanded)
+{
+    if (auto it = instruments.find (id); it != instruments.end() && it->second.expanded != expanded)
+    {
+        it->second.expanded = expanded;
+        emitEvent ("folderViewChanged");   // a view state, like a folder's (not history)
+    }
 }
 
 std::vector<AudioEngine::TrackId> AudioEngine::getArrangeTrackOrder() const
@@ -2605,6 +2688,7 @@ bool AudioEngine::saveProject (const juce::File& file)
         auto* e = root.createNewChildElement ("INSTRUMENT");
         e->setAttribute ("id", id);
         e->setAttribute ("name", instrument.name);
+        e->setAttribute ("expanded", instrument.expanded);
 
         if (auto* plugin = getInstrumentPlugin (id))
         {
@@ -2899,6 +2983,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
                 }
 
                 state->idMap[element->getIntAttribute ("id")] = newId;
+                setInstrumentExpanded (newId, element->getBoolAttribute ("expanded", false));
 
                 if (auto* stateElement = element->getChildByName ("STATE"))
                 {

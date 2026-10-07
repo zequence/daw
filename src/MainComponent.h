@@ -90,7 +90,7 @@ private:
     void updatePlaceholders();
     void togglePerfPanel();
     void toggleEditor (bool draw);
-    void openEditorOn (std::vector<AudioEngine::TrackId> tracks);   // top one edited; empty = the selected track
+    void openEditorOn (std::vector<AudioEngine::TrackId> tracks, AudioEngine::TrackId edited = 0);   // edited: that one (else the top one)
     std::vector<AudioEngine::TrackId> tracksToEdit() const;         // what E/D open (see the .cpp)
     std::vector<AudioEngine::TrackId> inSidebarOrder (const std::set<AudioEngine::TrackId>&) const;
     bool lastSelectionInArrangement = false;                         // which selection E/D follow
