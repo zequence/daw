@@ -91,7 +91,7 @@ public:
         applyScale();
 
         if (rack != nullptr)
-            rack->setBounds (rackPending ? getLocalBounds().translated (20000, 0) : getLocalBounds());   // pending: beyond any window edge
+            rack->setBounds (rackShown ? getLocalBounds() : getLocalBounds().translated (20000, 0));   // else beyond any window edge
     }
 
     void fitSize()
@@ -128,7 +128,7 @@ private:   // where a channel strip's pan and fader begin (the other strips foll
     // (drawn once per size into an image - the meters repaint often, and the image is cheaper to lay on)
     void paintOverChildren (juce::Graphics& g) override
     {
-        if (rack != nullptr && ! rackPending)   // the rack is not under the console's lights
+        if (rack != nullptr && rackShown)   // the rack is not under the console's lights
             return;
 
         if (sheenImage.getWidth() != getWidth() || sheenImage.getHeight() != getHeight())
@@ -1231,10 +1231,22 @@ public:
         if (onBeforeInsertRemove)
             onBeforeInsertRemove (id, -1);   // its inserts' windows close: the rack shows their editors
 
-        // The rack is built out of sight (beside the view - its plugin editors are native windows, so
-        // nothing can be drawn over them while they load); the mixer stays until it has settled
-        if (rack != nullptr || rackPending)
+        if (rackPending)
             return;
+
+        // The last rack is kept (out of sight) after it closes: the same channel's comes back at once,
+        // its plugins already drawn; another channel's replaces it
+        if (rack != nullptr && rack->channelId == id)
+        {
+            rackShown = true;
+            resized();
+            return;
+        }
+
+        destroyRack();
+
+        // The rack is built out of sight (far beyond the window - its plugin editors are native windows,
+        // so nothing can be drawn over them while they load); the mixer stays until it has settled
 
         rackPending = true;
         engine.getBusyStatus().begin ("Opening the rack");   // the busy box, until it shows
@@ -1271,26 +1283,44 @@ public:
         if (now - rack->lastChange > 500 || now - rackOpenedAt > 5000)
         {
             rackPending = false;
+            rackShown = true;
             engine.getBusyStatus().end();
             resized();   // over the mixer, which stays as it is underneath (closing the rack needs no redraw)
         }
     }
 
+    // Back to the mixer: the rack goes out of sight but stays (see openRack)
     void closeRack()
     {
         if (rackPending)   // closed while still loading
-            engine.getBusyStatus().end();
+        {
+            destroyRack();
+            return;
+        }
 
-        rackPending = false;
         if (rack != nullptr)
             rackScroll[rack->channelId] = { rack->view.getViewPosition(), rack->stripView.getViewPosition() };
 
-        rack.reset();
-        outer.setVisible (true);
+        rackShown = false;
         resized();
     }
 
-    bool isRackOpen() const   { return rack != nullptr; }
+    // The rack and its editors go for good - before a project load, an instrument's removal, etc.
+    void destroyRack()
+    {
+        if (rackPending)
+            engine.getBusyStatus().end();
+
+        if (rack != nullptr && rackShown)
+            rackScroll[rack->channelId] = { rack->view.getViewPosition(), rack->stripView.getViewPosition() };
+
+        rackPending = rackShown = false;
+        rack.reset();
+        resized();
+    }
+
+    bool isRackOpen() const   { return rack != nullptr && rackShown; }
+    bool rackShown = false;                 // in view (else kept out of sight, or none)
     juce::uint32 rackEditorsOpenedAt = 0;
     bool rackPending = false;               // built, loading out of sight
     juce::uint32 rackOpenedAt = 0;   // when the rack last created plugin editors (they may take the window's activation)

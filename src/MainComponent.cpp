@@ -73,7 +73,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         if (safe != nullptr)
             safe->pluginWindows.clear();
             safe->insertWindows.clear();
-            safe->mixerView.closeRack();   // its editors go before their plugins
+            safe->mixerView.destroyRack();   // its editors go before their plugins
     };
 
     dispatcher.onAfterProjectChange = [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::File& file)
@@ -338,7 +338,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     {
         pluginWindows.erase (id);
         closeInsertWindows (engine.getAudioChannelForInstrument (id), -1);   // its channel's inserts go with it
-        mixerView.closeRack();
+        mixerView.destroyRack();
     };
     mixerView.onOpenInsert = [this] (auto channel, int slot) { openInsertWindow (channel, slot); };
     mixerView.onBeforeInsertRemove = [this] (auto channel, int slot) { closeInsertWindows (channel, slot); };
@@ -616,7 +616,7 @@ MainComponent::~MainComponent()
 
     insertWindows.clear();
 
-    mixerView.closeRack();   // its editors go before their plugins
+    mixerView.destroyRack();   // its editors go before their plugins
 }
 
 //==============================================================================
@@ -1152,7 +1152,7 @@ void MainComponent::newProject()
 
         safe->insertWindows.clear();
 
-        safe->mixerView.closeRack();   // its editors go before their plugins
+        safe->mixerView.destroyRack();   // its editors go before their plugins
         safe->engine.clearProject();
         safe->currentProjectFile = juce::File();
         safe->selectedTrack = 0;
@@ -1184,7 +1184,7 @@ void MainComponent::loadProjectDialog()
                 const auto file = chooser.getResult();
                 safe->pluginWindows.clear();
                 safe->insertWindows.clear();
-                safe->mixerView.closeRack();   // its editors go before their plugins
+                safe->mixerView.destroyRack();   // its editors go before their plugins
                 safe->statusLabel.setText ("Loading " + file.getFileName() + "...", juce::dontSendNotification);
 
                 safe->engine.loadProject (file, [safe, file] (bool ok, const juce::String& warnings)
