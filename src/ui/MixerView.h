@@ -1233,19 +1233,30 @@ public:
 
         // The rack is built out of sight (beside the view - its plugin editors are native windows, so
         // nothing can be drawn over them while they load); the mixer stays until it has settled
+        if (rack != nullptr || rackPending)
+            return;
+
         rackPending = true;
-        rackOpenedAt = juce::Time::getMillisecondCounter();
         engine.getBusyStatus().begin ("Opening the rack");   // the busy box, until it shows
         engine.getBusyStatus().update ("Loading the inserts' editors");
-        rack = std::make_unique<Rack> (*this, id);
-        addAndMakeVisible (*rack);
-        resized();
 
-        if (auto it = rackScroll.find (id); it != rackScroll.end())   // where it was left
+        // The editors load (and block) only once the busy box has been drawn
+        juce::Timer::callAfterDelay (60, [safe = juce::Component::SafePointer<MixerView> (this), id]
         {
-            rack->view.setViewPosition (it->second.first);
-            rack->stripView.setViewPosition (it->second.second);
-        }
+            if (safe == nullptr || ! safe->rackPending || safe->rack != nullptr)
+                return;   // closed meanwhile
+
+            safe->rackOpenedAt = juce::Time::getMillisecondCounter();
+            safe->rack = std::make_unique<Rack> (*safe, id);
+            safe->addAndMakeVisible (*safe->rack);
+            safe->resized();
+
+            if (auto it = safe->rackScroll.find (id); it != safe->rackScroll.end())   // where it was left
+            {
+                safe->rack->view.setViewPosition (it->second.first);
+                safe->rack->stripView.setViewPosition (it->second.second);
+            }
+        });
     }
 
     // Called by the timer: the rack shows once its editors have stopped loading and resizing
