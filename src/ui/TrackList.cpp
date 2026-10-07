@@ -417,10 +417,13 @@ public:
         soloButton.setClickingTogglesState (true);
         theme::setButtonRole (soloButton, "solo");
         soloButton.setConnectedEdges (juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);   // meter|S|M: one unit
-        soloButton.onClick = [this]
+        soloButton.onClick = [this]   // a group: the channels it sums
         {
-            if (const auto channel = engine.getAudioChannelForInstrument (instrumentId); channel != 0)
-                engine.setAudioChannelSoloed (channel, soloButton.getToggleState());
+            const auto bus = engine.getInstrumentGroupBus (instrumentId);
+
+            for (auto channel : engine.getAudioChannelIds())
+                if (engine.getAudioChannelOutput (channel) == bus)
+                    engine.setAudioChannelSoloed (channel, soloButton.getToggleState());
         };
 
         muteButton.setTooltip ("Mute the instrument");
@@ -429,15 +432,21 @@ public:
         muteButton.setConnectedEdges (juce::Button::ConnectedOnLeft);
         muteButton.onClick = [this]
         {
-            if (auto* p = engine.getAudioChannel (engine.getAudioChannelForInstrument (instrumentId)))
+            if (auto* p = engine.getAudioChannel (engine.getInstrumentGroupBus (instrumentId)))
                 p->setMuted (muteButton.getToggleState());
         };
 
         for (auto* c : std::initializer_list<juce::Component*> { &soloButton, &muteButton, &meter })
         {
             c->setWantsKeyboardFocus (false);
-            addAndMakeVisible (c);
+            addChildComponent (c);   // (a group's)
         }
+
+        groupButton.setTooltip ("Group: the instrument's audio summed on a bus of its own (one strip in the mixer)");
+        groupButton.setClickingTogglesState (true);
+        groupButton.setWantsKeyboardFocus (false);
+        groupButton.onClick = [this] { engine.setInstrumentGrouped (instrumentId, groupButton.getToggleState()); owner.refreshSoon(); };
+        addAndMakeVisible (groupButton);
 
         nameLabel.setFont (sidebar::trackNameFont().withHeight (15.0f));
         nameLabel.setColour (juce::Label::textColourId, juce::Colours::transparentBlack);
@@ -455,15 +464,34 @@ public:
 
     void refresh()
     {
-        const auto channel = engine.getAudioChannelForInstrument (instrumentId);
+        // Folder-like until grouped; a group gets its name on tape, its level, S and M (its bus)
+        const auto bus = engine.getInstrumentGroupBus (instrumentId);
+        const auto grouped = bus != 0;
+        groupButton.setToggleState (grouped, juce::dontSendNotification);
 
-        if (auto* p = engine.getAudioChannel (channel))
+        for (auto* c : std::initializer_list<juce::Component*> { &soloButton, &muteButton, &meter })
+            c->setVisible (grouped);
+
+        if (auto* p = engine.getAudioChannel (bus))
         {
             muteButton.setToggleState (p->isMuted(), juce::dontSendNotification);
             meter.update (p->getLastPeak());
         }
 
-        soloButton.setToggleState (channel != 0 && engine.isAudioChannelSoloed (channel), juce::dontSendNotification);
+        bool anySoloed = false;
+
+        for (auto channel : engine.getAudioChannelIds())
+            if (grouped && engine.getAudioChannelOutput (channel) == bus)
+                anySoloed = anySoloed || engine.isAudioChannelSoloed (channel);
+
+        soloButton.setToggleState (anySoloed, juce::dontSendNotification);
+
+        if (grouped != wasGrouped)
+        {
+            wasGrouped = grouped;
+            resized();
+            repaint();
+        }
     }
 
     void resized() override
@@ -473,11 +501,19 @@ public:
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 20).reduced (0, 4);
         iconBox = area.removeFromLeft (sidebar::iconWidth);
         area.removeFromLeft (5);
-        meter.setBounds (area.removeFromLeft (7).withSizeKeepingCentre (7, 20));
-        area.removeFromLeft (1);
-        soloButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20));
-        muteButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20).expanded (1, 0).withTrimmedRight (1));
-        tapeLeft = area.getX() + 6;
+        groupButton.setBounds (area.removeFromRight (28).withSizeKeepingCentre (20, 20));
+
+        if (wasGrouped)   // a group: its unit, then the tape
+        {
+            meter.setBounds (area.removeFromLeft (7).withSizeKeepingCentre (7, 20));
+            area.removeFromLeft (1);
+            soloButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20));
+            muteButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20).expanded (1, 0).withTrimmedRight (1));
+            area.removeFromLeft (6);
+        }
+
+        tapeLeft = area.getX();
+        tapeRight = area.getRight();
     }
 
     AudioEngine::InstrumentId getInstrumentId() const noexcept { return instrumentId; }
@@ -576,10 +612,25 @@ public:
 
         auto text = getLocalBounds().withLeft (tapeLeft).reduced (0, 2);   // the tape, after the level and S|M
 
-        // Its name on tape - the tape takes the instrument's colour (cream without one); drawn once, cached
-        const auto colour = AudioEngine::colourFromHex (engine.getInstrumentColour (instrumentId), mixer::tape::cream);
-        nameTape.draw (g, text.withTrimmedLeft (2), engine.getInstrumentName (instrumentId), colour,
-                       juce::jmin (64.0f, (float) getHeight() * 0.8f));   // the writing fills the tape (and grows with the zoom)
+        if (nameLabel.isBeingEdited())
+            return;
+
+        text = text.withRight (tapeRight);
+
+        if (wasGrouped)   // a group: its name on tape, in the instrument's colour (cream without one); cached
+        {
+            const auto colour = AudioEngine::colourFromHex (engine.getInstrumentColour (instrumentId), mixer::tape::cream);
+            nameTape.draw (g, text.withTrimmedLeft (2), engine.getInstrumentName (instrumentId), colour,
+                           juce::jmin (64.0f, (float) getHeight() * 0.8f));
+        }
+        else   // as a folder's name
+        {
+            const auto font = sidebar::folderNameFont();
+            g.setColour (sidebar::rowTextColour);
+            g.setFont (font);
+            g.drawText (engine.getInstrumentName (instrumentId).toUpperCase(), text.translated (0, sidebar::visualCentreOffset (font)),
+                        juce::Justification::centredLeft, true);
+        }
     }
 
 private:
@@ -592,7 +643,9 @@ private:
     juce::TextButton soloButton { "S" }, muteButton { "M" };
     mixer::LevelMeter meter { false };
     juce::Label nameLabel;   // only its editor shows (renaming); the tape draws the name
-    int tapeLeft = 0;
+    juce::TextButton groupButton { juce::String::fromUTF8 ("\xce\xa3") };
+    bool wasGrouped = false;
+    int tapeLeft = 0, tapeRight = 0;
     juce::Rectangle<int> iconBox;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InstrumentRow)
@@ -683,15 +736,30 @@ public:
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
 
-        theme::paintTrackBox (g, bounds, theme::Token::trackAudioBg, selected, subselected);
+        const auto isBus = engine.isBus (channelId);
+        theme::paintTrackBox (g, bounds, isBus ? theme::Token::trackBusBg : theme::Token::trackAudioBg, selected, subselected);
+        sidebar::drawTrackIcon (g, iconBox.toFloat(), isBus ? sidebar::TrackKind::bus : sidebar::TrackKind::audio,
+                                sidebar::rowTextColour.withAlpha (0.8f));
 
-        sidebar::drawTrackIcon (g, iconBox.toFloat(), sidebar::TrackKind::audio, sidebar::rowTextColour.withAlpha (0.8f));
+        if (nameLabel.isBeingEdited())
+            return;
 
-        // Its name on tape (as an instrument's): its instrument's colour, cream for a bus
-        if (! nameLabel.isBeingEdited())
+        if (engine.isGroupBus (engine.getAudioChannelOutput (channelId)))   // summed by a group: no tag, just its name
+        {
+            const auto font = sidebar::trackNameFont();
+            g.setColour (sidebar::rowTextColour);
+            g.setFont (font);
+            g.drawText (engine.getAudioChannelName (channelId), nameArea.translated (0, sidebar::visualCentreOffset (font)),
+                        juce::Justification::centredLeft, true);
+            return;
+        }
+
+        // Its name on tape (as a group's): its instrument's colour, cream for a bus
+        {
             nameTape.draw (g, nameArea.withHeight (getHeight()).withY (0), engine.getAudioChannelName (channelId),
                            AudioEngine::colourFromHex (engine.getInstrumentColour (engine.getAudioChannelInput (channelId)), mixer::tape::cream),
                            juce::jmin (48.0f, (float) getHeight() * 0.8f));
+        }
     }
 
     void resized() override

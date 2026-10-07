@@ -265,12 +265,15 @@ public:
         InstrumentId instrument = 0;
         AudioChannelId channel = 0;
 
+        bool tagged = false;   // carries a name tag (tape) and a level: an audio row not summed by a group, a
+                               // bus, a grouped folder or instrument - a tall row
+
         bool isTreeChild() const noexcept   { return folder != 0 || member != 0; }   // a folder's real child (positions count these)
 
         bool operator== (const SidebarItem& other) const noexcept
         {
             return folder == other.folder && member == other.member && depth == other.depth && parent == other.parent
-                    && instrument == other.instrument && channel == other.channel;
+                    && instrument == other.instrument && channel == other.channel && tagged == other.tagged;
         }
     };
 
@@ -443,6 +446,9 @@ public:
     // following its renames). The engine keeps that routing as things move: every audio channel inside
     // goes to its innermost grouped folder's bus (channels routed elsewhere by hand are left alone).
     void setFolderGrouped (FolderId, bool);
+    void setInstrumentGrouped (InstrumentId, bool);   // an instrument too: its audio on a bus of its own
+    bool isInstrumentGrouped (InstrumentId) const;
+    AudioChannelId getInstrumentGroupBus (InstrumentId) const;
     bool isFolderGrouped (FolderId) const;
     AudioChannelId getFolderGroupBus (FolderId) const;   // 0: not grouped
     bool isGroupBus (AudioChannelId) const;
@@ -554,6 +560,7 @@ private:
         AudioChannelId audioChannel = 0;
         std::vector<MidiChannelInfo> midiChannels;  // named channels (manual + synced)
         bool expanded = false;                      // its folder in the MIDI tree (collapsed by default)
+        AudioChannelId groupBus = 0;                // grouped: the bus its audio goes to
         juce::String colour;                        // its folder's ("#rrggbb", "" = none)
     };
 

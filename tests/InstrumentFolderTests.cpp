@@ -141,6 +141,32 @@ public:
             expect (engine.getBusIds().empty(), "its bus goes with the group");
         }
 
+                beginTest ("an instrument groups as a folder does; only rows with a tag are tagged");
+        {
+            engine.setInstrumentExpanded (instrument, true);
+            auto tagOf = [&] (auto match)
+            {
+                for (auto& item : engine.getSidebarItems (true, true))
+                    if (match (item))
+                        return item.tagged;
+
+                return false;
+            };
+
+            expect (! tagOf ([&] (auto& i) { return i.instrument == (int) instrument; }), "an instrument: no tag");
+            expect (tagOf ([&] (auto& i) { return i.channel == channel; }), "its audio: a tag");
+
+            engine.setInstrumentGrouped (instrument, true);
+            const auto bus = engine.getInstrumentGroupBus (instrument);
+            expectEquals (engine.getAudioChannelOutput (channel), bus);
+            expect (tagOf ([&] (auto& i) { return i.instrument == (int) instrument; }), "grouped: a tag");
+            expect (! tagOf ([&] (auto& i) { return i.channel == channel; }), "summed by a group: no tag");
+
+            engine.setInstrumentGrouped (instrument, false);
+            expectEquals (engine.getAudioChannelOutput (channel), 0);
+            expect (engine.getBusIds().empty());
+        }
+
                 beginTest ("membership follows routing");
         {
             engine.clearTrackOutputs (second);

@@ -1728,6 +1728,8 @@ private:
         {
             if (item.folder != 0 && engine.isFolderGrouped (item.folder))   // a group: its bus where the folder is
                 ids.push_back (engine.getFolderGroupBus (item.folder));
+            else if (item.instrument != 0 && engine.isInstrumentGrouped (item.instrument))   // (or the instrument)
+                ids.push_back (engine.getInstrumentGroupBus (item.instrument));
             else if (item.channel != 0 && ! engine.isGroupBus (engine.getAudioChannelOutput (item.channel)))
                 ids.push_back (item.channel);   // (the channels a group sums don't show: the group does)
         }

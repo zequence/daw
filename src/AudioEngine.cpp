@@ -1214,6 +1214,10 @@ void AudioEngine::removeBus (AudioChannelId id)
         if (folder.groupBus == id)
             folder.groupBus = 0;
 
+    for (auto& [instrumentId, instrument] : instruments)
+        if (instrument.groupBus == id)
+            instrument.groupBus = 0;
+
     graph.removeNode (it->second.node, updateKind());
     buses.erase (it);
 
@@ -1274,13 +1278,56 @@ void AudioEngine::setFolderGrouped (FolderId id, bool grouped)
 
 bool AudioEngine::isFolderGrouped (FolderId id) const   { return getFolderGroupBus (id) != 0; }
 
+void AudioEngine::setInstrumentGrouped (InstrumentId id, bool grouped)
+{
+    auto it = instruments.find (id);
+
+    if (it == instruments.end() || (it->second.groupBus != 0) == grouped)
+        return;
+
+    if (grouped)
+    {
+        const auto bus = addBus (it->second.name);
+        buses[bus].input = id;   // (a bus's input: the instrument it sums)
+        instruments[id].groupBus = bus;
+    }
+    else
+    {
+        const auto bus = it->second.groupBus;
+        it->second.groupBus = 0;
+
+        for (auto& [channelId, channel] : audioChannels)
+            if (channel.output == bus)
+                setAudioChannelOutput (channelId, 0);
+
+        removeBus (bus);
+    }
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    data->setProperty ("change", "grouped");
+    emitEvent ("instrumentChanged", data);
+}
+
+bool AudioEngine::isInstrumentGrouped (InstrumentId id) const   { return getInstrumentGroupBus (id) != 0; }
+
+AudioEngine::AudioChannelId AudioEngine::getInstrumentGroupBus (InstrumentId id) const
+{
+    const auto it = instruments.find (id);
+    return it != instruments.end() ? it->second.groupBus : 0;
+}
+
 AudioEngine::AudioChannelId AudioEngine::getFolderGroupBus (FolderId id) const
 {
     const auto it = folders.find (id);
     return it != folders.end() ? it->second.groupBus : 0;
 }
 
-bool AudioEngine::isGroupBus (AudioChannelId id) const   { return getGroupBusFolder (id) != 0; }
+bool AudioEngine::isGroupBus (AudioChannelId id) const
+{
+    const auto it = buses.find (id);
+    return it != buses.end() && (it->second.folder != 0 || it->second.input != 0);   // a folder's or an instrument's
+}
 
 AudioEngine::FolderId AudioEngine::getGroupBusFolder (AudioChannelId id) const
 {
@@ -1292,7 +1339,8 @@ AudioEngine::FolderId AudioEngine::getGroupBusFolder (AudioChannelId id) const
 // group); channels routed to another bus by hand stay where they are. Group buses take their folder's name.
 void AudioEngine::syncFolderGroups()
 {
-    if (syncingGroups || std::none_of (folders.begin(), folders.end(), [] (const auto& f) { return f.second.groupBus != 0; }))
+    if (syncingGroups || (std::none_of (folders.begin(), folders.end(), [] (const auto& f) { return f.second.groupBus != 0; })
+                            && std::none_of (instruments.begin(), instruments.end(), [] (const auto& i) { return i.second.groupBus != 0; })))
         return;
 
     const juce::ScopedValueSetter<bool> guard (syncingGroups, true);
@@ -1300,6 +1348,10 @@ void AudioEngine::syncFolderGroups()
     for (auto& [id, folder] : folders)
         if (auto bus = buses.find (folder.groupBus); bus != buses.end())
             bus->second.name = folder.name;
+
+    for (auto& [id, instrument] : instruments)
+        if (auto bus = buses.find (instrument.groupBus); bus != buses.end())
+            bus->second.name = instrument.name;
 
     std::vector<std::pair<int, FolderId>> enclosing;   // (depth, folder) of the folders around an item
 
@@ -1314,7 +1366,7 @@ void AudioEngine::syncFolderGroups()
         if (item.channel == 0 || isBus (item.channel))
             continue;
 
-        AudioChannelId wanted = 0;
+        AudioChannelId wanted = getInstrumentGroupBus (getAudioChannelInput (item.channel));   // its instrument's group first
 
         for (auto around = enclosing.rbegin(); around != enclosing.rend() && wanted == 0; ++around)
             wanted = getFolderGroupBus (around->second);
@@ -2532,7 +2584,7 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
     const auto pushInstrument = [&] (InstrumentId instrument, int depth, FolderId parent)
     {
         placed.insert (instrument);
-        items.push_back ({ 0, 0, depth, parent, instrument, 0 });
+        items.push_back ({ 0, 0, depth, parent, instrument, 0, isInstrumentGrouped (instrument) });
 
         if (skipCollapsed && ! isInstrumentExpanded (instrument))
             return;
@@ -2540,8 +2592,8 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
         for (auto trackId : tracksOfInstrument[instrument])   // its MIDI tracks, then its audio
             items.push_back ({ 0, trackId, depth + 1, parent, 0, 0 });
 
-        if (const auto channel = getAudioChannelForInstrument (instrument); channel != 0)
-            items.push_back ({ 0, 0, depth + 1, parent, 0, channel });
+        if (const auto channel = getAudioChannelForInstrument (instrument); channel != 0)   // tagged unless a group sums it
+            items.push_back ({ 0, 0, depth + 1, parent, 0, channel, ! isGroupBus (getAudioChannelOutput (channel)) });
     };
 
     const std::function<void (FolderId, int)> visit = [&] (FolderId parent, int depth)
@@ -2555,7 +2607,7 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
         {
             if (child.isFolder)
             {
-                items.push_back ({ child.id, 0, depth, parent });
+                items.push_back ({ child.id, 0, depth, parent, 0, 0, midiDomain && isFolderGrouped (child.id) });
 
                 if (! (skipCollapsed && isFolderCollapsed (child.id)))
                     visit (child.id, depth + 1);
@@ -2582,7 +2634,7 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
     if (midiDomain)   // the buses, last (audio rows of their own)
         for (auto id : getBusIds())
             if (! isGroupBus (id))
-                items.push_back ({ 0, 0, 0, 0, 0, id });
+                items.push_back ({ 0, 0, 0, 0, 0, id, true });
 
     return items;
 }
@@ -2971,6 +3023,9 @@ bool AudioEngine::saveProject (const juce::File& file)
         e->setAttribute ("id", id);
         e->setAttribute ("name", instrument.name);
         e->setAttribute ("expanded", instrument.expanded);
+
+        if (instrument.groupBus != 0)
+            e->setAttribute ("groupBus", instrument.groupBus);   // its group's bus (the BUS element)
         e->setAttribute ("colour", instrument.colour);
 
         if (auto* plugin = getInstrumentPlugin (id))
@@ -3308,6 +3363,12 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
                 state->idMap[element->getIntAttribute ("id")] = newId;
                 setInstrumentExpanded (newId, element->getBoolAttribute ("expanded", false));
+
+                if (auto bus = state->busIdMap.find (element->getIntAttribute ("groupBus")); bus != state->busIdMap.end())
+                {
+                    buses[bus->second].input = newId;   // its group's bus (made before the instruments)
+                    instruments[newId].groupBus = bus->second;
+                }
                 setInstrumentColour (newId, element->getStringAttribute ("colour"));
 
                 if (auto* stateElement = element->getChildByName ("STATE"))

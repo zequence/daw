@@ -31,7 +31,7 @@ namespace sidebar
 
     // A row's kind, as a small line symbol at its left (after Cubase): a folder, an instrument (a
     // keyboard), a MIDI track (the 5-pin MIDI plug), an audio track (a waveform)
-    enum class TrackKind { folder, instrument, midi, audio };
+    enum class TrackKind { folder, instrument, midi, audio, bus };
     constexpr int iconWidth = 14;
 
     inline void drawTrackIcon (juce::Graphics& g, juce::Rectangle<float> box, TrackKind kind, juce::Colour colour)
@@ -76,6 +76,20 @@ namespace sidebar
                 g.fillEllipse (juce::Rectangle<float> (1.7f, 1.7f).withCentre (pin));
             }
         }
+        else if (kind == TrackKind::bus)   // a bus: three lines gathered into one
+        {
+            juce::Path bus;
+
+            for (auto dy : { -4.0f, 0.0f, 4.0f })
+            {
+                bus.startNewSubPath (c.x - 6.0f, c.y + dy);
+                bus.quadraticTo (c.x - 1.5f, c.y + dy * 0.5f, c.x + 1.0f, c.y);
+            }
+
+            bus.startNewSubPath (c.x + 1.0f, c.y);
+            bus.lineTo (c.x + 6.0f, c.y);
+            g.strokePath (bus, juce::PathStrokeType (1.2f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
+        }
         else   // audio: a short waveform
         {
             juce::Path wave;
@@ -119,12 +133,12 @@ namespace sidebar
         return juce::Font (juce::FontOptions ("Segoe UI", height, juce::Font::plain).withStyle (folder ? "Semibold" : "Regular"));
     }
 
-    // Every row follows the zoom; an instrument folder's is taller (room for its name on tape)
+    // Every row follows the zoom; the rows with a name tag (audio, buses, grouped folders and instruments) are taller
     constexpr int instrumentExtraHeight = 10;
 
     inline int heightOf (const AudioEngine::SidebarItem& item)
     {
-        return trackRowHeight() + (item.instrument != 0 ? instrumentExtraHeight : 0);
+        return trackRowHeight() + (item.tagged ? instrumentExtraHeight : 0);   // a name tag: a taller row
     }
 
     // Automation mode (F2): only what can be automated shows - the MIDI tracks step out of the
