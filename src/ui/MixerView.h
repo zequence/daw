@@ -777,11 +777,14 @@ private:
             // The background is drawn once into an image, again only when the size or highlight changes
             const auto isHighlighted = kind == Kind::channel && owner.highlighted.count (channelId) > 0;
 
-            const auto summed = owner.engine.isGroupBus (owner.engine.getAudioChannelOutput (channelId));
+            const auto group = owner.engine.getAudioChannelOutput (channelId);
+            const auto summed = owner.engine.isGroupBus (group);
+            const auto stripe = summed ? owner.engine.getChannelTagColour (group) : juce::String();
 
             if (background.getWidth() != getWidth() || background.getHeight() != getHeight() || isHighlighted != backgroundHighlighted
-                || summed != backgroundSummed)
+                || summed != backgroundSummed || stripe != backgroundStripe)
             {
+                backgroundStripe = stripe;
                 backgroundHighlighted = isHighlighted;
                 backgroundSummed = summed;
                 background = makeBackground (isHighlighted);
@@ -791,6 +794,7 @@ private:
         }
 
         bool backgroundSummed = false;
+        juce::String backgroundStripe;   // a summed channel's: its group's colour
 
         juce::Image makeBackground (bool isHighlighted) const
         {
@@ -808,17 +812,22 @@ private:
             if (owner.engine.isGroupBus (channelId))   // a plastic cover over the top (its tape, the expand button): not the strip's
             {
                 const juce::Rectangle<float> cover (1.0f, 1.0f, (float) w - 2.0f, 40.0f);
-                const auto plastic = theme::colour (theme::Token::buttonBg).brighter (0.15f);
+                const auto plastic = theme::colour (theme::Token::buttonBg);   // dark: the button's colour
 
                 g.setColour (juce::Colours::black.withAlpha (0.45f));   // its shadow on the strip below
                 g.fillRoundedRectangle (cover.translated (0.0f, 3.0f), 4.0f);
-                g.setGradientFill (juce::ColourGradient (plastic.brighter (0.25f), 0.0f, cover.getY(),
-                                                         plastic.darker (0.2f), 0.0f, cover.getBottom(), false));
+                g.setColour (plastic);
                 g.fillRoundedRectangle (cover, 4.0f);
-                g.setColour (juce::Colours::white.withAlpha (0.3f));   // the sheen along its top edge
+                g.setColour (juce::Colours::white.withAlpha (0.12f));   // the sheen along its top edge
                 g.drawHorizontalLine (2, cover.getX() + 4.0f, cover.getRight() - 4.0f);
                 g.setColour (juce::Colours::black.withAlpha (0.6f));
                 g.drawRoundedRectangle (cover.reduced (0.5f), 4.0f, 1.0f);
+            }
+
+            if (backgroundSummed)   // a stripe along the top: it belongs to the group (in the group's colour)
+            {
+                g.setColour (AudioEngine::colourFromHex (backgroundStripe, juce::Colour (0xff7d9cc0)));
+                g.fillRoundedRectangle (juce::Rectangle<float> (1.0f, 0.0f, (float) w - 2.0f, 4.0f), 2.0f);
             }
 
             {
