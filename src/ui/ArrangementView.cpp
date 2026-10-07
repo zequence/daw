@@ -910,7 +910,16 @@ void ArrangementView::paint (juce::Graphics& g)
 
                 for (auto [start, end] : folderSpans (group))
                 {
-                    const auto noteShift = draggingFolder.folder == group && draggingFolder.start == start && didDrag
+                    // Moving with a dragged folder: its own span, or a folder (or instrument) inside it - all
+                    // of whose tracks are being moved - within the dragged stretch
+                    const auto insideDragged = draggingFolder.folder != 0 && draggingFolder.folder != group && ! folderTracks.empty()
+                                                 && start >= draggingFolder.start && start < draggingFolder.end
+                                                 && std::all_of (folderTracks.begin(), folderTracks.end(), [this] (auto track)
+                                                    {
+                                                        return std::find (draggingFolderTracks.begin(), draggingFolderTracks.end(), track)
+                                                                 != draggingFolderTracks.end();
+                                                    });
+                    const auto noteShift = didDrag && ((draggingFolder.folder == group && draggingFolder.start == start) || insideDragged)
                                              ? dragDeltaTicks : (juce::int64) 0;
                     const auto originalStart = start;
                     start += noteShift;
