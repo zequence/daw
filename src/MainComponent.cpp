@@ -1120,10 +1120,22 @@ void MainComponent::setEditorDocked (bool docked)
     dockHandle.repaint();
 }
 
+void MainComponent::showDockPage (DockPage page)
+{
+    if (contentView != ContentView::midiRegions)
+        showContent (ContentView::midiRegions);
+
+    dockPage = page;
+    setEditorDocked (true);
+    updateViewVisibility();
+    resized();
+    dockHandle.repaint();
+}
+
 // The docked editor's border: rounded at the top, down both sides
 void MainComponent::paintOverChildren (juce::Graphics& g)
 {
-    if (! isEditorDockedShowing() || ! pianoRollView.isVisible())
+    if (! isDockOpen())
         return;
 
     const auto box = pianoRollView.getBounds().expanded (2, 0).withTop (pianoRollView.getY() - 2).toFloat().reduced (0.5f);
@@ -1396,7 +1408,7 @@ void MainComponent::updateViewVisibility()
     arrangementView.setVisible (contentView == ContentView::midiRegions);
     pianoRollView.setVisible (isEditorShowing());
     dockHandle.setVisible (contentView == ContentView::midiRegions);
-    mixerView.setVisible (contentView == ContentView::mixer);
+    mixerView.setVisible (isMixerShowing());
     instrumentsView.setVisible (sidePane == SidePane::instruments);
     instrumentEditorView.setVisible (contentView == ContentView::instrumentEditor);
     expressionMapView.setVisible (contentView == ContentView::expressionMaps);
@@ -1494,7 +1506,7 @@ void MainComponent::timerCallback()
     // A click in a plugin editor inside the rack gives that plugin the keyboard, and the transport's
     // keys stop working. Once the mouse is up, the keys come back to the main window. (Typing into a
     // plugin's own text field in the rack does not work because of this; its own window does.)
-    if (contentView == ContentView::mixer && mixerView.isRackOpen()
+    if (isMixerShowing() && mixerView.isRackOpen()
         && ! juce::ModifierKeys::getCurrentModifiersRealtime().isAnyMouseButtonDown())
     {
         // Our window is the active one, but the keyboard is not ours: a plugin inside it has it (some
@@ -1791,10 +1803,7 @@ void MainComponent::openEditorOn (std::vector<AudioEngine::TrackId> tracks, Audi
             engine.setInstrumentExpanded (instrument, true);
 
     // In the panel under the arrangement (at its own height, kept from the last drag)
-    if (contentView != ContentView::midiRegions)
-        showContent (ContentView::midiRegions);
-
-    setEditorDocked (true);
+    showDockPage (DockPage::editor);
     pianoRollView.grabKeyboardFocus();
 
     pianoRollView.setTracks (std::move (tracks), edited);
@@ -1822,15 +1831,15 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
             return true;
         }
 
-        if (contentView == ContentView::mixer && mixerView.isRackOpen())   // the rack first, then the mixer
+        if (isMixerShowing() && mixerView.isRackOpen())   // the rack first, then the mixer's panel
         {
             mixerView.closeRack();
             return true;
         }
 
-        if (contentView == ContentView::mixer)   // the mixer: back where it came from
+        if (isMixerShowing())
         {
-            showContent (mainView);
+            setEditorDocked (false);
             return true;
         }
 
@@ -1841,17 +1850,6 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
             return true;
         }
 
-        if (contentView == ContentView::mixer && mixerView.isRackOpen())   // the rack, back to the mixer
-        {
-            mixerView.closeRack();
-            return true;
-        }
-
-        if (contentView == ContentView::mixer)   // then the mixer itself
-        {
-            showContent (mainView);
-            return true;
-        }
 
         // The MIDI editor: Esc first deselects the notes, then closes
         if (isEditorShowing() && pianoRollView.deselectNotes())
@@ -1958,7 +1956,10 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
 
     if (keys::matches ("view.mixer", key))
     {
-        showContent (contentView == ContentView::mixer ? mainView : ContentView::mixer);
+        if (isMixerShowing())
+            setEditorDocked (false);
+        else
+            showDockPage (DockPage::mixer);
         return true;
     }
 
@@ -2001,11 +2002,11 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
 
     // Global clip undo/redo on the selected track (the piano roll consumes its own first)
     if (keys::matches ("edit.undo", key))   // in the mixer: its own undo (the strips' settings)
-        return contentView == ContentView::mixer ? mixerView.undo()
+        return isMixerShowing() ? mixerView.undo()
                                                  : selectedTrack != 0 && engine.undoTrackSequence (selectedTrack);
 
     if (keys::matches ("edit.redo", key))
-        return contentView == ContentView::mixer ? mixerView.redo()
+        return isMixerShowing() ? mixerView.redo()
                                                  : selectedTrack != 0 && engine.redoTrackSequence (selectedTrack);
 
     return false;
@@ -2182,6 +2183,7 @@ void MainComponent::resized()
         {
             auto editorArea = arrangeArea.removeFromBottom (currentDockHeight());
             pianoRollView.setBounds (editorArea.withTrimmedLeft (2).withTrimmedRight (2).withTrimmedTop (2));   // inside its border
+            mixerView.setBounds (pianoRollView.getBounds());
         }
 
         dockHandle.setBounds (arrangeArea.removeFromBottom (dockHandleHeight));

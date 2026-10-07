@@ -44,7 +44,7 @@ public:
     void confirmQuit();
 
 private:
-    enum class ContentView { midiRegions, instrumentEditor, expressionMaps, mixer };   // (the MIDI editor: a panel under the arrangement)   // Instruments and History: the side pane
+    enum class ContentView { midiRegions, instrumentEditor, expressionMaps };   // (the MIDI editor and the mixer: the panel under the arrangement)   // (the MIDI editor: a panel under the arrangement)   // Instruments and History: the side pane
 
     // Instruments and History open as a pane on the right, beside the arrangement or the editor
     enum class SidePane { none, instruments, history };
@@ -123,9 +123,15 @@ private:
     // close it, drag to set its height - so the arrangement and the editor show together
     bool editorDocked = false;
     int dockHeight = 0;                    // 0 = the default (about 40% of the content); saved in the settings
-    static constexpr int dockHandleHeight = 7;
-    bool isEditorDockedShowing() const      { return editorDocked && contentView == ContentView::midiRegions; }
+    static constexpr int dockHandleHeight = 15;   // room for its tabs (MIDI, MIXER)
+    // The panel under the arrangement holds a page: the MIDI editor or the mixer (its tabs on the handle)
+    enum class DockPage { editor, mixer };
+    DockPage dockPage = DockPage::editor;
+    bool isDockOpen() const                 { return editorDocked && contentView == ContentView::midiRegions; }
+    bool isEditorDockedShowing() const      { return isDockOpen() && dockPage == DockPage::editor; }
     bool isEditorShowing() const            { return isEditorDockedShowing(); }
+    bool isMixerShowing() const             { return isDockOpen() && dockPage == DockPage::mixer; }
+    void showDockPage (DockPage);           // opens the panel on that page
     void setEditorDocked (bool);
 
     struct DockHandle final : juce::Component, juce::SettableTooltipClient
@@ -133,7 +139,14 @@ private:
         explicit DockHandle (MainComponent& o) : owner (o)
         {
             setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
-            setTooltip ("MIDI editor: click to open or close it here, drag to set its height");
+            setTooltip ("The MIDI editor and the mixer: a tab opens its page here (again: closes), a click elsewhere "
+                        "opens or closes the panel, a drag sets its height");
+        }
+
+        // The tabs, small, at the handle's left
+        juce::Rectangle<int> tabArea (DockPage page) const
+        {
+            return { page == DockPage::editor ? 8 : 52, 1, 42, getHeight() - 2 };
         }
 
         void paint (juce::Graphics& g) override
@@ -142,6 +155,23 @@ private:
             const auto grip = juce::Rectangle<float> (36.0f, 3.0f).withCentre (getLocalBounds().toFloat().getCentre());
             g.setColour (juce::Colours::white.withAlpha (owner.editorDocked ? 0.5f : 0.35f));
             g.fillRoundedRectangle (grip, 1.5f);
+
+            g.setFont (juce::FontOptions (9.5f, juce::Font::bold).withKerningFactor (0.08f));
+
+            for (auto [page, label] : { std::pair (DockPage::editor, "MIDI"), std::pair (DockPage::mixer, "MIXER") })
+            {
+                const auto open = owner.isDockOpen() && owner.dockPage == page;
+                const auto tab = tabArea (page).toFloat();
+
+                if (open)
+                {
+                    g.setColour (juce::Colours::white.withAlpha (0.12f));
+                    g.fillRoundedRectangle (tab, 2.5f);
+                }
+
+                g.setColour (juce::Colours::white.withAlpha (open ? 0.9f : 0.45f));
+                g.drawText (label, tab, juce::Justification::centred, false);
+            }
         }
 
         void mouseEnter (const juce::MouseEvent&) override { repaint(); }
@@ -171,10 +201,28 @@ private:
             owner.setEditorDocked (true);
         }
 
-        void mouseUp (const juce::MouseEvent&) override
+        void mouseUp (const juce::MouseEvent& event) override
         {
             if (! dragged)
-                owner.setEditorDocked (! owner.editorDocked);   // a click opens / closes it
+            {
+                auto onTab = false;
+
+                for (auto page : { DockPage::editor, DockPage::mixer })
+                    if (tabArea (page).contains (event.getPosition()))
+                    {
+                        onTab = true;
+
+                        if (owner.isDockOpen() && owner.dockPage == page)
+                            owner.setEditorDocked (false);   // its tab again: closes
+                        else
+                            owner.showDockPage (page);
+                    }
+
+                if (! onTab)
+                    owner.setEditorDocked (! owner.editorDocked);   // a click elsewhere opens / closes it
+            }
+
+            repaint();
 
             owner.engine.getSettingsFile().setValue ("dockHeight", owner.dockHeight);
             owner.engine.getSettingsFile().saveIfNeeded();
