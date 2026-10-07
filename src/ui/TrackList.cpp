@@ -1469,9 +1469,10 @@ void TrackList::showFolderMenu (AudioEngine::FolderId folderId)
             }
         }));
     menu.addSeparator();
-    menu.addItem ("Remove folder (contents move up)", [safe, folderId]
+    menu.addItem ("Remove folder and everything in it...", [safe, folderId]
     {
-        if (safe != nullptr) { safe->engine.removeFolder (folderId); safe->refresh(); }
+        if (safe != nullptr && safe->onRemoveFolder)
+            safe->onRemoveFolder (folderId);
     });
 
     menu.showMenuAsync (juce::PopupMenu::Options());

@@ -287,6 +287,13 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     // Double-click on a folder's region: the editor on the folder's tracks
     arrangementView.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
     trackList.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
+    trackList.onRemoveFolder = [this] (AudioEngine::FolderId folder)
+    {
+        Removal removal;
+        addFolderToRemoval (folder, removal);
+        removeAsking (removal, "the folder '" + engine.getFolderName (folder) + "' and everything in it");
+    };
+
     trackList.onGroupSelected = [this]   // a folder, an instrument or an audio row chosen
     {
         arrangementView.clearSelection();
@@ -776,6 +783,91 @@ void MainComponent::addTracks (const AddTrackDialog::Choice& choice)
     trackList.refresh();
 }
 
+// A folder's contents, all the way down: its tracks, instruments, audio tracks and folders
+void MainComponent::addFolderToRemoval (AudioEngine::FolderId folder, Removal& removal) const
+{
+    removal.folders.insert (folder);
+    int folderDepth = -1;
+
+    for (auto& item : engine.getSidebarItems (true, false))
+    {
+        if (folderDepth < 0)
+        {
+            if (item.folder == folder)
+                folderDepth = item.depth;
+
+            continue;
+        }
+
+        if (item.depth <= folderDepth)
+            break;
+
+        if (item.folder != 0)
+            removal.folders.insert (item.folder);
+        else if (item.instrument != 0)
+            removal.instruments.insert (item.instrument);
+        else if (item.member != 0 && engine.getTrackInstrument (item.member) == 0)
+            removal.tracks.insert (item.member);
+        else if (item.channel != 0 && engine.isAudioTrack (item.channel))
+            removal.audioTracks.insert (item.channel);
+    }
+}
+
+void MainComponent::removeAsking (Removal removal, const juce::String& what)
+{
+    juce::StringArray parts;
+
+    if (! removal.instruments.empty())   parts.add (juce::String ((int) removal.instruments.size()) + " instrument(s) with their tracks");
+    if (! removal.tracks.empty())        parts.add (juce::String ((int) removal.tracks.size()) + " MIDI track(s)");
+    if (! removal.audioTracks.empty())   parts.add (juce::String ((int) removal.audioTracks.size()) + " audio track(s)");
+
+    const auto message = "Remove " + what + "?" + (parts.isEmpty() ? juce::String() : "\n\n" + parts.joinIntoString (", ") + ".");
+
+    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, "Remove", message, "Remove", "Cancel", this,
+        juce::ModalCallbackFunction::create ([safe = juce::Component::SafePointer<MainComponent> (this), removal] (int result)
+        {
+            if (safe != nullptr && result == 1)
+                safe->removeNow (removal);
+        }));
+}
+
+void MainComponent::removeNow (const Removal& removal)
+{
+    for (auto instrument : removal.instruments)   // (its windows first, then it and its tracks)
+    {
+        auto params = new juce::DynamicObject();
+        params->setProperty ("instrumentId", instrument);
+        params->setProperty ("removeTracks", true);
+        commandDispatcher.run ("instrument.remove", juce::var (params));
+    }
+
+    for (auto track : removal.tracks)
+        engine.removeTrack (track);
+
+    for (auto channel : removal.audioTracks)
+        engine.removeAudioTrack (channel);
+
+    // Folders last, the deepest first (each one's subfolders are gone by then)
+    std::vector<std::pair<int, AudioEngine::FolderId>> byDepth;
+
+    for (auto& item : engine.getSidebarItems (true, false))
+        if (item.folder != 0 && removal.folders.count (item.folder) > 0)
+            byDepth.push_back ({ item.depth, item.folder });
+
+    std::sort (byDepth.rbegin(), byDepth.rend());
+
+    for (auto& [depth, folder] : byDepth)
+        engine.removeFolder (folder);
+
+    const auto remaining = engine.getTrackIds();
+
+    if (std::find (remaining.begin(), remaining.end(), selectedTrack) == remaining.end())
+        selectTrack (remaining.empty() ? 0 : remaining.front(), false);
+
+    trackList.refresh();
+    statusLabel.setText ("Removed " + juce::String (removal.count()) + (removal.count() == 1 ? " item" : " items"), juce::dontSendNotification);
+}
+
 void MainComponent::removeTrack (AudioEngine::TrackId id)
 {
     engine.removeTrack (id);
@@ -921,7 +1013,23 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     menu.addItem ("Clear clip", engine.getTrackSequence (id) != nullptr, false,
                   [safe, id] { if (safe != nullptr) safe->engine.setTrackSequence (id, nullptr); });
     menu.addSeparator();
-    if (instrument != 0)
+    if (const auto selection = trackList.getMultiSelection(); selection.size() > 1 && selection.count (id) > 0)
+    {
+        // Several selected: all of them (an instrument's track takes its instrument along)
+        Removal removal;
+
+        for (auto track : selection)
+        {
+            if (const auto owner = engine.getTrackInstrument (track); owner != 0)
+                removal.instruments.insert (owner);
+            else
+                removal.tracks.insert (track);
+        }
+
+        menu.addItem ("Remove the " + juce::String ((int) selection.size()) + " selected tracks...",
+                      [safe, removal] { if (safe != nullptr) safe->removeAsking (removal, "the selected tracks"); });
+    }
+    else if (instrument != 0)
         menu.addItem ("Remove instrument...", [safe, instrument] { if (safe != nullptr) safe->removeInstrumentAsking (instrument); });
     else
         menu.addItem ("Remove track", [safe, id]

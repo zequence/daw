@@ -39,6 +39,7 @@ public:
     std::function<void()> onGroupSelected;   // a folder, an instrument or an audio row chosen (the regions' selection goes)
     std::function<void (std::vector<AudioEngine::TrackId>)> onOpenEditorOnTracks;   // an instrument folder double-clicked
     std::function<void (AudioEngine::InstrumentId)> onInstrumentMenu;                 // right-click on an instrument folder or its audio
+    std::function<void (AudioEngine::FolderId)> onRemoveFolder;                       // the folder and everything in it (asks first)
 
     std::function<void (AudioEngine::TrackId)> onSelect, onArm, onShowContextMenu;
 

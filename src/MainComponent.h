@@ -67,6 +67,21 @@ private:
     void chooseNewInstrumentFor (AudioEngine::TrackId);
     void openPluginWindow (AudioEngine::InstrumentId);
     void addTracks (const AddTrackDialog::Choice&);
+
+    // Removing several things at once (asked first): the tracks, instruments (with their tracks), audio
+    // tracks and folders (with everything in them) given
+    struct Removal
+    {
+        std::set<AudioEngine::TrackId> tracks;
+        std::set<AudioEngine::InstrumentId> instruments;
+        std::set<AudioEngine::AudioChannelId> audioTracks;
+        std::set<AudioEngine::FolderId> folders;
+        int count() const   { return (int) (tracks.size() + instruments.size() + audioTracks.size() + folders.size()); }
+    };
+
+    void addFolderToRemoval (AudioEngine::FolderId, Removal&) const;
+    void removeAsking (Removal, const juce::String& what);
+    void removeNow (const Removal&);
     void openInsertWindow (AudioEngine::AudioChannelId, int slot);
     void closeInsertWindows (AudioEngine::AudioChannelId, int slot);   // slot -1: all
     void openTrackPluginWindow (AudioEngine::TrackId);   // toggles the track's (first) instrument GUI
