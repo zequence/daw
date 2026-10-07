@@ -1781,7 +1781,7 @@ private:
             if (item.folder != 0)
                 strip = engine.getFolderGroupBus (item.folder);
             else if (item.instrument != 0)
-                strip = engine.getInstrumentGroupBus (item.instrument);
+                strip = engine.getInstrumentGroupBus (item.instrument);   // (one output: its channel's row follows)
             else if (item.channel != 0 && ! engine.isGroupBus (item.channel))
                 strip = item.channel;
 

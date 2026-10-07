@@ -455,6 +455,11 @@ public:
     // following its renames). The engine keeps that routing as things move: every audio channel inside
     // goes to its innermost grouped folder's bus (channels routed elsewhere by hand are left alone).
     void setFolderGrouped (FolderId, bool);
+    // An instrument with one (stereo) output IS that channel in the tree: no group, no audio row of its own
+    // (its row carries the channel's tag, level, S, M); only instruments with several outputs group
+    int getInstrumentOutputCount (InstrumentId) const;   // (one for now: multi-output instruments come later)
+    bool isSingleOutputInstrument (InstrumentId id) const   { return getInstrumentOutputCount (id) <= 1; }
+
     void setInstrumentGrouped (InstrumentId, bool);   // an instrument too: its audio on a bus of its own
     bool isInstrumentGrouped (InstrumentId) const;
     AudioChannelId getInstrumentGroupBus (InstrumentId) const;

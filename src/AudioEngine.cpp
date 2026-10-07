@@ -1359,12 +1359,17 @@ void AudioEngine::setFolderGrouped (FolderId id, bool grouped)
 
 bool AudioEngine::isFolderGrouped (FolderId id) const   { return getFolderGroupBus (id) != 0; }
 
+int AudioEngine::getInstrumentOutputCount (InstrumentId id) const
+{
+    return getAudioChannelForInstrument (id) != 0 ? 1 : 0;
+}
+
 void AudioEngine::setInstrumentGrouped (InstrumentId id, bool grouped)
 {
     auto it = instruments.find (id);
 
-    if (it == instruments.end() || (it->second.groupBus != 0) == grouped)
-        return;
+    if (it == instruments.end() || (it->second.groupBus != 0) == grouped || (grouped && isSingleOutputInstrument (id)))
+        return;   // (one output: nothing to group - the instrument is its channel)
 
     if (grouped)
     {
@@ -2713,8 +2718,9 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
     const auto pushInstrument = [&] (InstrumentId instrument, int depth, FolderId parent)
     {
         placed.insert (instrument);
-        items.push_back ({ 0, 0, depth, parent, instrument, 0,
-                           isInstrumentGrouped (instrument) && ! isGroupBus (getAudioChannelOutput (getInstrumentGroupBus (instrument))) });
+        // Its tag: one output - its channel's (unless a group sums it); several - its group's (if grouped)
+        const auto strip = isSingleOutputInstrument (instrument) ? getAudioChannelForInstrument (instrument) : getInstrumentGroupBus (instrument);
+        items.push_back ({ 0, 0, depth, parent, instrument, 0, strip != 0 && ! isGroupBus (getAudioChannelOutput (strip)) });
 
         if (skipCollapsed && ! isInstrumentExpanded (instrument))
             return;

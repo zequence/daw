@@ -141,41 +141,38 @@ public:
             expect (engine.getBusIds().empty(), "its bus goes with the group");
         }
 
-                beginTest ("an instrument groups as a folder does; only rows with a tag are tagged");
+                beginTest ("an instrument with one output is its channel: tagged itself, never grouped");
         {
             engine.setInstrumentExpanded (instrument, true);
-            auto tagOf = [&] (auto match)
+            auto instrumentTagged = [&]
             {
                 for (auto& item : engine.getSidebarItems (true, true))
-                    if (match (item))
+                    if (item.instrument == (int) instrument)
                         return item.tagged;
 
                 return false;
             };
 
-            expect (! tagOf ([&] (auto& i) { return i.instrument == (int) instrument; }), "an instrument: no tag");
-            expect (tagOf ([&] (auto& i) { return i.channel == channel; }), "its audio: a tag");
+            expect (engine.isSingleOutputInstrument (instrument));
+            expect (instrumentTagged(), "one output: the instrument carries its channel's tag");
 
             engine.setInstrumentGrouped (instrument, true);
-            const auto bus = engine.getInstrumentGroupBus (instrument);
-            expectEquals (engine.getAudioChannelOutput (channel), bus);
-            expect (tagOf ([&] (auto& i) { return i.instrument == (int) instrument; }), "grouped: a tag");
-            expect (! tagOf ([&] (auto& i) { return i.channel == channel; }), "summed by a group: no tag");
-
-            engine.setInstrumentGrouped (instrument, false);
+            expect (! engine.isInstrumentGrouped (instrument), "one output: nothing to group");
             expectEquals (engine.getAudioChannelOutput (channel), 0);
             expect (engine.getBusIds().empty());
         }
 
-                beginTest ("groups within groups: a grouped instrument in a grouped folder feeds the folder's group, untagged");
+                beginTest ("groups within groups: an instrument in a grouped folder feeds the folder's group, untagged");
         {
+            const auto outerFolder = engine.addFolder (true, "Orchestra");
             const auto folder = engine.addFolder (true, "Brass");
+            engine.setFolderParent (folder, outerFolder);
             engine.setTrackFolder (first, folder);
             engine.setTrackFolder (second, folder);
-            engine.setInstrumentGrouped (instrument, true);
             engine.setFolderGrouped (folder, true);
+            engine.setFolderGrouped (outerFolder, true);
 
-            const auto inner = engine.getInstrumentGroupBus (instrument), outer = engine.getFolderGroupBus (folder);
+            const auto inner = engine.getFolderGroupBus (folder), outer = engine.getFolderGroupBus (outerFolder);
             expectEquals (engine.getAudioChannelOutput (channel), inner);
             expectEquals (engine.getAudioChannelOutput (inner), outer);
             expect (! engine.setAudioChannelOutput (outer, inner), "no loops");
@@ -188,9 +185,10 @@ public:
 
             expect (! instrumentTagged, "inside a group: no tag");
 
-            engine.setFolderGrouped (folder, false);
+            engine.setFolderGrouped (outerFolder, false);
             expectEquals (engine.getAudioChannelOutput (inner), 0);
-            engine.setInstrumentGrouped (instrument, false);
+            engine.setFolderGrouped (folder, false);
+            expectEquals (engine.getAudioChannelOutput (channel), 0);
             engine.setTrackFolder (first, 0);
             engine.setTrackFolder (second, 0);
         }

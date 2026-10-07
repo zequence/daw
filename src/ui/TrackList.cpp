@@ -418,8 +418,14 @@ public:
         soloButton.setClickingTogglesState (true);
         theme::setButtonRole (soloButton, "solo");
         soloButton.setConnectedEdges (juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);   // meter|S|M: one unit
-        soloButton.onClick = [this]   // a group: the channels it sums
+        soloButton.onClick = [this]   // its channel, or the channels its group sums
         {
+            if (engine.isSingleOutputInstrument (instrumentId))
+            {
+                engine.setAudioChannelSoloed (engine.getAudioChannelForInstrument (instrumentId), soloButton.getToggleState());
+                return;
+            }
+
             const auto bus = engine.getInstrumentGroupBus (instrumentId);
 
             for (auto channel : engine.getAudioChannelIds())
@@ -433,7 +439,7 @@ public:
         muteButton.setConnectedEdges (juce::Button::ConnectedOnLeft);
         muteButton.onClick = [this]
         {
-            if (auto* p = engine.getAudioChannel (engine.getInstrumentGroupBus (instrumentId)))
+            if (auto* p = engine.getAudioChannel (strip()))
                 p->setMuted (muteButton.getToggleState());
         };
 
@@ -463,12 +469,21 @@ public:
         addAndMakeVisible (nameLabel);
     }
 
+    // The strip the row stands for: its one output's channel, or (several outputs) its group's bus
+    AudioEngine::AudioChannelId strip() const
+    {
+        return engine.isSingleOutputInstrument (instrumentId) ? engine.getAudioChannelForInstrument (instrumentId)
+                                                               : engine.getInstrumentGroupBus (instrumentId);
+    }
+
     void refresh()
     {
-        // Folder-like until grouped; a group gets its name on tape, its level, S and M (its bus)
-        const auto bus = engine.getInstrumentGroupBus (instrumentId);
-        const auto grouped = bus != 0;
-        groupButton.setToggleState (grouped, juce::dontSendNotification);
+        // Its tag, level, S and M: its one output's (unless a group sums it), or its group's; else folder-like
+        const auto bus = strip();
+        const auto single = engine.isSingleOutputInstrument (instrumentId);
+        const auto grouped = bus != 0 && ! engine.isGroupBus (engine.getAudioChannelOutput (bus));
+        groupButton.setVisible (! single);   // (one output: nothing to group)
+        groupButton.setToggleState (engine.isInstrumentGrouped (instrumentId), juce::dontSendNotification);
 
         for (auto* c : std::initializer_list<juce::Component*> { &soloButton, &muteButton, &meter })
             c->setVisible (grouped);
@@ -481,9 +496,12 @@ public:
 
         bool anySoloed = false;
 
-        for (auto channel : engine.getAudioChannelIds())
-            if (grouped && engine.getAudioChannelOutput (channel) == bus)
-                anySoloed = anySoloed || engine.isAudioChannelSoloed (channel);
+        if (single)
+            anySoloed = engine.isAudioChannelSoloed (bus);
+        else
+            for (auto channel : engine.getAudioChannelIds())
+                if (grouped && engine.getAudioChannelOutput (channel) == bus)
+                    anySoloed = anySoloed || engine.isAudioChannelSoloed (channel);
 
         soloButton.setToggleState (anySoloed, juce::dontSendNotification);
 

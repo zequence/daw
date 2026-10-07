@@ -158,6 +158,13 @@ namespace sidebar
         std::erase_if (items, [&engine] (const AudioEngine::SidebarItem& item)
                        { return item.channel != 0 && engine.isGroupBus (engine.getAudioChannelOutput (item.channel)); });
 
+        // An instrument with one output is that channel: no audio row of its own
+        std::erase_if (items, [&engine] (const AudioEngine::SidebarItem& item)
+                       {
+                           const auto instrument = item.channel != 0 ? engine.getAudioChannelInput (item.channel) : 0;
+                           return instrument != 0 && engine.isSingleOutputInstrument (instrument);
+                       });
+
         return items;
     }
 
