@@ -329,7 +329,6 @@ private:
             // --- Pan, fader, meter, solo, mute: working on channels and the master ---
             pan.setRange (-1.0, 1.0, 0.01);
             pan.setDoubleClickReturnValue (true, 0.0);
-            pan.alwaysShowValue = true;
             pan.format = [] (double v)
             {
                 if (std::abs (v) < 0.005) return juce::String ("0");
@@ -555,6 +554,8 @@ private:
 
         void tick()
         {
+            level.setVisible (fader.isMouseButtonDown());   // the fader's dB shows only while it moves
+
             if (auto* p = processor())
                 meter.update (p->getLastPeak(), p->getLastRms());
         }

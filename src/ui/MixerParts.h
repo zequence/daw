@@ -159,7 +159,7 @@ struct Knob : juce::Slider
 
         if (alwaysShowValue || isMouseButtonDown())
         {
-            const auto font = juce::Font (juce::FontOptions (alwaysShowValue ? 10.5f : 10.0f, juce::Font::bold));
+            const auto font = juce::Font (juce::FontOptions (12.0f, juce::Font::bold));
             const auto text = format (getValue());
 
             if (isMouseButtonDown())   // while turning: on a black label, readable on any cap
