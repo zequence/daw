@@ -103,6 +103,7 @@ public:
         layoutBody();
     }
 
+    int levelTop = 0;   // where a channel strip's pan and fader begin (the other strips follow it)
     static constexpr int fitHeight = 1240 + 20;   // a strip, its margins and the channels' scrollbar
     float scale = 0.0f;   // 0 = not yet read from the settings
 
@@ -723,6 +724,13 @@ private:
             area.removeFromBottom (4);
             level.setBounds (area.removeFromBottom (16));
 
+            // The faders are one height on every strip: the Aux buses and the master (no aux sends,
+            // no EQ) start theirs where the channels' do - the master's, below where pan would be
+            if (kind == Kind::channel)
+                owner.levelTop = area.getY();
+            else if (owner.levelTop > 0)
+                area.setTop (owner.levelTop + (kind == Kind::master ? 64 + 4 : 0));
+
             if (kind != Kind::master)   // drive and pan, side by side, by the level
             {
                 auto knobs = area.removeFromTop (64);   // pan as big as the EQ's knobs, drive 46 px
@@ -819,10 +827,10 @@ private:
         const auto width = outer.getMaximumVisibleWidth();
         body.setSize (width, height);
 
-        master->setBounds (width - stripWidth - 8, 4, stripWidth, height - 8);
+        const auto stripsHeight = height - 12;   // room for the channels' scrollbar, shown or not: every strip one height
+        master->setBounds (width - stripWidth - 8, 4, stripWidth, stripsHeight - 8);
         channelsViewport.setBounds (4, 0, width - stripWidth - 20, height);
 
-        const auto stripsHeight = height - (channelsViewport.isHorizontalScrollBarShown() ? 12 : 0);
         const auto gap = 14;   // between the channels and the Aux buses
         const auto count = (int) channelStrips.size();
         strips.setSize (count * (stripWidth + 4) + gap + 6 * (stripWidth + 4) + 4, stripsHeight);
@@ -832,6 +840,11 @@ private:
 
         for (int i = 0; i < (int) auxStrips.size(); ++i)
             auxStrips[(size_t) i]->setBounds (4 + count * (stripWidth + 4) + gap + i * (stripWidth + 4), 4, stripWidth, stripsHeight - 8);
+
+        for (auto& strip : auxStrips)   // now that the channels have set levelTop
+            strip->resized();
+
+        master->resized();
     }
 
     AudioEngine& engine;
