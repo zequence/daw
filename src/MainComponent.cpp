@@ -965,7 +965,7 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
 
         for (auto& item : safe->engine.getSidebarItems (true, false))
         {
-            if (item.parent == parent && item.isTreeChild())
+            if (item.parent == parent && safe->engine.isTreeSlot (item))
                 ++index;
 
             if (item.member == id)

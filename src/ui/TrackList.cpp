@@ -84,19 +84,19 @@ public:
             return;
         }
 
-        owner.rowMouseDown (this, false, trackId, event);
+        owner.rowMouseDown (this, { RowRef::Kind::track, trackId }, event);
     }
 
     void mouseDrag (const juce::MouseEvent& event) override
     {
         if (! event.mods.isPopupMenu())
-            owner.rowMouseDrag (this, false, trackId, event);
+            owner.rowMouseDrag (this, { RowRef::Kind::track, trackId }, event);
     }
 
     void mouseUp (const juce::MouseEvent& event) override
     {
         if (! event.mods.isPopupMenu())
-            owner.finishRowDrag (trackId);
+            owner.finishRowDrag ({ RowRef::Kind::track, trackId });
     }
 
     void mouseDoubleClick (const juce::MouseEvent& event) override
@@ -288,13 +288,13 @@ public:
             return;
         }
 
-        owner.rowMouseDown (this, true, folderId, event);
+        owner.rowMouseDown (this, { RowRef::Kind::folder, folderId }, event);
     }
 
     void mouseDrag (const juce::MouseEvent& event) override
     {
         if (! event.mods.isPopupMenu())
-            owner.rowMouseDrag (this, true, folderId, event);
+            owner.rowMouseDrag (this, { RowRef::Kind::folder, folderId }, event);
     }
 
     void mouseUp (const juce::MouseEvent& event) override
@@ -305,7 +305,7 @@ public:
         // A click (no drag happened): the arrow toggles collapse; the rest of
         // the row selects the folder (ISSUES.md) - which selects every track
         // inside it, ready for multi-channel work.
-        if (! owner.finishRowDrag (folderId))
+        if (! owner.finishRowDrag ({ RowRef::Kind::folder, folderId }))
         {
             if (event.x < iconBox.getRight() + 2)   // the arrow or the folder symbol: open / close
                 engine.setFolderCollapsed (folderId, ! engine.isFolderCollapsed (folderId));
@@ -565,28 +565,13 @@ public:
             return;
         }
 
-        owner.drag = {};
-        owner.clearSelectionOnMouseUp = false;
+        owner.rowMouseDown (this, { RowRef::Kind::instrument, instrumentId }, event);
     }
 
-    void mouseDrag (const juce::MouseEvent& event) override
+    void mouseDrag (const juce::MouseEvent& event) override   // the whole instrument: all its tracks together
     {
-        if (event.mods.isPopupMenu())
-            return;
-
-        if (! owner.drag.active && getLocalBounds().contains (event.getPosition()))
-            return;
-
-        if (! owner.drag.active)   // the whole instrument: all its tracks together
-        {
-            owner.drag.active = true;
-            owner.drag.sourceIsFolder = false;
-            owner.drag.sourceId = 0;
-            owner.drag.draggedTracks = engine.getInstrumentTracks (instrumentId);
-        }
-
-        owner.computeDropTarget (event.getEventRelativeTo (&owner.rowContainer).getPosition().y);
-        owner.rowContainer.repaint();
+        if (! event.mods.isPopupMenu())
+            owner.rowMouseDrag (this, { RowRef::Kind::instrument, instrumentId }, event);
     }
 
     void mouseUp (const juce::MouseEvent& event) override
@@ -594,7 +579,7 @@ public:
         if (event.mods.isPopupMenu())
             return;
 
-        if (! owner.finishRowDrag (0))
+        if (! owner.finishRowDrag ({ RowRef::Kind::instrument, instrumentId }))
         {
             if (event.x < iconBox.getRight() + 2)   // the arrow or the keyboard symbol: open / close
                 engine.setInstrumentExpanded (instrumentId, ! engine.isInstrumentExpanded (instrumentId));
@@ -738,7 +723,7 @@ public:
     {
         if (! event.mods.isPopupMenu())
         {
-            owner.selectChannel (channelId, event.mods);
+            owner.rowMouseDown (this, ref(), event);
             return;
         }
 
@@ -747,6 +732,11 @@ public:
             const auto id = channelId;
             auto& eng = engine;
             juce::PopupMenu menu;
+            menu.addSubMenu ("Color", colours::buildMenu (eng.getAudioTrackColour (id), [&eng, id] (juce::String hex)
+            {
+                eng.setAudioTrackColour (id, hex);
+            }));
+            menu.addSeparator();
             menu.addItem ("Remove audio track", [&eng, id] { eng.removeAudioTrack (id); });
             menu.showMenuAsync (juce::PopupMenu::Options());
             return;
@@ -758,6 +748,21 @@ public:
     }
 
     AudioEngine::AudioChannelId getChannelId() const noexcept   { return channelId; }
+
+    // An audio track moves (dragged, alone or with others); an instrument's output only selects
+    RowRef ref() const   { return { engine.isAudioTrack (channelId) ? RowRef::Kind::audioTrack : RowRef::Kind::channel, channelId }; }
+
+    void mouseDrag (const juce::MouseEvent& event) override
+    {
+        if (! event.mods.isPopupMenu())
+            owner.rowMouseDrag (this, ref(), event);
+    }
+
+    void mouseUp (const juce::MouseEvent& event) override
+    {
+        if (! event.mods.isPopupMenu())
+            owner.finishRowDrag (ref());
+    }
 
     void setSelected (bool should)   { if (selected != should) { selected = should; repaint(); } }
 
@@ -846,8 +851,8 @@ void TrackList::setSelectedTrack (AudioEngine::TrackId id)
 
     if (id != 0)
     {
-        selectedFolder = 0;   // a track chosen (e.g. a folder opened in the editor: its first track) ends the folder selection
-        selectedInstrument = 0;
+        selectedFolders.clear();   // a track chosen (e.g. a folder opened in the editor: its first track) ends the folder selection
+        selectedInstruments.clear();
         selectedChannels.clear();
     }
 
@@ -887,7 +892,7 @@ void TrackList::refresh()
     // A selected folder or instrument selects everything inside it: those rows are subselected (the
     // theme's own colour); the tracks' own selection highlight steps aside meanwhile
     std::set<RowKey> subselectedRows;
-    const auto groupSelected = selectedFolder != 0 || selectedInstrument != 0;
+    const auto groupSelected = ! selectedFolders.empty() || ! selectedInstruments.empty();
 
     if (groupSelected)
     {
@@ -895,18 +900,13 @@ void TrackList::refresh()
 
         for (auto& item : items)
         {
-            if (groupDepth < 0)
-            {
-                if ((selectedFolder != 0 && item.folder == selectedFolder) || (selectedInstrument != 0 && item.instrument == selectedInstrument))
-                    groupDepth = item.depth;
+            if (groupDepth >= 0 && item.depth <= groupDepth)
+                groupDepth = -1;
 
-                continue;
-            }
-
-            if (item.depth <= groupDepth)
-                break;
-
-            subselectedRows.insert ({ item.folder, item.member, item.depth, item.instrument, item.channel });
+            if (groupDepth >= 0)
+                subselectedRows.insert ({ item.folder, item.member, item.depth, item.instrument, item.channel });
+            else if (selectedFolders.count (item.folder) > 0 || selectedInstruments.count (item.instrument) > 0)
+                groupDepth = item.depth;
         }
     }
 
@@ -916,18 +916,18 @@ void TrackList::refresh()
         const auto sub = subselectedRows.count (key) > 0;
 
         if (auto* trackRow = dynamic_cast<Row*> (component.get()))
-            trackRow->refresh (! groupSelected && selectedChannels.empty()   // (audio rows chosen: no track shows selected)
-                                 && (multiSelection.empty() ? trackRow->getTrackId() == selectedTrack
-                                                            : multiSelection.count (trackRow->getTrackId()) > 0),
+            trackRow->refresh (! multiSelection.empty() ? multiSelection.count (trackRow->getTrackId()) > 0
+                                                        : (! groupSelected && selectedChannels.empty()   // (other rows chosen: no track shows selected)
+                                                           && trackRow->getTrackId() == selectedTrack),
                                engine.isTrackArmed (trackRow->getTrackId()), sub);
         else if (auto* folderRow = dynamic_cast<FolderRow*> (component.get()))
         {
-            folderRow->setSelected (folderRow->getFolderId() == selectedFolder, sub);
+            folderRow->setSelected (selectedFolders.count (folderRow->getFolderId()) > 0, sub);
             folderRow->refresh();
         }
         else if (auto* instrumentRow = dynamic_cast<InstrumentRow*> (component.get()))
         {
-            instrumentRow->setSelected (instrumentRow->getInstrumentId() == selectedInstrument, sub);
+            instrumentRow->setSelected (selectedInstruments.count (instrumentRow->getInstrumentId()) > 0, sub);
             instrumentRow->refresh();
         }
         else if (auto* audioRow = dynamic_cast<AudioRow*> (component.get()))
@@ -944,13 +944,13 @@ void TrackList::refresh()
 void TrackList::selectInstrument (AudioEngine::InstrumentId instrumentId)
 {
     multiSelection.clear();
-    selectedFolder = 0;
+    selectedFolders.clear();
     selectedChannels.clear();
 
     if (const auto tracks = engine.getInstrumentTracks (instrumentId); ! tracks.empty() && onSelect)
         onSelect (tracks.front());
 
-    selectedInstrument = instrumentId;   // (after onSelect: choosing the track clears it)
+    selectedInstruments = { instrumentId };   // (after onSelect: choosing the track clears it)
 
     if (onGroupSelected)
         onGroupSelected();
@@ -976,9 +976,9 @@ void TrackList::setEditedTracks (std::vector<AudioEngine::TrackId> shown, AudioE
 void TrackList::selectFolder (AudioEngine::FolderId folderId)
 {
     multiSelection.clear();
-    selectedInstrument = 0;
+    selectedInstruments.clear();
     selectedChannels.clear();
-    selectedFolder = folderId;
+    selectedFolders = { folderId };
 
     if (onSelectionChanged)
         onSelectionChanged (multiSelection);
@@ -989,55 +989,16 @@ void TrackList::selectFolder (AudioEngine::FolderId folderId)
     refreshSoon();
 }
 
-void TrackList::selectChannel (AudioEngine::AudioChannelId channelId, juce::ModifierKeys mods)
+void TrackList::selectChannel (AudioEngine::AudioChannelId channelId, juce::ModifierKeys)
 {
-    auto chosen = selectedChannels;
-
-    if (mods.isCtrlDown())
-    {
-        if (! chosen.erase (channelId))
-            chosen.insert (channelId);
-    }
-    else if (mods.isShiftDown() && channelAnchor != 0)   // the audio rows from the anchor to here
-    {
-        chosen.clear();
-        bool inRange = false;
-
-        for (auto& item : engine.getSidebarItems (true, true))
-        {
-            if (item.channel == 0)
-                continue;
-
-            const auto edge = item.channel == channelAnchor || item.channel == channelId;
-
-            if (edge || inRange)
-                chosen.insert (item.channel);
-
-            if (edge)
-            {
-                if (inRange || channelAnchor == channelId)
-                    break;
-
-                inRange = true;
-            }
-        }
-    }
-    else
-    {
-        chosen = { channelId };
-    }
-
-    if (! mods.isShiftDown())
-        channelAnchor = channelId;
-
-    selectChannels (chosen);
+    selectChannels ({ channelId });
 }
 
 void TrackList::selectChannels (const std::set<AudioEngine::AudioChannelId>& channels)
 {
     multiSelection.clear();
-    selectedFolder = 0;
-    selectedInstrument = 0;
+    selectedFolders.clear();
+    selectedInstruments.clear();
     selectedChannels = channels;
 
     if (onSelectionChanged)
@@ -1180,82 +1141,239 @@ void TrackList::realizeVisibleRows()
 //==============================================================================
 // Selection + drag
 
-void TrackList::rowMouseDown (juce::Component*, bool isFolder, int id, const juce::MouseEvent& event)
+TrackList::RowRef TrackList::refOf (const AudioEngine::SidebarItem& item) const
+{
+    using K = RowRef::Kind;
+
+    if (item.folder != 0)      return { K::folder, item.folder };
+    if (item.instrument != 0)  return { K::instrument, item.instrument };
+    if (item.member != 0)      return { K::track, item.member };
+
+    return { engine.isAudioTrack (item.channel) ? K::audioTrack : K::channel, item.channel };
+}
+
+bool TrackList::isSelected (RowRef ref) const
+{
+    switch (ref.kind)
+    {
+        case RowRef::Kind::folder:      return selectedFolders.count (ref.id) > 0;
+        case RowRef::Kind::instrument:  return selectedInstruments.count (ref.id) > 0;
+        case RowRef::Kind::track:       return multiSelection.count (ref.id) > 0 || (multiSelection.empty() && selectionCount() == 0 && ref.id == selectedTrack);
+        case RowRef::Kind::audioTrack:
+        case RowRef::Kind::channel:     return selectedChannels.count (ref.id) > 0;
+    }
+
+    return false;
+}
+
+int TrackList::selectionCount() const
+{
+    return (int) (multiSelection.size() + selectedFolders.size() + selectedInstruments.size() + selectedChannels.size());
+}
+
+void TrackList::selectOnly (RowRef ref)
+{
+    switch (ref.kind)
+    {
+        case RowRef::Kind::folder:      selectFolder (ref.id); break;
+        case RowRef::Kind::instrument:  selectInstrument (ref.id); break;
+        case RowRef::Kind::audioTrack:
+        case RowRef::Kind::channel:     selectChannel (ref.id); break;
+        case RowRef::Kind::track:
+            multiSelection.clear();
+
+            if (onSelect)
+                onSelect (ref.id);
+
+            if (onSelectionChanged)
+                onSelectionChanged (multiSelection);
+            break;
+    }
+}
+
+// Ctrl toggles a row (of any kind) in the selection; Shift takes every row from the anchor to here;
+// a plain click selects the row alone - or, on a row already in a bigger selection, waits for the
+// mouse-up (a drag moves them all)
+void TrackList::rowMouseDown (juce::Component*, RowRef ref, const juce::MouseEvent& event)
 {
     drag = {};
     clearSelectionOnMouseUp = false;
-
-    if (isFolder)
-        return;   // folders don't join the multi-selection; a plain drag moves just the folder
-
-    selectedFolder = 0;   // clicking a track ends a folder selection
-    const auto trackId = (AudioEngine::TrackId) id;
+    pressUsed = false;
 
     if (event.mods.isCtrlDown())
     {
-        // The current single selection becomes the first member of the group
-        if (multiSelection.empty() && selectedTrack != 0)
+        // The single selected track (nothing else chosen) becomes the first of several
+        if (selectionCount() == 0 && selectedTrack != 0)
             multiSelection.insert (selectedTrack);
 
-        if (multiSelection.count (trackId))
-            multiSelection.erase (trackId);
-        else
-            multiSelection.insert (trackId);
+        const auto toggle = [&ref] (auto& set) { if (! set.erase (ref.id)) set.insert (ref.id); };
 
-        shiftAnchor = trackId;
+        switch (ref.kind)
+        {
+            case RowRef::Kind::folder:      toggle (selectedFolders); break;
+            case RowRef::Kind::instrument:  toggle (selectedInstruments); break;
+            case RowRef::Kind::track:       toggle (multiSelection); break;
+            case RowRef::Kind::audioTrack:
+            case RowRef::Kind::channel:     toggle (selectedChannels); break;
+        }
+
+        anchor = ref;
+        pressUsed = true;
     }
-    else if (event.mods.isShiftDown() && shiftAnchor != 0)
+    else if (event.mods.isShiftDown() && anchor.id != 0)
     {
-        // Range over the visual order of track rows, from the anchor to the click
         multiSelection.clear();
+        selectedFolders.clear();
+        selectedInstruments.clear();
+        selectedChannels.clear();
         bool inRange = false;
+
+        const auto same = [] (RowRef a, RowRef b) { return a.kind == b.kind && a.id == b.id; };
 
         for (auto& item : items)
         {
-            if (item.member == 0)
-                continue;
-
-            const auto isEdge = item.member == shiftAnchor || item.member == trackId;
+            const auto here = refOf (item);
+            const auto isEdge = same (here, anchor) || same (here, ref);
 
             if (isEdge || inRange)
-                multiSelection.insert (item.member);
+            {
+                switch (here.kind)
+                {
+                    case RowRef::Kind::folder:      selectedFolders.insert (here.id); break;
+                    case RowRef::Kind::instrument:  selectedInstruments.insert (here.id); break;
+                    case RowRef::Kind::track:       multiSelection.insert (here.id); break;
+                    case RowRef::Kind::audioTrack:
+                    case RowRef::Kind::channel:     selectedChannels.insert (here.id); break;
+                }
+            }
 
             if (isEdge)
             {
-                if (inRange || shiftAnchor == trackId)
+                if (inRange || same (anchor, ref))
                     break;          // closing edge (or a one-row range)
 
                 inRange = true;     // opening edge
             }
         }
+
+        pressUsed = true;
     }
     else
     {
-        // Clicking an already-selected row must not re-select it (that would steal
-        // the group drag); it resolves on mouse-up if no drag happened.
-        if (multiSelection.count (trackId))
+        if (isSelected (ref) && selectionCount() > 1)
+            clearSelectionOnMouseUp = true;   // (resolved on mouse-up, unless a drag moves them all)
+        else if (ref.kind == RowRef::Kind::track || ref.kind == RowRef::Kind::audioTrack || ref.kind == RowRef::Kind::channel)
         {
-            clearSelectionOnMouseUp = true;
-        }
-        else
-        {
-            multiSelection.clear();
-
-            if (onSelect)
-                onSelect (trackId);
+            selectOnly (ref);   // (a folder or an instrument: on mouse-up - its arrow opens it instead)
+            pressUsed = true;
         }
 
-        shiftAnchor = trackId;
+        anchor = ref;
     }
 
-    // Ctrl/Shift changed the multi-selection: the shell arms it (auto-record)
-    if ((event.mods.isCtrlDown() || event.mods.isShiftDown()) && onSelectionChanged)
-        onSelectionChanged (multiSelection);
+    if (pressUsed && (event.mods.isCtrlDown() || event.mods.isShiftDown()))
+    {
+        if (onSelectionChanged)
+            onSelectionChanged (multiSelection);
+
+        if (onGroupSelected && (! selectedFolders.empty() || ! selectedInstruments.empty() || ! selectedChannels.empty()))
+            onGroupSelected();
+    }
 
     refresh();
 }
 
-void TrackList::rowMouseDrag (juce::Component* row, bool isFolder, int id, const juce::MouseEvent& event)
+// What a drag from 'pressed' moves: the selection when it's in it (else just that row), in visual
+// order; what's inside a selected folder or instrument goes with it (not on its own); an
+// instrument's tracks stand for the instrument - unless only tracks of one instrument are dragged
+std::vector<AudioEngine::TreeNode> TrackList::draggedNodes (RowRef pressed) const
+{
+    using N = AudioEngine::TreeNode;
+    std::vector<N> nodes;
+
+    const auto add = [&nodes] (N node)
+    {
+        if (std::find (nodes.begin(), nodes.end(), node) == nodes.end())
+            nodes.push_back (node);
+    };
+
+    const auto nodeOf = [this] (RowRef ref) -> std::optional<N>
+    {
+        switch (ref.kind)
+        {
+            case RowRef::Kind::folder:      return N { N::Kind::folder, ref.id };
+            case RowRef::Kind::instrument:  return N { N::Kind::instrument, ref.id };
+            case RowRef::Kind::track:       return N { N::Kind::track, ref.id };
+            case RowRef::Kind::audioTrack:  return N { N::Kind::audioTrack, ref.id };
+            case RowRef::Kind::channel:
+                if (const auto instrument = engine.getAudioChannelInput (ref.id); instrument != 0)
+                    return N { N::Kind::instrument, instrument };   // (an instrument's output: the instrument)
+                break;
+        }
+
+        return std::nullopt;
+    };
+
+    if (! isSelected (pressed) || selectionCount() <= 1)
+    {
+        if (auto node = nodeOf (pressed))
+            add (*node);
+    }
+    else
+    {
+        int insideDepth = -1;   // inside a selected folder or instrument: it goes with that
+
+        for (auto& item : items)
+        {
+            if (insideDepth >= 0 && item.depth <= insideDepth)
+                insideDepth = -1;
+
+            if (insideDepth >= 0)
+                continue;
+
+            const auto ref = refOf (item);
+
+            if (! isSelected (ref))
+                continue;
+
+            if (ref.kind == RowRef::Kind::folder || ref.kind == RowRef::Kind::instrument)
+                insideDepth = item.depth;
+
+            if (auto node = nodeOf (ref))
+                add (*node);
+        }
+    }
+
+    // Tracks of one instrument alone: reordered in it. Otherwise an instrument's tracks: the instrument
+    AudioEngine::InstrumentId only = 0;
+    auto allOfOne = ! nodes.empty();
+
+    for (auto& node : nodes)
+    {
+        const auto instrument = node.kind == N::Kind::track ? engine.getTrackInstrument (node.id) : 0;
+        allOfOne = allOfOne && instrument != 0 && (only == 0 || only == instrument);
+        only = instrument;
+    }
+
+    if (allOfOne)
+        return nodes;
+
+    std::vector<N> result;
+
+    for (auto node : nodes)
+    {
+        if (node.kind == N::Kind::track)
+            if (const auto instrument = engine.getTrackInstrument (node.id); instrument != 0)
+                node = { N::Kind::instrument, instrument };
+
+        if (std::find (result.begin(), result.end(), node) == result.end())
+            result.push_back (node);
+    }
+
+    return result;
+}
+
+void TrackList::rowMouseDrag (juce::Component* row, RowRef ref, const juce::MouseEvent& event)
 {
     // "Moving only happens when the mouse moves outside of the channel being dragged"
     if (! drag.active && row->getLocalBounds().contains (event.getPosition()))
@@ -1263,13 +1381,19 @@ void TrackList::rowMouseDrag (juce::Component* row, bool isFolder, int id, const
 
     if (! drag.active)
     {
-        drag.active = true;
-        drag.sourceIsFolder = isFolder;
-        drag.sourceId = id;
+        drag.nodes = draggedNodes (ref);
 
-        if (! isFolder)
-            drag.draggedTracks = multiSelection.count (id) ? selectionInVisualOrder()
-                                                           : std::vector<AudioEngine::TrackId> { id };
+        if (drag.nodes.empty())
+            return;
+
+        drag.active = true;
+        drag.reorderIn = 0;
+
+        if (drag.nodes.front().kind == AudioEngine::TreeNode::Kind::track)
+            if (const auto instrument = engine.getTrackInstrument (drag.nodes.front().id);
+                instrument != 0 && std::all_of (drag.nodes.begin(), drag.nodes.end(), [&] (auto& n)
+                                                { return n.kind == AudioEngine::TreeNode::Kind::track && engine.getTrackInstrument (n.id) == instrument; }))
+                drag.reorderIn = instrument;
     }
 
     computeDropTarget (event.getEventRelativeTo (&rowContainer).getPosition().y);
@@ -1278,6 +1402,7 @@ void TrackList::rowMouseDrag (juce::Component* row, bool isFolder, int id, const
 
 void TrackList::computeDropTarget (int y)
 {
+    using N = AudioEngine::TreeNode;
     drag.valid = false;
     drag.intoFolder = false;
     drag.indicatorY = -1;
@@ -1285,26 +1410,16 @@ void TrackList::computeDropTarget (int y)
 
     const auto isDragged = [this] (const AudioEngine::SidebarItem& item)
     {
-        if (drag.sourceIsFolder)
-            return item.folder == drag.sourceId;
+        const auto has = [this] (N node) { return std::find (drag.nodes.begin(), drag.nodes.end(), node) != drag.nodes.end(); };
 
-        return item.member != 0 && std::find (drag.draggedTracks.begin(), drag.draggedTracks.end(),
-                                              item.member) != drag.draggedTracks.end();
+        if (item.folder != 0)       return has ({ N::Kind::folder, item.folder });
+        if (item.instrument != 0)   return has ({ N::Kind::instrument, item.instrument });
+        if (item.member != 0)       return has ({ N::Kind::track, item.member });
+
+        return item.channel != 0 && has ({ N::Kind::audioTrack, item.channel });
     };
 
-    // Count the siblings of 'parent' that appear before item index i (dragged ones
-    // don't count: the engine removes them from the list before inserting).
-    const auto childIndexAt = [&] (AudioEngine::FolderId parent, size_t i)
-    {
-        int index = 0;
-
-        for (size_t j = 0; j < i; ++j)   // (instrument folders and their audio rows aren't the folder's children)
-            if (items[j].parent == parent && items[j].isTreeChild() && ! isDragged (items[j]))
-                ++index;
-
-        return index;
-    };
-
+    // The row under the mouse
     int rowY = 0;
     size_t i = 0;
 
@@ -1318,23 +1433,81 @@ void TrackList::computeDropTarget (int y)
         rowY += height;
     }
 
+    if (drag.reorderIn != 0)   // an instrument's tracks, among its own tracks
+    {
+        if (i >= items.size() || items[i].member == 0 || engine.getTrackInstrument (items[i].member) != drag.reorderIn)
+            return;
+
+        const auto before = y < rowY + heightOfItem (items[i]) / 2;
+        const auto target = items[i].member;
+        std::vector<AudioEngine::TrackId> moved, order;
+
+        for (auto& node : drag.nodes)
+            moved.push_back (node.id);
+
+        for (auto track : engine.getInstrumentTracks (drag.reorderIn))
+        {
+            const auto isMoved = std::find (moved.begin(), moved.end(), track) != moved.end();
+
+            if (track == target && before)
+                order.insert (order.end(), moved.begin(), moved.end());
+
+            if (! isMoved)
+                order.push_back (track);
+
+            if (track == target && ! before)
+                order.insert (order.end(), moved.begin(), moved.end());
+        }
+
+        if (std::find (moved.begin(), moved.end(), target) != moved.end())
+            return;   // (onto itself: nothing)
+
+        drag.valid = true;
+        drag.reordered = order;
+        drag.indicatorY = before ? rowY : rowY + heightOfItem (items[i]);
+        return;
+    }
+
+    // The parent's slots before item index i (dragged ones don't count: the engine takes them out first)
+    const auto slotIndexAt = [&] (AudioEngine::FolderId parent, size_t end)
+    {
+        int index = 0;
+
+        for (size_t j = 0; j < end; ++j)
+            if (items[j].parent == parent && engine.isTreeSlot (items[j]) && ! isDragged (items[j]))
+                ++index;
+
+        return index;
+    };
+
     if (i >= items.size())
     {
         // Below every row: append at the top level
         drag.valid = true;
         drag.parent = 0;
-        drag.index = childIndexAt (0, items.size());
+        drag.index = slotIndexAt (0, items.size());
         drag.indicatorY = rowY;
         return;
     }
 
-    const auto& item = items[i];
+    // Inside an instrument (its tracks, its audio): around the instrument (its slot)
+    auto at = i;
+    auto atY = rowY;
+
+    if (! engine.isTreeSlot (items[at]))
+        while (at > 0 && items[at].instrument == 0)
+        {
+            --at;
+            atY -= heightOfItem (items[at]);
+        }
+
+    const auto& item = items[at];
     const auto height = heightOfItem (item);
 
     // A folder row's middle drops INTO the folder (its edges insert around it)
-    if (item.folder != 0 && y >= rowY + height / 4 && y <= rowY + 3 * height / 4)
+    if (item.folder != 0 && at == i && y >= rowY + height / 4 && y <= rowY + 3 * height / 4)
     {
-        if (drag.sourceIsFolder && item.folder == drag.sourceId)
+        if (isDragged (item))
             return;   // not into itself (subtrees are rejected by the engine on drop)
 
         drag.valid = true;
@@ -1345,60 +1518,50 @@ void TrackList::computeDropTarget (int y)
         return;
     }
 
-    const auto before = y < rowY + height / 2;
+    auto before = at == i && y < rowY + height / 2;
+    auto indicator = before ? atY : atY + height;
+
+    if (! before && item.instrument != 0)   // after an instrument: after its tracks and audio
+        for (auto j = at + 1; j < items.size() && items[j].depth > item.depth; ++j)
+            indicator += heightOfItem (items[j]);
+
     drag.valid = true;
     drag.parent = item.parent;
-    drag.index = childIndexAt (item.parent, i) + (before ? 0 : 1);
-    drag.indicatorY = before ? rowY : rowY + height;
+    drag.index = slotIndexAt (item.parent, at) + (before || isDragged (item) ? 0 : 1);
+    drag.indicatorY = indicator;
 }
 
-bool TrackList::finishRowDrag (int id)
+bool TrackList::finishRowDrag (RowRef ref)
 {
     const auto wasDragging = drag.active;
+    auto used = wasDragging || pressUsed;
 
     if (drag.active && drag.valid)
     {
-        std::vector<AudioEngine::FolderId> folderIds;
-        std::vector<int> memberIds;
-
-        if (drag.sourceIsFolder)
-            folderIds.push_back (drag.sourceId);
+        if (drag.reorderIn != 0)
+            engine.reorderInstrumentTracks (drag.reorderIn, drag.reordered);
         else
-            memberIds.assign (drag.draggedTracks.begin(), drag.draggedTracks.end());
-
-        engine.moveSidebarItems (true, folderIds, memberIds, drag.parent, drag.index);
+            engine.moveTreeNodes (drag.nodes, drag.parent, drag.index);
     }
     else if (! wasDragging && clearSelectionOnMouseUp)
     {
-        // The deferred plain click on a selected row: now it becomes the selection
-        multiSelection.clear();
-
-        if (onSelect)
-            onSelect (id);
+        // The deferred plain click on a selected row: now it alone becomes the selection
+        selectOnly (ref);
+        used = true;
     }
 
     clearSelectionOnMouseUp = false;
+    pressUsed = false;
     drag = {};
     rowContainer.repaint();
     refreshSoon();   // rebuilding rows would delete the row we're called from
-    return wasDragging;
+    return used;
 }
 
 void TrackList::refreshSoon()
 {
     juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<TrackList> (this)]
                                      { if (safe != nullptr) safe->refresh(); });
-}
-
-std::vector<AudioEngine::TrackId> TrackList::selectionInVisualOrder() const
-{
-    std::vector<AudioEngine::TrackId> ordered;
-
-    for (auto& item : items)
-        if (item.member != 0 && multiSelection.count (item.member))
-            ordered.push_back (item.member);
-
-    return ordered;
 }
 
 void TrackList::RowContainer::mouseDown (const juce::MouseEvent& event)

@@ -208,8 +208,51 @@ public:
 
             expect (found, "in its folder, with a tag");
 
+            engine.setAudioTrackColour (vocal, "ff5599cc");
+            expectEquals (engine.getChannelTagColour (vocal), juce::String ("ff5599cc"));
+
             engine.removeAudioTrack (vocal);
             expect (! engine.isAudioTrack (vocal));
+        }
+
+                beginTest ("moving: folders, tracks, audio tracks and instruments together; an instrument's tracks reordered in it");
+        {
+            using N = AudioEngine::TreeNode;
+            const auto folder = engine.addFolder (true, "Target");
+            const auto take = engine.addAudioTrack ("Take");
+
+            // The rows of a folder, as (kind, id): its slots in order
+            auto slotsOf = [&] (AudioEngine::FolderId parent)
+            {
+                std::vector<std::pair<char, int>> rows;
+
+                for (auto& item : engine.getSidebarItems (true, false))
+                    if (item.parent == parent && engine.isTreeSlot (item))
+                        rows.push_back (item.folder != 0 ? std::pair<char, int> { 'f', item.folder }
+                                        : item.instrument != 0 ? std::pair<char, int> { 'i', item.instrument }
+                                        : item.member != 0 ? std::pair<char, int> { 't', item.member }
+                                                           : std::pair<char, int> { 'a', item.channel });
+                return rows;
+            };
+
+            expect (engine.moveTreeNodes ({ { N::Kind::audioTrack, take }, { N::Kind::track, loose }, { N::Kind::instrument, instrument } }, folder, 0));
+            expect (slotsOf (folder) == std::vector<std::pair<char, int>> { { 'a', take }, { 't', loose }, { 'i', instrument } },
+                    "all three in the folder, in the order given");
+            expectEquals (engine.getTrackFolder (first), folder);
+            expectEquals (engine.getTrackFolder (second), folder);
+
+            expect (engine.moveTreeNodes ({ { N::Kind::track, loose } }, folder, 0));   // to the top: the audio track after it, not in its place
+            expect (slotsOf (folder) == std::vector<std::pair<char, int>> { { 't', loose }, { 'a', take }, { 'i', instrument } });
+
+            expect (! engine.moveTreeNodes ({ { N::Kind::folder, folder } }, folder, 0), "not into itself");
+
+            engine.reorderInstrumentTracks (instrument, { second, first });
+            expect (engine.getInstrumentTracks (instrument) == std::vector<AudioEngine::TrackId> { second, first });
+            engine.reorderInstrumentTracks (instrument, { first, second });
+
+            expect (engine.moveTreeNodes ({ { N::Kind::instrument, instrument }, { N::Kind::track, loose } }, 0, 0));
+            engine.removeAudioTrack (take);
+            engine.removeFolder (folder);
         }
 
                 beginTest ("membership follows routing");

@@ -8,8 +8,9 @@
 // and an indented guide area on the left shows what belongs to which folder.
 //
 // Re-ordering (ISSUES.md "Sidebar"): drag rows to re-order; Ctrl/Shift-click
-// selects multiple tracks and dragging any selected row moves the group (it lands
-// in visual order). The drag starts once the mouse leaves the pressed row and
+// selects several rows of any kind (folders, instruments, MIDI tracks, audio tracks)
+// and dragging any selected row moves them all (they land in visual order; what's in a
+// selected folder goes with it). An instrument's own tracks dragged alone reorder in it. The drag starts once the mouse leaves the pressed row and
 // completes on drop: between rows inserts there, onto a folder row's middle drops
 // into that folder. Rows rebuild when the engine's tree changes; call refresh()
 // from a UI timer.
@@ -30,8 +31,8 @@ public:
     void setEditedTracks (std::vector<AudioEngine::TrackId> shown, AudioEngine::TrackId edited);
     std::vector<AudioEngine::TrackId> editorTracks;
     AudioEngine::TrackId editorTrack = 0;
-    AudioEngine::FolderId getSelectedFolder() const noexcept { return selectedFolder; }
-    AudioEngine::InstrumentId getSelectedInstrument() const noexcept { return selectedInstrument; }
+    AudioEngine::FolderId getSelectedFolder() const noexcept   { return selectedFolders.size() == 1 ? *selectedFolders.begin() : 0; }
+    AudioEngine::InstrumentId getSelectedInstrument() const noexcept   { return selectedInstruments.size() == 1 ? *selectedInstruments.begin() : 0; }
     AudioEngine::AudioChannelId getSelectedChannel() const noexcept { return selectedChannels.empty() ? 0 : *selectedChannels.begin(); }
     const std::set<AudioEngine::AudioChannelId>& getSelectedChannels() const noexcept { return selectedChannels; }
     void selectChannels (const std::set<AudioEngine::AudioChannelId>&);   // from the mixer
@@ -78,12 +79,24 @@ private:
 
     static int heightOfItem (const AudioEngine::SidebarItem&);
 
-    // Selection + drag (called by the rows)
-    void rowMouseDown (juce::Component* row, bool isFolder, int id, const juce::MouseEvent&);
-    void rowMouseDrag (juce::Component* row, bool isFolder, int id, const juce::MouseEvent&);
-    bool finishRowDrag (int id);          // true if a drag was in progress (even an invalid one)
+    // Selection + drag (called by the rows). A row: what it stands for (an instrument's output
+    // channel is selectable, not movable)
+    struct RowRef
+    {
+        enum class Kind { folder, track, audioTrack, instrument, channel };
+        Kind kind = Kind::track;
+        int id = 0;
+    };
+
+    RowRef refOf (const AudioEngine::SidebarItem&) const;
+    bool isSelected (RowRef) const;
+    int selectionCount() const;
+    void selectOnly (RowRef);                             // a plain click: that one alone
+    void rowMouseDown (juce::Component* row, RowRef, const juce::MouseEvent&);
+    void rowMouseDrag (juce::Component* row, RowRef, const juce::MouseEvent&);
+    bool finishRowDrag (RowRef);          // true: the click is used up (a drag, Ctrl/Shift, a resolved deferred click)
     void computeDropTarget (int yInContainer);
-    std::vector<AudioEngine::TrackId> selectionInVisualOrder() const;
+    std::vector<AudioEngine::TreeNode> draggedNodes (RowRef pressed) const;   // in visual order
 
     AudioEngine& engine;
     sidebar::VerticalScroll& vscroll;
@@ -112,19 +125,18 @@ private:
 
     // Multi-select (UI-level; the primary selection stays with MainComponent)
     std::set<AudioEngine::TrackId> multiSelection;
-    AudioEngine::FolderId selectedFolder = 0;
-    AudioEngine::InstrumentId selectedInstrument = 0;
-    std::set<AudioEngine::AudioChannelId> selectedChannels;   // audio rows (Ctrl / Shift: several)
-    AudioEngine::AudioChannelId channelAnchor = 0;
-    AudioEngine::TrackId shiftAnchor = 0;
-    bool clearSelectionOnMouseUp = false;
+    std::set<AudioEngine::FolderId> selectedFolders;
+    std::set<AudioEngine::InstrumentId> selectedInstruments;
+    std::set<AudioEngine::AudioChannelId> selectedChannels;   // audio rows
+    RowRef anchor;                                            // where a Shift range starts (0: none)
+    bool clearSelectionOnMouseUp = false, pressUsed = false;
 
     struct DragState
     {
         bool active = false;              // true once the mouse left the pressed row
-        bool sourceIsFolder = false;
-        int sourceId = 0;
-        std::vector<AudioEngine::TrackId> draggedTracks;
+        std::vector<AudioEngine::TreeNode> nodes;
+        AudioEngine::InstrumentId reorderIn = 0;   // only tracks of this instrument: reordered in it
+        std::vector<AudioEngine::TrackId> reordered;
 
         bool valid = false, intoFolder = false;
         AudioEngine::FolderId parent = 0;

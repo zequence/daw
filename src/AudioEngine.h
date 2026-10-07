@@ -302,11 +302,31 @@ public:
     std::vector<TrackId> getArrangeTrackOrder() const;   // visible tracks, tree order
 
     // Move folders and/or members (tracks for midi, channels for audio) into
-    // 'parent' at child index 'index', keeping the given order as one group.
+    // 'parent' at slot 'index' (see moveTreeNodes), keeping the given order as one group.
     // One call = one event = one history entry. False: unknown ids, a domain
     // mismatch, or a folder moved into itself/its own subtree.
     bool moveSidebarItems (bool midiDomain, const std::vector<FolderId>& folderIds,
                            const std::vector<int>& memberIds, FolderId parent, int index);
+
+    // The MIDI tree's movable things, of any kind mixed: folders, MIDI tracks, audio tracks and
+    // instruments (an instrument moves with all its tracks, together). A folder's slots: its
+    // folders, plain tracks, audio tracks and instruments, each one slot (an instrument's tracks
+    // are its one slot, where its first stands). Moves 'nodes' (in that order) into 'parent' at slot
+    // 'index' (past the end: appended). False: nothing valid to move, or a folder into its own subtree.
+    struct TreeNode
+    {
+        enum class Kind { folder, track, audioTrack, instrument };
+        Kind kind = Kind::track;
+        int id = 0;
+        bool operator== (const TreeNode& o) const noexcept   { return kind == o.kind && id == o.id; }
+    };
+
+    bool moveTreeNodes (const std::vector<TreeNode>& nodes, FolderId parent, int index);
+    bool isTreeSlot (const SidebarItem&) const;   // a row that is a slot of its parent folder (above)
+
+    // An instrument's own tracks in a new order: they take over the places (folder, position) the
+    // old order held, in turn
+    void reorderInstrumentTracks (InstrumentId, const std::vector<TrackId>& order);
 
     //==============================================================================
     Transport& getTransport()                 { return transport; }
@@ -450,6 +470,8 @@ public:
     void removeAudioTrack (AudioChannelId);
     bool isAudioTrack (AudioChannelId) const;
     bool isAudioTrackStereo (AudioChannelId) const;
+    void setAudioTrackColour (AudioChannelId, const juce::String& hex);   // its tag's colour ("" = none)
+    juce::String getAudioTrackColour (AudioChannelId) const;
 
     // Folder groups: a grouped folder sums the audio inside it on a bus of its own (named as the folder,
     // following its renames). The engine keeps that routing as things move: every audio channel inside
@@ -595,6 +617,7 @@ private:
         std::map<int, Insert> inserts;              // slot -> effect, in series before the strip
         AudioChannelId output = 0;                  // 0 = the master, else a bus
         bool audioTrack = false;                    // an audio track's (no instrument): its own row in the tree
+        juce::String colour;                        // (an audio track's own: "" = none)
         bool stereo = true;
         int firstInput = 0;                         // its device input channel (stereo: and the next)
         bool insertsOn = false;                     // the section's IN: off bypasses every insert (on with the first one added)

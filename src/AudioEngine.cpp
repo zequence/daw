@@ -1419,7 +1419,31 @@ juce::String AudioEngine::getChannelTagColour (AudioChannelId id) const
         return getInstrumentColour (bus->second.input);   // an instrument's group (or "" for a plain bus)
     }
 
+    if (isAudioTrack (id))
+        return getAudioTrackColour (id);
+
     return getInstrumentColour (getAudioChannelInput (id));
+}
+
+void AudioEngine::setAudioTrackColour (AudioChannelId id, const juce::String& hex)
+{
+    const auto it = audioChannels.find (id);
+
+    if (it == audioChannels.end() || ! it->second.audioTrack || it->second.colour == hex)
+        return;
+
+    it->second.colour = hex;
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    data->setProperty ("change", "colour");
+    emitEvent ("audioTrackChanged", data);
+}
+
+juce::String AudioEngine::getAudioTrackColour (AudioChannelId id) const
+{
+    const auto it = audioChannels.find (id);
+    return it != audioChannels.end() && it->second.audioTrack ? it->second.colour : juce::String();
 }
 
 bool AudioEngine::isGroupBus (AudioChannelId id) const
@@ -2585,6 +2609,10 @@ std::vector<AudioEngine::ChildRef> AudioEngine::getChildrenOf (bool midiDomain, 
         for (auto& [id, track] : tracks)
             if (effectiveFolder (track.folder) == parent)
                 children.push_back ({ false, id, track.position });
+
+        for (auto& [id, channel] : audioChannels)   // the audio tracks stand among the tracks
+            if (channel.audioTrack && effectiveFolder (channel.folder) == parent)
+                children.push_back ({ false, id, channel.position, true });
     }
     else
     {
@@ -2643,7 +2671,7 @@ void AudioEngine::setChildPosition (bool midiDomain, const ChildRef& child, int 
         if (auto it = folders.find (child.id); it != folders.end())
             it->second.position = position;
     }
-    else if (midiDomain)
+    else if (midiDomain && ! child.audioTrack)
     {
         if (auto* track = findTrack (child.id))
             track->position = position;
@@ -2780,11 +2808,164 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
     return items;
 }
 
+bool AudioEngine::isTreeSlot (const SidebarItem& item) const
+{
+    return item.folder != 0 || item.instrument != 0
+            || (item.member != 0 && getTrackInstrument (item.member) == 0)
+            || (item.channel != 0 && isAudioTrack (item.channel));
+}
+
+bool AudioEngine::moveTreeNodes (const std::vector<TreeNode>& nodes, FolderId parent, int index)
+{
+    using Kind = TreeNode::Kind;
+
+    if (parent != 0 && (! folderExists (parent) || ! isFolderMidiDomain (parent)))
+        return false;
+
+    // The valid nodes (no folder into itself or its own subtree; instruments with tracks)
+    std::vector<TreeNode> moved;
+
+    for (auto& node : nodes)
+    {
+        auto ok = false;
+
+        switch (node.kind)
+        {
+            case Kind::folder:
+                if (const auto it = folders.find (node.id); it != folders.end() && it->second.midiDomain)
+                {
+                    ok = true;
+
+                    for (auto walk = parent; walk != 0 && ok; walk = folders.at (walk).parent)
+                        ok = walk != node.id;
+
+                    if (! ok)
+                        return false;
+                }
+                break;
+            case Kind::track:       ok = findTrack (node.id) != nullptr; break;
+            case Kind::audioTrack:  ok = isAudioTrack (node.id); break;
+            case Kind::instrument:  ok = instruments.count (node.id) > 0 && ! getInstrumentTracks (node.id).empty(); break;
+        }
+
+        if (ok && std::find (moved.begin(), moved.end(), node) == moved.end())
+            moved.push_back (node);
+    }
+
+    if (moved.empty())
+        return false;
+
+    const auto isMoved = [&] (Kind kind, int id) { return std::find (moved.begin(), moved.end(), TreeNode { kind, id }) != moved.end(); };
+
+    // The parent's slots now, the moved ones left out
+    std::vector<TreeNode> slots;
+
+    for (auto& child : getChildrenOf (true, parent))
+    {
+        TreeNode node;
+
+        if (child.isFolder)           node = { Kind::folder, child.id };
+        else if (child.audioTrack)    node = { Kind::audioTrack, child.id };
+        else if (const auto instrument = getTrackInstrument (child.id); instrument != 0 && ! isMoved (Kind::track, child.id))
+            node = { Kind::instrument, instrument };
+        else                          node = { Kind::track, child.id };
+
+        if (! isMoved (node.kind, node.id) && std::find (slots.begin(), slots.end(), node) == slots.end())
+            slots.push_back (node);
+    }
+
+    index = juce::jlimit (0, (int) slots.size(), index);
+    slots.insert (slots.begin() + index, moved.begin(), moved.end());
+
+    // The slots as children, in order: an instrument's tracks together (all of them when it moves;
+    // else those already here, not moved on their own)
+    std::vector<ChildRef> children;
+
+    for (auto& slot : slots)
+    {
+        switch (slot.kind)
+        {
+            case Kind::folder:      children.push_back ({ true, slot.id, 0 }); break;
+            case Kind::track:       children.push_back ({ false, slot.id, 0 }); break;
+            case Kind::audioTrack:  children.push_back ({ false, slot.id, 0, true }); break;
+            case Kind::instrument:
+            {
+                const auto whole = isMoved (Kind::instrument, slot.id);
+
+                for (auto track : getInstrumentTracks (slot.id))
+                    if (! isMoved (Kind::track, track) && (whole || getTrackFolder (track) == parent))
+                        children.push_back ({ false, track, 0 });
+                break;
+            }
+        }
+    }
+
+    // Re-parent, renumber
+    for (int i = 0; i < (int) children.size(); ++i)
+    {
+        const auto& child = children[(size_t) i];
+
+        if (child.isFolder)
+            folders[child.id].parent = parent;
+        else if (child.audioTrack)
+            audioChannels[child.id].folder = parent;
+        else if (auto* track = findTrack (child.id))
+            track->folder = parent;
+
+        setChildPosition (true, child, i);
+    }
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("domain", "midi");
+    data->setProperty ("parent", parent);
+    data->setProperty ("count", (int) moved.size());
+    emitEvent ("sidebarMoved", data);
+    return true;
+}
+
+void AudioEngine::reorderInstrumentTracks (InstrumentId instrument, const std::vector<TrackId>& order)
+{
+    const auto current = getInstrumentTracks (instrument);
+
+    if (order.size() != current.size() || ! std::is_permutation (order.begin(), order.end(), current.begin()))
+        return;
+
+    std::vector<std::pair<FolderId, int>> places;   // (folder, position) of each, in the old order
+
+    for (auto track : current)
+        places.push_back ({ findTrack (track)->folder, findTrack (track)->position });
+
+    for (size_t i = 0; i < order.size(); ++i)
+    {
+        auto* track = findTrack (order[i]);
+        track->folder = places[i].first;
+        track->position = places[i].second;
+    }
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("domain", "midi");
+    data->setProperty ("instrument", instrument);
+    emitEvent ("sidebarMoved", data);
+}
+
 bool AudioEngine::moveSidebarItems (bool midiDomain, const std::vector<FolderId>& folderIds,
                                     const std::vector<int>& memberIds, FolderId parent, int index)
 {
     if (folderIds.empty() && memberIds.empty())
         return false;
+
+    if (midiDomain)
+    {
+        std::vector<TreeNode> nodes;
+
+        for (auto folder : folderIds)
+            nodes.push_back ({ TreeNode::Kind::folder, folder });
+
+        for (auto member : memberIds)
+            nodes.push_back ({ TreeNode::Kind::track, member });
+
+        return moveTreeNodes (nodes, parent, index);
+    }
 
     if (parent != 0 && (! folderExists (parent) || isFolderMidiDomain (parent) != midiDomain))
         return false;
@@ -3172,6 +3353,7 @@ bool AudioEngine::saveProject (const juce::File& file)
         a->setAttribute ("position", channel.position);
         a->setAttribute ("output", channel.output);
         a->setAttribute ("soloed", channel.soloed);
+        a->setAttribute ("colour", channel.colour);
 
         if (auto* processor = getAudioChannel (id))
         {
@@ -3454,6 +3636,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
         const auto folder = folderIdMap.count (a->getIntAttribute ("folder")) > 0 ? folderIdMap[a->getIntAttribute ("folder")] : 0;
         const auto id = addAudioTrack (a->getStringAttribute ("name"), a->getBoolAttribute ("stereo", true), folder);
         audioChannels[id].firstInput = a->getIntAttribute ("firstInput");
+        audioChannels[id].colour = a->getStringAttribute ("colour");
 
         if (a->hasAttribute ("position"))
             audioChannels[id].position = a->getIntAttribute ("position");
