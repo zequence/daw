@@ -103,17 +103,10 @@ public:
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
 
-        if (engine.getTrackInstrument (trackId) != 0)   // in an instrument folder: the whole row its dark blue-grey
-        {
-            // Selected: the theme's selected-track colour (as any track)
-            g.setColour (theme::rowColour (AudioEngine::colourFromHex (AudioEngine::instrumentTrackColour, juce::Colours::grey), selected, subselected));
-            g.fillRoundedRectangle (bounds, theme::corner);
-        }
-        else
-        {
-            theme::paintRowBox (g, bounds, false, selected, subselected);
+        theme::paintTrackBox (g, bounds, theme::Token::trackMidiBg, selected, subselected);
 
-            // The track color shows as a left border only; uncolored = grey (ISSUES.md)
+        if (engine.getTrackInstrument (trackId) == 0)   // outside an instrument: its colour as a left border (grey without)
+        {
             g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (trackId), juce::Colour (0xff6d7178)));
             g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
         }
@@ -242,7 +235,7 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
-        theme::paintRowBox (g, bounds, true, selected, subselected);
+        theme::paintTrackBox (g, bounds, theme::Token::folderBg, selected, subselected);
 
         // Collapse triangle (folders have no colour: it sits near the edge)
         const auto collapsed = engine.isFolderCollapsed (folderId);
@@ -420,7 +413,7 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
-        theme::paintRowBox (g, bounds, true, selected, subselected);
+        theme::paintTrackBox (g, bounds, theme::Token::trackInstrumentBg, selected, subselected);
 
         const auto tracks = engine.getInstrumentTracks (instrumentId);
 
@@ -509,9 +502,7 @@ public:
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
 
-        // An instrument's audio: the whole row its dark red-grey (subselected: that colour)
-        g.setColour (theme::rowColour (AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey), false, subselected));
-        g.fillRoundedRectangle (bounds, theme::corner);
+        theme::paintTrackBox (g, bounds, theme::Token::trackAudioBg, false, subselected);
 
         g.setColour (sidebar::rowTextColour);
         g.setFont (sidebar::rowFont (14.0f, false));

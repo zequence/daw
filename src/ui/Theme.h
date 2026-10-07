@@ -43,11 +43,13 @@ namespace theme
     C (arrangeGutterBg,  "arrange.gutter.bg", "Arrange / audio", "Name gutter background", (int) Token::surfaceWindow, 0xff1d1f23, false) \
     C (arrangeGutterBorder, "arrange.gutter.border", "Arrange / audio", "Name gutter border", (int) Token::borderSubtle, 0xff2e3136, false) \
     C (channelBg,        "channel.bg",        "Channel",  "Channel background",        -1,                      0xff2b2e33, false) \
-    C (channelSelectedBg,"channel.selected.bg","Channel", "Selected channel background",-1,                      0xff4a5363, false) \
     C (channelBorder,    "channel.border",    "Channel",  "Channel border",            -1,                      0x00000000, true)  \
 \
     C (channelEdited,    "channel.edited",    "Channel",  "Shown in the MIDI editor (right edge)", -1,           0xff3aa6c4, false) \
-    C (folderBg,         "folder.bg",         "Folder",   "Folder background",         -1,                      0xff2e3038, false) \
+    C (folderBg,         "folder.bg",         "Tracks",   "Folder background",         -1,                      0xff2e3038, false) \
+    C (trackMidiBg,      "track.midi.bg",     "Tracks",   "MIDI track background",     -1,                      0xff3a3e46, false) \
+    C (trackAudioBg,     "track.audio.bg",    "Tracks",   "Audio track background",    -1,                      0xff45393b, false) \
+    C (trackInstrumentBg,"track.instrument.bg","Tracks",  "Instrument folder background", (int) Token::folderBg,  0xff2e3038, false) \
     C (folderBorder,     "folder.border",     "Folder",   "Folder border",             -1,                      0x00000000, true)  \
     C (buttonBg,         "button.bg",         "Buttons",  "Button background",         -1,                      0xff263238, false) \
     C (buttonOn,         "button.on",         "Buttons",  "Button background (on / selected)", -1,              0xff181f22, false) \
@@ -424,6 +426,15 @@ namespace theme
     {
         const auto amount = selected ? number (Token::rowSelectedBrightness) : subselected ? number (Token::rowSubselectedBrightness) : 0.0f;
         return base.interpolatedWith (juce::Colours::white, juce::jlimit (0.0f, 1.0f, amount));
+    }
+
+    // A track row's box in its kind's background (a Tracks token), brighter when (sub)selected
+    inline void paintTrackBox (juce::Graphics& g, juce::Rectangle<float> bounds, Token background, bool selected, bool subselected = false)
+    {
+        g.setColour (rowColour (colour (background), selected, subselected));
+        g.fillRoundedRectangle (bounds, corner);
+        g.setColour (colour (background == Token::folderBg || background == Token::trackInstrumentBg ? Token::folderBorder : Token::channelBorder));
+        g.drawRoundedRectangle (bounds, corner, 1.0f);
     }
 
     inline void paintRowBox (juce::Graphics& g, juce::Rectangle<float> bounds, bool isFolder, bool selected, bool subselected = false)
