@@ -382,7 +382,7 @@ private:
         {
             inserts.setVisible (insertsShown || kind == Kind::master);
             eq.setVisible (! insertsShown && kind != Kind::master);
-            dynamics.setVisible (! insertsShown && kind != Kind::master);
+            dynamics.setVisible (kind != Kind::master);   // the inserts take the EQ's place only
         }
 
         // The engine's strip (none for the Aux buses yet)
@@ -690,7 +690,6 @@ private:
                 for (auto* k : { &threshold, &ratio, &attack, &release, &makeup })
                     knob (k);
 
-                auto pageBottom = juce::jmax (columnY[0], columnY[1]) + pad;   // the inserts share the EQ and dynamics' space
 
                 if (kind == Kind::channel)
                 {
@@ -703,10 +702,8 @@ private:
 
                 finish();
 
-                if (kind == Kind::channel)
-                    pageBottom = aux.getY() - 2;
-
-                inserts.setBounds (getLocalBounds().reduced (4).withTop (pageTop).withBottom (pageBottom));
+                // The inserts, flipped in, in the EQ's place: their slots the master's size (330 px for 16)
+                inserts.setBounds (getLocalBounds().reduced (4).withTop (pageTop).withHeight (330 * inserts.slots / 16));
                 area.setTop (juce::jmax (columnY[0], columnY[1]) + pad + 2);
             }
 
