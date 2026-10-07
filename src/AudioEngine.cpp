@@ -2464,6 +2464,16 @@ std::vector<AudioEngine::TrackId> AudioEngine::getInstrumentTracks (InstrumentId
     return result;
 }
 
+float AudioEngine::takeTrackMidiActivity (TrackId id)
+{
+    if (auto* track = findTrack (id))
+        if (auto* node = graph.getNodeForId (track->midiSourceNode))
+            if (auto* source = dynamic_cast<MidiSourceProcessor*> (node->getProcessor()))
+                return source->takeActivity();
+
+    return 0.0f;
+}
+
 bool AudioEngine::isInstrumentExpanded (InstrumentId id) const
 {
     const auto it = instruments.find (id);

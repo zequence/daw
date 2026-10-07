@@ -279,6 +279,7 @@ public:
     void setInstrumentExpanded (InstrumentId, bool);
     std::vector<TrackId> getInstrumentTracks (InstrumentId) const;   // whose first output it is, in tree order
     InstrumentId getTrackInstrument (TrackId) const;                 // its first output's instrument (0: none)
+    float takeTrackMidiActivity (TrackId);                           // its loudest note-on velocity (0..1) since asked; for its meter
 
     // Only an instrument folder itself takes a colour (its tape): inside it, the rows have the theme's
     // MIDI / audio track backgrounds, and its regions take the instrument's colour 20% darker

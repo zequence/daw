@@ -454,6 +454,48 @@ struct GainReductionMeter final : juce::Component, juce::SettableTooltipClient
 };
 
 //==========================================================================
+// A MIDI track's meter: the velocity of the notes it plays, in the MIDI editor's velocity colours
+// (low to high, filled up to the level). It looks like the audio meters: a thin vertical bar. Falls
+// back after a note; repaints only when the bar's height changes.
+struct MidiMeter final : juce::Component
+{
+    std::function<juce::Colour (float)> colourFor;   // the velocity colour of a level 0..1
+
+    void update (float velocity)   // the loudest note since the last update (0 = none)
+    {
+        level = juce::jmax (velocity, level * 0.86f);
+
+        if (const auto pixels = juce::roundToInt (level * (float) getHeight()); pixels != shownPixels)
+        {
+            shownPixels = pixels;
+            repaint();
+        }
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto area = getLocalBounds().toFloat();
+        g.setColour (juce::Colour (0xff111214));
+        g.fillRoundedRectangle (area, 1.5f);
+
+        if (shownPixels <= 0 || colourFor == nullptr)
+            return;
+
+        // The velocity colours, from the bottom (soft) to the top (hard), shown up to the level
+        juce::ColourGradient gradient (colourFor (0.0f), 0.0f, area.getBottom(), colourFor (1.0f), 0.0f, area.getY(), false);
+
+        for (auto at : { 0.25f, 0.5f, 0.75f })
+            gradient.addColour (at, colourFor (at));
+
+        g.setGradientFill (gradient);
+        g.fillRect (area.withTop (area.getBottom() - (float) shownPixels));
+    }
+
+    float level = 0.0f;
+    int shownPixels = 0;
+};
+
+//==========================================================================
 // A level meter in the usual colours: green for low levels (below -18 dB), yellow for the good area
 // (-18 to -1 dB), red at the top and for clipping. Horizontal (the track rows) or vertical (the master),
 // optionally with a dB scale and a readout of the held peak. It repaints only when what it shows

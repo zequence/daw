@@ -3,6 +3,7 @@
 #include "ThemedLookAndFeel.h"
 #include "../engine/AudioChannelProcessor.h"
 #include "MixerParts.h"
+#include "ControllerLanes.h"
 
 namespace
 {
@@ -35,7 +36,7 @@ public:
         soloButton.setTooltip ("Solo (MIDI)");
         soloButton.setClickingTogglesState (true);
         theme::setButtonRole (soloButton, "solo");
-        soloButton.setConnectedEdges (juce::Button::ConnectedOnRight);   // S|M share one border
+        soloButton.setConnectedEdges (juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);   // meter|S|M: one unit
         soloButton.onClick = [this] { engine.setTrackSoloed (trackId, soloButton.getToggleState()); };
 
         muteButton.setTooltip ("Mute (MIDI)");
@@ -43,6 +44,10 @@ public:
         theme::setButtonRole (muteButton, "mute");
         muteButton.setConnectedEdges (juce::Button::ConnectedOnLeft);
         muteButton.onClick = [this] { engine.setTrackMuted (trackId, muteButton.getToggleState()); };
+
+        meter.colourFor = [] (float v) { return lanes::valueColour (lanes::Kind::velocity, v); };
+        meter.setInterceptsMouseClicks (false, false);
+        addAndMakeVisible (meter);
 
         for (auto* c : std::initializer_list<juce::Component*> { &armButton, &soloButton, &muteButton })
         {
@@ -59,6 +64,7 @@ public:
     {
         selected = isSelected;
         subselected = isSubselected;
+        meter.update (engine.takeTrackMidiActivity (trackId));
         armButton.setToggleState (isArmed, juce::dontSendNotification);
         muteButton.setToggleState (engine.isTrackMuted (trackId), juce::dontSendNotification);
         soloButton.setToggleState (engine.isTrackSoloed (trackId), juce::dontSendNotification);
@@ -125,13 +131,15 @@ public:
 
     void resized() override
     {
-        // One line: S|M (one joined box), the name, and R at the right edge
+        // One line: its MIDI meter, S, M (one unit, as the audio rows), the name, and R at the right edge
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 6).reduced (8, 0);   // past the colour strip
         area = area.withSizeKeepingCentre (area.getWidth(), 20);
 
         area.removeFromRight (5);   // the editor bar's room
         armButton.setBounds (area.removeFromRight (20));
         area.removeFromRight (6);
+        meter.setBounds (area.removeFromLeft (7));
+        area.removeFromLeft (1);
         soloButton.setBounds (area.removeFromLeft (20));
         muteButton.setBounds (area.removeFromLeft (20).expanded (1, 0).withTrimmedRight (1));   // shares S's right edge
         area.removeFromLeft (6);
@@ -146,6 +154,7 @@ private:
 
     juce::Label nameLabel;
     juce::TextButton armButton { "R" }, soloButton { "S" }, muteButton { "M" };
+    mixer::MidiMeter meter;
     bool selected = false, subselected = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Row)

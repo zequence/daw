@@ -83,9 +83,28 @@ public:
         }
 
         midi.addEvents (liveIn, 0, -1, 0);
+
+        // The MIDI meter: the loudest note-on since the meter last looked (played, live or injected)
+        auto loudest = 0.0f;
+
+        for (const auto metadata : midi)
+            if (const auto message = metadata.getMessage(); message.isNoteOn())
+                loudest = juce::jmax (loudest, message.getFloatVelocity());
+
+        if (loudest > 0.0f)
+        {
+            auto held = activity.load();
+
+            while (loudest > held && ! activity.compare_exchange_weak (held, loudest)) {}
+        }
     }
 
+    // The loudest note-on velocity (0..1) since the last call; 0 = none (one reader: the track's meter)
+    float takeActivity() noexcept   { return activity.exchange (0.0f); }
+
 private:
+    std::atomic<float> activity { 0.0f };
+
     void renderSequence (juce::MidiBuffer& midi)
     {
         midi.clear();
