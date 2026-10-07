@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AppBinaryData.h"
 #include "ThemedLookAndFeel.h"
 
 // The mixer's drawn parts (MixerView.h): the console style, knobs, lit buttons, the level fader,
@@ -258,10 +259,12 @@ namespace tape
 {
     inline const juce::Colour cream { 0xffe9d68e };
 
+    // Patrick Hand (OFL, embedded): the same handwriting on every system
     inline juce::Font markerFont (float height)
     {
-        static const auto hasPrint = juce::Font::findAllTypefaceNames().contains ("Segoe Print");
-        return juce::Font (juce::FontOptions (hasPrint ? juce::String ("Segoe Print") : juce::String(), height, juce::Font::bold));
+        static const auto hand = juce::Typeface::createSystemTypefaceFor (AppBinaryData::PatrickHandRegular_ttf,
+                                                                          AppBinaryData::PatrickHandRegular_ttfSize);
+        return juce::Font (juce::FontOptions (hand).withHeight (height));
     }
 
     // WCAG's relative luminance (0..1, linear light) and contrast ratio (1..21)

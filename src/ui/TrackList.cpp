@@ -335,6 +335,15 @@ public:
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
         theme::paintTrackBox (g, bounds, theme::Token::folderBg, selected, subselected);
+        const auto groupColour = AudioEngine::colourFromHex (engine.getFolderColour (folderId), mixer::tape::cream);
+        auto marks = juce::Colours::white.withAlpha (0.7f);
+
+        if (wasGrouped)   // a group: the whole row in its colour (its tape dark, written in it)
+        {
+            g.setColour (selected ? groupColour.brighter (0.2f) : groupColour);
+            g.fillRoundedRectangle (bounds, 3.0f);
+            marks = mixer::tape::inkFor (groupColour);
+        }
 
         // Collapse triangle (folders have no colour: it sits near the edge)
         const auto collapsed = engine.isFolderCollapsed (folderId);
@@ -346,14 +355,13 @@ public:
         else
             triangle.addTriangle (cx - 3.0f, cy - 1.5f, cx + 3.0f, cy - 1.5f, cx, cy + 3.0f);
 
-        g.setColour (juce::Colours::white.withAlpha (0.7f));
+        g.setColour (marks);
         g.fillPath (triangle);
-        sidebar::drawTrackIcon (g, iconBox.toFloat(), sidebar::TrackKind::folder, sidebar::rowTextColour.withAlpha (0.8f));
+        sidebar::drawTrackIcon (g, iconBox.toFloat(), sidebar::TrackKind::folder, wasGrouped ? marks : sidebar::rowTextColour.withAlpha (0.8f));
 
         if (wasGrouped && ! nameLabel.isBeingEdited())   // a group: a dark tape written in its colour (as in the mixer)
             nameTape.draw (g, nameLabel.getBounds().withHeight (getHeight()).withY (0), engine.getFolderName (folderId),
-                           theme::colour (theme::Token::buttonBg), juce::jmin (48.0f, (float) getHeight() * 0.8f),
-                           AudioEngine::colourFromHex (engine.getFolderColour (folderId), mixer::tape::cream));
+                           theme::colour (theme::Token::buttonBg), juce::jmin (48.0f, (float) getHeight() * 0.8f), groupColour);
     }
 
     void resized() override

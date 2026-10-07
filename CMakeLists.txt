@@ -61,10 +61,12 @@ target_compile_definitions(OrchestralDAW PRIVATE
 # articulation symbols in the MIDI editor and the expression map editor.
 # Inter by Rasmus Andersson, the sidebar's rows (SIL Open Font License 1.1, resources/fonts/Inter-OFL.txt):
 # the same on every system (Linux has no Segoe UI)
+# Patrick Hand by Patrick Wagesreiter, the tapes' handwriting (SIL Open Font License 1.1, resources/fonts/PatrickHand-OFL.txt)
 juce_add_binary_data(OrchestralDAWData
     HEADER_NAME AppBinaryData.h
     NAMESPACE AppBinaryData
-    SOURCES resources/fonts/Bravura.otf resources/fonts/Inter-Regular.ttf resources/fonts/Inter-SemiBold.ttf)
+    SOURCES resources/fonts/Bravura.otf resources/fonts/Inter-Regular.ttf resources/fonts/Inter-SemiBold.ttf
+            resources/fonts/PatrickHand-Regular.ttf)
 
 target_link_libraries(OrchestralDAW
     PRIVATE
