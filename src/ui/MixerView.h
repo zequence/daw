@@ -577,8 +577,19 @@ private:
             expandButton.setButtonText (juce::String::fromUTF8 (owner.expandedGroups.count (channelId) > 0 ? "\xe2\x97\x82" : "\xe2\x96\xb8"));
 
             // A channel's tape: its tag colour (as in the track view: a group's own, else its instrument's), cream without one
+            // A group: inverted - a dark tape written in its colour (its cover takes the colour); a channel
+            // a group sums: a smaller tape, greyed (it reads as part of the group, though it plays on)
             if (kind == Kind::channel)
-                name.setTapeColour (AudioEngine::colourFromHex (owner.engine.getChannelTagColour (channelId), mixer::tape::cream));
+            {
+                const auto colour = AudioEngine::colourFromHex (owner.engine.getChannelTagColour (channelId), mixer::tape::cream);
+
+                if (owner.engine.isGroupBus (channelId))
+                    name.setTapeColour (theme::colour (theme::Token::buttonBg), colour);
+                else if (owner.engine.isGroupBus (owner.engine.getAudioChannelOutput (channelId)))
+                    name.setTapeColour (colour.withMultipliedSaturation (0.3f).interpolatedWith (owner.style().panel, 0.35f), {}, true);
+                else
+                    name.setTapeColour (colour);
+            }
         }
 
         void updateLevelText()
@@ -779,7 +790,8 @@ private:
 
             const auto group = owner.engine.getAudioChannelOutput (channelId);
             const auto summed = owner.engine.isGroupBus (group);
-            const auto stripe = summed ? owner.engine.getChannelTagColour (group) : juce::String();
+            const auto stripe = summed ? owner.engine.getChannelTagColour (group)   // the group's colour: its cover, its channels' stripes
+                                       : owner.engine.isGroupBus (channelId) ? owner.engine.getChannelTagColour (channelId) : juce::String();
 
             if (background.getWidth() != getWidth() || background.getHeight() != getHeight() || isHighlighted != backgroundHighlighted
                 || summed != backgroundSummed || stripe != backgroundStripe)
@@ -812,7 +824,7 @@ private:
             if (owner.engine.isGroupBus (channelId))   // a plastic cover over the top (its tape, the expand button): not the strip's
             {
                 const juce::Rectangle<float> cover (1.0f, 1.0f, (float) w - 2.0f, 40.0f);
-                const auto plastic = theme::colour (theme::Token::buttonBg);   // dark: the button's colour
+                const auto plastic = AudioEngine::colourFromHex (backgroundStripe, juce::Colour (0xff7d9cc0));   // the group's colour
 
                 g.setColour (juce::Colours::black.withAlpha (0.45f));   // its shadow on the strip below
                 g.fillRoundedRectangle (cover.translated (0.0f, 3.0f), 4.0f);

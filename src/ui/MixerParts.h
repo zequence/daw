@@ -294,8 +294,9 @@ namespace tape
     }
 
     // centred: in the middle of 'area' (a mixer strip), else at its left (a sidebar row)
+    // ink: the writing's colour (transparent = the one that reads best on the tape)
     inline void draw (juce::Graphics& g, juce::Rectangle<float> area, const juce::String& name, juce::Colour colour,
-                      float fontHeight, bool centred = true)
+                      float fontHeight, bool centred = true, juce::Colour ink = juce::Colours::transparentBlack)
     {
         auto text = name;
         juce::Random random (text.hashCode());   // (from the whole name, before shortening)
@@ -354,7 +355,7 @@ namespace tape
             }
         }
 
-        g.setColour (inkFor (colour));
+        g.setColour (ink.isTransparent() ? inkFor (colour) : ink);
         g.setFont (font);
         g.drawText (text, strip.reduced (5.0f, 0.0f).translated (0.0f, -0.5f), juce::Justification::centred, false);
     }
@@ -394,11 +395,14 @@ struct TapeLabel final : juce::Label
 {
     static juce::Font markerFont()   { return tape::markerFont (24.0f); }
 
-    void setTapeColour (juce::Colour newColour)
+    // ink: transparent = the one that reads best; small: a smaller tape (a channel a group sums)
+    void setTapeColour (juce::Colour newColour, juce::Colour newInk = juce::Colours::transparentBlack, bool newSmall = false)
     {
-        if (newColour != tapeColour)
+        if (newColour != tapeColour || newInk != inkColour || newSmall != small)
         {
             tapeColour = newColour;
+            inkColour = newInk;
+            small = newSmall;
             repaint();
         }
     }
@@ -406,10 +410,12 @@ struct TapeLabel final : juce::Label
     void paint (juce::Graphics& g) override
     {
         if (! isBeingEdited())
-            tape::draw (g, getLocalBounds().toFloat().reduced (3.0f, 2.5f), getText(), tapeColour, (float) getHeight() * 0.8f);
+            tape::draw (g, getLocalBounds().toFloat().reduced (small ? 12.0f : 3.0f, small ? 7.0f : 2.5f), getText(), tapeColour,
+                        (float) getHeight() * (small ? 0.55f : 0.8f), true, inkColour);
     }
 
-    juce::Colour tapeColour = tape::cream;
+    juce::Colour tapeColour = tape::cream, inkColour = juce::Colours::transparentBlack;
+    bool small = false;
 };
 
 //==========================================================================
