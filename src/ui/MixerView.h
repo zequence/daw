@@ -501,6 +501,11 @@ private:
                             : kind == Kind::aux ? "Aux " + juce::String (auxNumber)
                                                 : owner.engine.getAudioChannelName (channelId),
                           juce::dontSendNotification);
+
+            // A channel's tape: its instrument's colour (as in the track view), cream without one
+            if (kind == Kind::channel)
+                name.setTapeColour (AudioEngine::colourFromHex (owner.engine.getInstrumentColour (owner.engine.getAudioChannelInput (channelId)),
+                                                                mixer::tape::cream));
         }
 
         void updateLevelText()

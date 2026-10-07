@@ -388,16 +388,28 @@ namespace tape
     };
 }
 
-// A strip's name label on tape (double-click edits it in the mixer)
+// A strip's name label on tape (double-click edits it in the mixer): the same tag as the instrument's
+// folder in the track view - its colour, its ink
 struct TapeLabel final : juce::Label
 {
     static juce::Font markerFont()   { return tape::markerFont (17.5f); }
 
+    void setTapeColour (juce::Colour newColour)
+    {
+        if (newColour != tapeColour)
+        {
+            tapeColour = newColour;
+            repaint();
+        }
+    }
+
     void paint (juce::Graphics& g) override
     {
         if (! isBeingEdited())
-            tape::draw (g, getLocalBounds().toFloat().reduced (3.0f, 2.5f), getText(), tape::cream, 17.5f);
+            tape::draw (g, getLocalBounds().toFloat().reduced (3.0f, 2.5f), getText(), tapeColour, 17.5f);
     }
+
+    juce::Colour tapeColour = tape::cream;
 };
 
 //==========================================================================
