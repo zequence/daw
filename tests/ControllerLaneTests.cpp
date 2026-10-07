@@ -97,6 +97,12 @@ public:
             expect (rising);
             expectWithinAbsoluteError (MidiSequence::laneValueAt (ramp->getControls(), point (0, 0), 2 * Q), 64, 1);
 
+            // A point added between two others (appended to the list) takes its place between them:
+            // the first ramp now runs to it
+            const auto inserted = MidiSequence::create ({}, { point (0, 0, true), point (4 * Q, 127), point (2 * Q, 100) });
+            expect (inserted->getControls()[1].tick == 2 * Q);
+            expectWithinAbsoluteError (MidiSequence::laneValueAt (inserted->getControls(), point (0, 0), Q), 50, 1);
+
             // Bent: the handle's height is the value at the middle
             const auto bent = MidiSequence::create ({}, { point (0, 0, true, 0.2f), point (4 * Q, 100) });
             expectWithinAbsoluteError (MidiSequence::laneValueAt (bent->getControls(), point (0, 0), 2 * Q), 20, 1);

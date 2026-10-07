@@ -95,6 +95,11 @@ public:
         std::stable_sort (notes.begin(), notes.end(),
                           [] (const Note& a, const Note& b) { return a.startTick < b.startTick; });
 
+        // Controller points by time too (a point added between two others belongs between them:
+        // the ramps, their drawing and playback follow this order)
+        std::stable_sort (controls.begin(), controls.end(),
+                          [] (const Control& a, const Control& b) { return a.tick < b.tick; });
+
         for (auto& n : notes)    seq->lengthTicks = juce::jmax (seq->lengthTicks, n.startTick + n.lengthTicks);
         for (auto& c : controls) seq->lengthTicks = juce::jmax (seq->lengthTicks, c.tick + 1);
 
