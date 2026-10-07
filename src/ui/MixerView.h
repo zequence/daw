@@ -371,6 +371,31 @@ private:
             if (kind != Kind::master)
                 addAndMakeVisible (drive);
 
+            // --- The console processing (channels): each knob and switch drives its parameter ---
+            if (kind == Kind::channel)
+            {
+                for (auto [knob, param] : stripKnobs())
+                {
+                    knob->setTooltip (knob->legend.isNotEmpty() ? knob->legend : juce::String ("Drive"));
+                    knob->setDoubleClickReturnValue (true, AnalogStrip::info (param).initial);
+                    knob->onValueChange = [this, knob, param = param]
+                    {
+                        if (auto* p = processor())
+                            p->getStrip().set (param, (float) knob->getValue());
+                    };
+                }
+
+                for (auto [button, param] : stripSwitches())
+                {
+                    button->setTooltip (button->getButtonText());
+                    button->onClick = [this, button, param = param]
+                    {
+                        if (auto* p = processor())
+                            p->getStrip().set (param, button->getToggleState() ? 1.0f : 0.0f);
+                    };
+                }
+            }
+
             // --- Pan, fader, meter, solo, mute: working on channels and the master ---
             pan.setRange (-1.0, 1.0, 0.01);
             pan.setDoubleClickReturnValue (true, 0.0);
@@ -479,8 +504,35 @@ private:
         }
 
         // The controls follow the engine (an API change, undo) - not while being dragged
+        std::vector<std::pair<mixer::Knob*, int>> stripKnobs()
+        {
+            return { { &hpf, AnalogStrip::hpf }, { &lpf, AnalogStrip::lpf },
+                     { &hfGain, AnalogStrip::hfGain }, { &hfFreq, AnalogStrip::hfFreq },
+                     { &hmfGain, AnalogStrip::hmfGain }, { &hmfFreq, AnalogStrip::hmfFreq }, { &hmfQ, AnalogStrip::hmfQ },
+                     { &lmfGain, AnalogStrip::lmfGain }, { &lmfFreq, AnalogStrip::lmfFreq }, { &lmfQ, AnalogStrip::lmfQ },
+                     { &lfGain, AnalogStrip::lfGain }, { &lfFreq, AnalogStrip::lfFreq },
+                     { &threshold, AnalogStrip::threshold }, { &ratio, AnalogStrip::ratio }, { &attack, AnalogStrip::attack },
+                     { &release, AnalogStrip::release }, { &makeup, AnalogStrip::makeup }, { &drive, AnalogStrip::drive } };
+        }
+
+        std::vector<std::pair<juce::Button*, int>> stripSwitches()
+        {
+            return { { &hfBell, AnalogStrip::hfBell }, { &lfBell, AnalogStrip::lfBell },
+                     { &eqIn, AnalogStrip::eqIn }, { &dynamicsIn, AnalogStrip::dynIn } };
+        }
+
         void syncControls()
         {
+            if (auto* p = processor(); p != nullptr && kind == Kind::channel)   // the console processing
+            {
+                for (auto [knob, param] : stripKnobs())
+                    if (! knob->isMouseButtonDown())
+                        knob->setValue (p->getStrip().get (param), juce::dontSendNotification);
+
+                for (auto [button, param] : stripSwitches())
+                    button->setToggleState (p->getStrip().get (param) > 0.5f, juce::dontSendNotification);
+            }
+
             if (auto* p = processor())
             {
                 if (! fader.isMouseButtonDown())

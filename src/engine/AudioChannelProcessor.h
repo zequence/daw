@@ -1,8 +1,10 @@
 #pragma once
 
 #include <juce_audio_processors/juce_audio_processors.h>
+#include "AnalogStrip.h"
 
-// A stereo audio channel strip: fader (gain), pan, mute, solo-silencing and metering (peak and RMS).
+// A stereo audio channel strip: the console processing (filters, EQ, dynamics, drive - AnalogStrip.h),
+// then fader (gain), pan, mute, solo-silencing and metering (peak and RMS).
 // Sits between an input (an instrument, later a device input) and the master bus; the master bus
 // is one too, between the channels and the device output.
 class AudioChannelProcessor final : public juce::AudioProcessor
@@ -32,9 +34,14 @@ public:
     float getLastPeak() const noexcept       { return peak.load(); }
     float getLastRms() const noexcept        { return rms.load(); }
 
+    // The filters, EQ, dynamics and drive (before the fader)
+    AnalogStrip& getStrip() noexcept               { return strip; }
+    const AnalogStrip& getStrip() const noexcept   { return strip; }
+
     //==============================================================================
-    void prepareToPlay (double, int) override
+    void prepareToPlay (double sampleRate, int) override
     {
+        strip.prepare (sampleRate);
         const auto [left, right] = targetGains();
         lastLeft = left;
         lastRight = right;
@@ -45,6 +52,7 @@ public:
     void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override
     {
         midi.clear();
+        strip.process (buffer);
         const auto [left, right] = targetGains();
         const auto samples = buffer.getNumSamples();
 
@@ -99,6 +107,7 @@ private:
     std::atomic<float> gain { 1.0f }, pan { 0.0f }, peak { 0.0f }, rms { 0.0f };
     std::atomic<bool> muted { false }, soloSilenced { false };
     float lastLeft = 1.0f, lastRight = 1.0f;
+    AnalogStrip strip;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioChannelProcessor)
 };

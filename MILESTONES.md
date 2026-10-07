@@ -774,7 +774,11 @@ Phases, each usable on its own: (1) the strip basics - names, fader, pan, solo,
 mute, meters, master bus, the view and F4 (DONE 2026-10-06; inserts, sends and
 output show as placeholders); (2) output selection and multi-output instruments
 (one strip per USED output pair); (3) the six Aux buses and the sends; (4) the EQ and dynamics (the SSL-style
-processing behind the knobs); (5) insert effects (STARTED 2026-10-07: channel inserts work -
+processing behind the knobs - DONE 2026-10-07 for channels: our own "analogue" strip
+(src/engine/AnalogStrip.h): HPF 18 dB/oct, LPF 12 dB/oct, shelves with the analogue bump (or bells),
+proportional-Q mid bands, a soft-knee VCA compressor, drive into a soft asymmetric clipper; smoothed,
+saved in the project; the Aux buses' knobs follow with phase 3; not yet: oversampling, undo, the API);
+(5) insert effects (STARTED 2026-10-07: channel inserts work -
 an empty slot's menu lists the scanned effects by category, a full slot opens its window, right-click
 bypasses / replaces / removes; pre-fader, in slot order; saved with their state. The rack (a channel's INSERTS button):
 the other strips step aside, the channel's strip stays at the left, and its inserts stand as rack units

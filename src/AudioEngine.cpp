@@ -2648,6 +2648,10 @@ bool AudioEngine::saveProject (const juce::File& file)
             a->setAttribute ("gain", audioChannel->getGain());
             a->setAttribute ("muted", audioChannel->isMuted());
             a->setAttribute ("pan", audioChannel->getPan());
+
+            for (int param = 0; param < AnalogStrip::numParams; ++param)   // the console strip: what isn't at its default
+                if (const auto value = audioChannel->getStrip().get (param); value != AnalogStrip::info (param).initial)
+                    a->setAttribute (AnalogStrip::info (param).name, value);
             a->setAttribute ("folder", getAudioChannelFolder (instrument.audioChannel));
 
             if (auto it = audioChannels.find (instrument.audioChannel); it != audioChannels.end())
@@ -2935,6 +2939,10 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
                         audioChannel->setGain ((float) a->getDoubleAttribute ("gain", 1.0));
                         audioChannel->setMuted (a->getBoolAttribute ("muted"));
                         audioChannel->setPan ((float) a->getDoubleAttribute ("pan", 0.0));
+
+                        for (int param = 0; param < AnalogStrip::numParams; ++param)
+                            if (a->hasAttribute (AnalogStrip::info (param).name))
+                                audioChannel->getStrip().set (param, (float) a->getDoubleAttribute (AnalogStrip::info (param).name));
                     }
 
                     if (a->getBoolAttribute ("soloed"))
