@@ -49,6 +49,18 @@ public:
         juce::PopupMenu styles;
         styles.addItem (mixer::ConsoleStyle::ssl().name, true, true, [] {});
         juce::PopupMenu menu;
+        const auto safe = juce::Component::SafePointer<MixerView> (this);
+        menu.addItem ("Fit size (to the window's height)", [safe] { if (safe != nullptr) safe->fitSize(); });
+        menu.addItem ("Actual size (100%)", [safe]
+        {
+            if (safe == nullptr)
+                return;
+
+            safe->scale = 1.0f;
+            safe->engine.getSettingsFile().setValue ("mixerZoom", 1.0);
+            safe->applyScale();
+        });
+        menu.addSeparator();
         menu.addSubMenu ("Console style", styles);
         menu.showMenuAsync (juce::PopupMenu::Options());
     }
@@ -65,12 +77,34 @@ public:
         }
     }
 
+    // The mixer keeps one size (the strips never stretch, so resizing the window only moves the view's
+    // edge). Its zoom changes on command only: "Fit size" (the right-click menu) zooms it to the
+    // window's height; the zoom is kept in the settings.
     void resized() override
     {
-        auto area = getLocalBounds();
-        outer.setBounds (area);
+        if (scale <= 0.0f)
+            scale = juce::jlimit (0.4f, 2.0f, (float) engine.getSettingsFile().getDoubleValue ("mixerZoom", 1.0));
+
+        applyScale();
+    }
+
+    void fitSize()
+    {
+        scale = juce::jlimit (0.4f, 2.0f, (float) getHeight() / (float) fitHeight);
+        engine.getSettingsFile().setValue ("mixerZoom", (double) scale);
+        engine.getSettingsFile().saveIfNeeded();
+        applyScale();
+    }
+
+    void applyScale()
+    {
+        outer.setTransform (juce::AffineTransform::scale (scale));
+        outer.setBounds (0, 0, juce::roundToInt (std::ceil ((float) getWidth() / scale)), juce::roundToInt (std::ceil ((float) getHeight() / scale)));
         layoutBody();
     }
+
+    static constexpr int fitHeight = 1240 + 20;   // a strip, its margins and the channels' scrollbar
+    float scale = 0.0f;   // 0 = not yet read from the settings
 
     void paint (juce::Graphics& g) override
     {
@@ -789,8 +823,7 @@ private:
     // whole row scrolls up and down when the view is shorter than a strip
     void layoutBody()
     {
-        const auto visibleHeight = outer.getMaximumVisibleHeight();
-        const auto height = juce::jmax (stripHeight, visibleHeight);
+        const auto height = fitHeight;   // fixed: the strips never change size (the zoom fits them to the window)
         const auto width = outer.getMaximumVisibleWidth();
         body.setSize (width, height);
 
