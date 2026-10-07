@@ -259,11 +259,10 @@ namespace tape
 {
     inline const juce::Colour cream { 0xffe9d68e };
 
-    // Patrick Hand (OFL, embedded): the same handwriting on every system
+    // Kalam Bold (OFL, embedded): the same handwriting on every system
     inline juce::Font markerFont (float height)
     {
-        static const auto hand = juce::Typeface::createSystemTypefaceFor (AppBinaryData::PatrickHandRegular_ttf,
-                                                                          AppBinaryData::PatrickHandRegular_ttfSize);
+        static const auto hand = juce::Typeface::createSystemTypefaceFor (AppBinaryData::KalamBold_ttf, AppBinaryData::KalamBold_ttfSize);
         return juce::Font (juce::FontOptions (hand).withHeight (height));
     }
 

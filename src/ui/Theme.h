@@ -29,7 +29,8 @@ namespace theme
     C (selectionBorder,  "selection.border",  "General",  "Selection outline",         -1,                      0xff6c87b5, false) \
     /* The sidebar and its tracks */                                                                                  \
     C (sidebarBg,        "sidebar.bg",        "Sidebar",  "Sidebar background",        (int) Token::surfacePanel, 0xff232529, false) \
-    C (folderBg,         "folder.bg",         "Tracks",   "Folder (instrument) background", -1,                 0xff2e3038, false) \
+    C (folderBg,         "folder.bg",         "Tracks",   "Folder background",         -1,                      0xff2e3038, false) \
+    C (instrumentBg,     "instrument.bg",     "Tracks",   "Instrument background",     -1,                      0xff342f40, false) \
     C (trackMidiBg,      "track.midi.bg",     "Tracks",   "MIDI track background",     -1,                      0xff3a3e46, false) \
     C (trackAudioBg,     "track.audio.bg",    "Tracks",   "Audio track background",    -1,                      0xff45393b, false) \
     C (trackBusBg,       "track.bus.bg",      "Tracks",   "Bus background",            -1,                      0xff34403a, false)  \
@@ -443,7 +444,7 @@ namespace theme
     {
         g.setColour (rowColour (colour (background), selected, subselected));
         g.fillRoundedRectangle (bounds, corner);
-        g.setColour (colour (background == Token::folderBg ? Token::folderBorder : Token::channelBorder));
+        g.setColour (colour (background == Token::folderBg || background == Token::instrumentBg ? Token::folderBorder : Token::channelBorder));
         g.drawRoundedRectangle (bounds, corner, 1.0f);
     }
 

@@ -73,8 +73,19 @@ public:
         status.setBounds (0, y, width, 18);
         y += 24;
 
-        preview.setBounds (0, y, juce::jmin (width, 700), 178);
-        y += 190;
+        // The preview beside the settings (below them when there's no room)
+        const auto rowsWidth = juce::jmin (width, 640);
+        const auto beside = width >= rowsWidth + 16 + 520;
+
+        if (beside)
+            preview.setBounds (rowsWidth + 16, y, juce::jmin (width - rowsWidth - 16, 720), Preview::height);
+        else
+        {
+            preview.setBounds (0, y, juce::jmin (width, 720), Preview::height);
+            y += Preview::height + 12;
+        }
+
+        const auto previewBottom = preview.getBottom();
 
         groupHeaders.clear();
         size_t nextGroup = 0;
@@ -93,6 +104,7 @@ public:
             y += 28;
         }
 
+        y = juce::jmax (y, previewBottom);
         setSize (width, y + 8);
         return y + 8;
     }
@@ -325,7 +337,7 @@ private:
     // A miniature arrange view + sidebar drawn with the real tokens
     struct Preview final : juce::Component
     {
-        static constexpr int buttonStrip = 38;
+        static constexpr int buttonStrip = 38, rowH = 30, rowCount = 9, height = rowH * rowCount + buttonStrip + 8;
 
         Preview()
         {
@@ -374,21 +386,31 @@ private:
             g.setColour (theme::colour (T::surfacePanel));
             g.fillRect (sidebar);
 
-            const int rowH = 36;
             const juce::Colour strings = juce::Colour (0xff56b58c), brass = juce::Colour (0xffdd2c40);
 
-            // --- sidebar rows ---
+            // --- sidebar rows: every kind, indented as in the tree; one selected, its contents subselected ---
             auto rowArea = sidebar.reduced (2, 0);
-            struct RowDef { const char* name; bool folder, selected; juce::Colour colour; };
+            struct RowDef { const char* name; T background; int depth; bool selected, subselected; juce::Colour colour; };
 
-            for (auto def : { RowDef { "Orchestra", true, false, juce::Colour (0xff6d7178) },
-                              RowDef { "Strings", false, false, strings },
-                              RowDef { "Brass", false, true, brass } })
+            for (auto def : { RowDef { "Orchestra", T::folderBg, 0, false, false, juce::Colours::transparentBlack },
+                              RowDef { "Violins", T::instrumentBg, 1, false, false, strings },
+                              RowDef { "Violins long", T::trackMidiBg, 2, false, false, strings },
+                              RowDef { "Violins short", T::trackMidiBg, 2, false, false, strings },
+                              RowDef { "Trumpets", T::instrumentBg, 1, true, false, brass },
+                              RowDef { "Trumpets legato", T::trackMidiBg, 2, false, true, brass },
+                              RowDef { "Choir take", T::trackAudioBg, 1, false, false, juce::Colours::transparentBlack },
+                              RowDef { "Reverb", T::trackBusBg, 0, false, false, juce::Colours::transparentBlack },
+                              RowDef { "Selected track", T::trackMidiBg, 0, true, false, strings } })
             {
-                auto bounds = rowArea.removeFromTop (rowH).toFloat().reduced (2.0f, 1.5f);
-                theme::paintTrackBox (g, bounds, def.folder ? theme::Token::folderBg : theme::Token::trackMidiBg, def.selected);
-                g.setColour (def.colour);
-                g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
+                auto bounds = rowArea.removeFromTop (rowH).withTrimmedLeft (def.depth * 12).toFloat().reduced (2.0f, 1.5f);
+                theme::paintTrackBox (g, bounds, def.background, def.selected, def.subselected);
+
+                if (! def.colour.isTransparent())
+                {
+                    g.setColour (def.colour);
+                    g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 2.0f, 4.0f, bounds.getHeight() - 4.0f);
+                }
+
                 g.setColour (juce::Colours::white.withAlpha (0.8f));
                 g.setFont (juce::FontOptions (13.0f));
                 g.drawText (def.name, bounds.reduced (14.0f, 0.0f), juce::Justification::centredLeft);
