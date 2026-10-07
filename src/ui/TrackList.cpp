@@ -304,7 +304,59 @@ class TrackList::InstrumentRow final : public juce::Component
 {
 public:
     InstrumentRow (TrackList& ownerToUse, AudioEngine& engineToUse, AudioEngine::InstrumentId id, int depthToUse)
-        : owner (ownerToUse), engine (engineToUse), instrumentId (id), depth (depthToUse) {}
+        : owner (ownerToUse), engine (engineToUse), instrumentId (id), depth (depthToUse)
+    {
+        // Solo and mute for the whole instrument (its audio), and its level
+        soloButton.setTooltip ("Solo the instrument");
+        soloButton.setClickingTogglesState (true);
+        theme::setButtonRole (soloButton, "solo");
+        soloButton.setConnectedEdges (juce::Button::ConnectedOnRight);
+        soloButton.onClick = [this]
+        {
+            if (const auto channel = engine.getAudioChannelForInstrument (instrumentId); channel != 0)
+                engine.setAudioChannelSoloed (channel, soloButton.getToggleState());
+        };
+
+        muteButton.setTooltip ("Mute the instrument");
+        muteButton.setClickingTogglesState (true);
+        theme::setButtonRole (muteButton, "mute");
+        muteButton.setConnectedEdges (juce::Button::ConnectedOnLeft);
+        muteButton.onClick = [this]
+        {
+            if (auto* p = engine.getAudioChannel (engine.getAudioChannelForInstrument (instrumentId)))
+                p->setMuted (muteButton.getToggleState());
+        };
+
+        for (auto* c : std::initializer_list<juce::Component*> { &soloButton, &muteButton, &meter })
+        {
+            c->setWantsKeyboardFocus (false);
+            addAndMakeVisible (c);
+        }
+    }
+
+    void refresh()
+    {
+        const auto channel = engine.getAudioChannelForInstrument (instrumentId);
+
+        if (auto* p = engine.getAudioChannel (channel))
+        {
+            muteButton.setToggleState (p->isMuted(), juce::dontSendNotification);
+            meter.update (p->getLastPeak());
+        }
+
+        soloButton.setToggleState (channel != 0 && engine.isAudioChannelSoloed (channel), juce::dontSendNotification);
+    }
+
+    void resized() override
+    {
+        // At the right: the level, then S|M (the tape takes the rest)
+        auto area = getLocalBounds().reduced (8, 0);
+        auto controls = area.removeFromRight (20 + 20 + 6 + 90).withSizeKeepingCentre (136, 20);
+        muteButton.setBounds (controls.removeFromRight (20).expanded (1, 0).withTrimmedRight (1));
+        soloButton.setBounds (controls.removeFromRight (20));
+        controls.removeFromRight (6);
+        meter.setBounds (controls.withSizeKeepingCentre (controls.getWidth(), 12));
+    }
 
     AudioEngine::InstrumentId getInstrumentId() const noexcept { return instrumentId; }
 
@@ -390,11 +442,8 @@ public:
         g.setColour (juce::Colours::white.withAlpha (0.7f));
         g.fillPath (triangle);
 
-        auto text = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 29).reduced (0, 2);
-        const auto count = juce::String ((int) tracks.size()) + ((int) tracks.size() == 1 ? " track" : " tracks");
-        g.setFont (juce::FontOptions (11.0f));
-        g.setColour (juce::Colours::white.withAlpha (0.4f));
-        g.drawText (count, text.removeFromRight (64).withTrimmedRight (8), juce::Justification::centredRight, false);
+        auto text = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 29).reduced (0, 2)
+                        .withRight (meter.getX() - 8);   // the tape, up to the level and S|M
 
         // Its name on tape - the tape takes the instrument's colour (cream without one); drawn once, cached
         const auto colour = AudioEngine::colourFromHex (engine.getInstrumentColour (instrumentId), mixer::tape::cream);
@@ -409,6 +458,8 @@ private:
     const int depth;
     bool selected = false;
     mixer::tape::Cached nameTape;
+    juce::TextButton soloButton { "S" }, muteButton { "M" };
+    mixer::LevelMeter meter;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InstrumentRow)
 };
@@ -431,6 +482,16 @@ public:
                 p->setMuted (muteButton.getToggleState());
         };
         addAndMakeVisible (muteButton);
+
+        soloButton.setTooltip ("Solo (audio)");
+        soloButton.setClickingTogglesState (true);
+        theme::setButtonRole (soloButton, "solo");
+        soloButton.setWantsKeyboardFocus (false);
+        soloButton.setConnectedEdges (juce::Button::ConnectedOnRight);   // S|M share one border
+        muteButton.setConnectedEdges (juce::Button::ConnectedOnLeft);
+        soloButton.onClick = [this] { engine.setAudioChannelSoloed (channelId, soloButton.getToggleState()); };
+        addAndMakeVisible (soloButton);
+        addAndMakeVisible (meter);
     }
 
     void mouseDown (const juce::MouseEvent& event) override
@@ -445,13 +506,10 @@ public:
         if (auto* p = engine.getAudioChannel (channelId))
         {
             muteButton.setToggleState (p->isMuted(), juce::dontSendNotification);
-            meterLevel = juce::jmax (p->getLastPeak(), meterLevel * 0.85f);
-
-            const auto peak = p->getLastPeak();   // the readout holds the peak a moment, then falls
-            heldPeak = peak >= heldPeak ? peak : heldPeak * 0.97f;
+            meter.update (p->getLastPeak());
         }
 
-        repaint();
+        soloButton.setToggleState (engine.isAudioChannelSoloed (channelId), juce::dontSendNotification);
     }
 
     void paint (juce::Graphics& g) override
@@ -464,24 +522,7 @@ public:
 
         g.setColour (sidebar::rowTextColour);
         g.setFont (sidebar::rowFont (14.0f, false));
-        g.drawText (juce::String::fromUTF8 ("\xe2\x99\xab ") + engine.getAudioChannelName (channelId), nameArea, juce::Justification::centredLeft, true);
-
-        // The level in dB: a meter (green, yellow from -12, red at 0) and its peak as a number
-        const auto peakDb = juce::Decibels::gainToDecibels (heldPeak, -60.0f);
-        g.setFont (juce::FontOptions (11.0f));
-        g.setColour (heldPeak >= 1.0f ? juce::Colours::red : juce::Colours::white.withAlpha (0.6f));
-        g.drawText (peakDb <= -59.9f ? juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e dB")) : juce::String (peakDb, 1) + " dB",
-                    readoutArea, juce::Justification::centredRight, false);
-
-        auto meter = meterArea.toFloat();
-        g.setColour (juce::Colours::black.withAlpha (0.55f));
-        g.fillRoundedRectangle (meter, 1.5f);
-        const auto db = juce::Decibels::gainToDecibels (meterLevel, -60.0f);
-        const auto fill = meter.withWidth (meter.getWidth() * juce::jlimit (0.0f, 1.0f, juce::jmap (db, -60.0f, 0.0f, 0.0f, 1.0f)));
-        juce::ColourGradient colours (juce::Colours::limegreen, meter.getX(), 0.0f, juce::Colours::red, meter.getRight(), 0.0f, false);
-        colours.addColour (0.8, juce::Colours::yellow);   // -12 dB
-        g.setGradientFill (colours);
-        g.fillRect (fill);
+        g.drawText (engine.getAudioChannelName (channelId), nameArea, juce::Justification::centredLeft, true);
     }
 
     void resized() override
@@ -489,14 +530,13 @@ public:
         // Two lines: mute and the name, then the meter and its readout under the name
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 6).reduced (8, 4);
         auto first = area.removeFromTop (area.getHeight() / 2);
-        muteButton.setBounds (first.removeFromLeft (20).withSizeKeepingCentre (20, 20));
+        soloButton.setBounds (first.removeFromLeft (20).withSizeKeepingCentre (20, 20));
+        muteButton.setBounds (first.removeFromLeft (20).withSizeKeepingCentre (20, 20).expanded (1, 0).withTrimmedRight (1));
         first.removeFromLeft (6);
         nameArea = first;
 
-        area.removeFromLeft (26);
-        readoutArea = area.removeFromRight (52);
-        area.removeFromRight (6);
-        meterArea = area.withSizeKeepingCentre (area.getWidth(), 6);
+        area.removeFromLeft (46);
+        meter.setBounds (area);
     }
 
 private:
@@ -504,9 +544,9 @@ private:
     AudioEngine& engine;
     const AudioEngine::AudioChannelId channelId;
     const int depth;
-    juce::TextButton muteButton { "M" };
-    juce::Rectangle<int> nameArea, meterArea, readoutArea;
-    float meterLevel = 0.0f, heldPeak = 0.0f;
+    juce::TextButton soloButton { "S" }, muteButton { "M" };
+    mixer::LevelMeter meter { true, false, true };
+    juce::Rectangle<int> nameArea;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AudioRow)
 };
@@ -574,7 +614,7 @@ void TrackList::refresh()
         else if (auto* instrumentRow = dynamic_cast<InstrumentRow*> (component.get()))
         {
             instrumentRow->setSelected (instrumentRow->getInstrumentId() == selectedInstrument);
-            instrumentRow->repaint();
+            instrumentRow->refresh();
         }
         else if (auto* audioRow = dynamic_cast<AudioRow*> (component.get()))
         {

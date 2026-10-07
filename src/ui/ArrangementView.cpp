@@ -1109,7 +1109,7 @@ void ArrangementView::paint (juce::Graphics& g)
                 {
                     g.setColour (juce::Colours::white.withAlpha (0.45f));
                     g.setFont (juce::FontOptions (10.0f));
-                    g.drawFittedText (item.channel != 0 ? juce::String::fromUTF8 ("♫ ") + engine.getAudioChannelName (item.channel)
+                    g.drawFittedText (item.channel != 0 ? engine.getAudioChannelName (item.channel)
                                                         : engine.getTrackName (item.member),
                                       4, y + 4, TimeAxis::gutter - 8, height - 8,
                                       juce::Justification::topLeft, 3);

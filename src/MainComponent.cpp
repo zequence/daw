@@ -1520,7 +1520,7 @@ void MainComponent::timerCallback()
     engine.pollRecording();
 
     if (auto* master = engine.getMasterChannel(); master != nullptr && masterMeter.isVisible())
-        masterMeter.update (master->getLastPeak(), master->getLastRms());
+        masterMeter.update (master->getLastPeak());
 
 
     // The mixer highlights the selected audio channel (the sidebar's audio list and the mixer share
@@ -2067,7 +2067,7 @@ void MainComponent::resized()
         }
 
         bar.removeFromBottom (6);
-        masterMeter.setBounds (bar.withSizeKeepingCentre (18, bar.getHeight()));   // the audio out
+        masterMeter.setBounds (bar.withSizeKeepingCentre (56, bar.getHeight()));   // the audio out (with its scale)
         masterMeter.setVisible (true);
     }
     else

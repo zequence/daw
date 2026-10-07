@@ -454,6 +454,154 @@ struct GainReductionMeter final : juce::Component, juce::SettableTooltipClient
 };
 
 //==========================================================================
+// A level meter in the usual colours: green for low levels (below -18 dB), yellow for the good area
+// (-18 to -1 dB), red at the top and for clipping. Horizontal (the track rows) or vertical (the master),
+// optionally with a dB scale and a readout of the held peak. It repaints only when what it shows
+// changes (many of them can run). Click it to clear the clip light.
+struct LevelMeter final : juce::Component
+{
+    static constexpr float floorDb = -60.0f, greenTop = -18.0f, redFrom = -1.0f;
+
+    explicit LevelMeter (bool horizontalToUse = true, bool scaleToUse = false, bool readoutToUse = false)
+        : horizontal (horizontalToUse), showScale (scaleToUse), showReadout (readoutToUse) {}
+
+    static float fraction (float db)   { return juce::jlimit (0.0f, 1.0f, (db - floorDb) / -floorDb); }
+
+    void update (float peakGain)
+    {
+        level = juce::jmax (peakGain, level * 0.85f);
+
+        if (peakGain >= held)
+        {
+            held = peakGain;
+            holdTicks = 45;   // ~1.5 s at 30 Hz
+        }
+        else if (--holdTicks <= 0)
+        {
+            held *= 0.92f;
+        }
+
+        clipped = clipped || peakGain >= 1.0f;
+
+        const auto length = (float) (horizontal ? bar().getWidth() : bar().getHeight());
+        const Shown now { juce::roundToInt (fraction (toDb (level)) * length), juce::roundToInt (fraction (toDb (held)) * length),
+                          clipped, juce::roundToInt (toDb (held) * 10.0f) };
+
+        if (now != shown)
+        {
+            shown = now;
+            repaint();
+        }
+    }
+
+    void mouseDown (const juce::MouseEvent&) override   { clipped = false; held = 0.0f; repaint(); }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto area = bar().toFloat();
+        g.setColour (juce::Colour (0xff111214));
+        g.fillRoundedRectangle (area, 1.5f);
+
+        // The zones, filled up to the level
+        const auto fillTo = fraction (toDb (level));
+        const std::array<std::tuple<float, float, juce::Colour>, 3> zones {{
+            { 0.0f, fraction (greenTop), juce::Colour (0xff3fbf5a) },
+            { fraction (greenTop), fraction (redFrom), juce::Colour (0xffe8c93a) },
+            { fraction (redFrom), 1.0f, juce::Colour (0xffe5483f) } }};
+
+        for (auto& [from, to, colour] : zones)
+        {
+            const auto end = juce::jmin (to, fillTo);
+
+            if (end <= from)
+                continue;
+
+            g.setColour (colour);
+            g.fillRect (horizontal ? juce::Rectangle<float> (area.getX() + from * area.getWidth(), area.getY(), (end - from) * area.getWidth(), area.getHeight())
+                                   : juce::Rectangle<float> (area.getX(), area.getBottom() - end * area.getHeight(), area.getWidth(), (end - from) * area.getHeight()));
+        }
+
+        // The held peak: a line
+        if (held > 0.0f)
+        {
+            const auto at = fraction (toDb (held));
+            g.setColour (juce::Colours::white.withAlpha (0.8f));
+            g.fillRect (horizontal ? juce::Rectangle<float> (area.getX() + at * area.getWidth() - 1.0f, area.getY(), 1.5f, area.getHeight())
+                                   : juce::Rectangle<float> (area.getX(), area.getBottom() - at * area.getHeight(), area.getWidth(), 1.5f));
+        }
+
+        if (clipped)   // the clip light
+        {
+            g.setColour (juce::Colour (0xffff3b30));
+            g.fillRect (horizontal ? area.withTrimmedLeft (area.getWidth() - 3.0f) : area.withHeight (3.0f));
+        }
+
+        if (showScale)   // dB marks beside the bar (vertical)
+        {
+            g.setFont (juce::FontOptions (9.0f));
+
+            for (auto db : { 0.0f, -6.0f, -12.0f, -18.0f, -24.0f, -36.0f, -48.0f })
+            {
+                const auto y = area.getBottom() - fraction (db) * area.getHeight();
+                g.setColour (juce::Colours::white.withAlpha (db == 0.0f ? 0.75f : 0.4f));
+                g.fillRect (area.getRight() + 1.0f, y - 0.5f, 4.0f, 1.0f);
+                g.drawText (juce::String ((int) db), juce::Rectangle<float> (area.getRight() + 6.0f, y - 6.0f, 22.0f, 12.0f),
+                            juce::Justification::centredLeft, false);
+            }
+        }
+
+        if (showReadout)   // the held peak in dB
+        {
+            const auto db = toDb (held);
+            g.setFont (juce::FontOptions (11.0f));
+            g.setColour (clipped ? juce::Colour (0xffff3b30) : juce::Colour (0xffd4d6da));
+            g.drawText (db <= floorDb + 0.05f ? juce::String (juce::CharPointer_UTF8 ("-\xe2\x88\x9e")) : juce::String (db, 1),
+                        readout(), horizontal ? juce::Justification::centredRight : juce::Justification::centred, false);
+        }
+    }
+
+    const bool horizontal, showScale, showReadout;
+
+private:
+    static float toDb (float gain)   { return juce::Decibels::gainToDecibels (gain, floorDb); }
+
+    juce::Rectangle<int> readout() const
+    {
+        auto area = getLocalBounds();
+        return horizontal ? area.removeFromRight (40) : area.removeFromTop (16);
+    }
+
+    juce::Rectangle<int> bar() const
+    {
+        auto area = getLocalBounds();
+
+        if (showReadout)
+        {
+            if (horizontal) { area.removeFromRight (40); area.removeFromRight (4); }
+            else            { area.removeFromTop (16); area.removeFromTop (4); }
+        }
+
+        if (showScale && ! horizontal)
+            area.removeFromRight (28);
+
+        return horizontal ? area.withSizeKeepingCentre (area.getWidth(), juce::jmin (area.getHeight(), 6)) : area;
+    }
+
+    struct Shown
+    {
+        int level = -1, held = -1;
+        bool clipped = false;
+        int readoutTenths = 0;
+        bool operator!= (const Shown& o) const   { return level != o.level || held != o.held || clipped != o.clipped || readoutTenths != o.readoutTenths; }
+    };
+
+    float level = 0.0f, held = 0.0f;
+    int holdTicks = 0;
+    bool clipped = false;
+    Shown shown;
+};
+
+//==========================================================================
 // A level meter: peak (bright) over RMS (body), a peak-hold line, a clip light (click resets)
 struct Meter final : juce::Component
 {
