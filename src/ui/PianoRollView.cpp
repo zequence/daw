@@ -2857,7 +2857,11 @@ void PianoRollView::paint (juce::Graphics& g)
 
     const auto playable = [&] (int key) { return key >= playableLow && key <= playableHigh; };
 
-    // --- Key rows ---
+    // --- Key rows (inside the grid: the last one is cut at the lanes) ---
+    {
+    juce::Graphics::ScopedSaveState rowsOnly (g);
+    g.reduceClipRegion (grid);
+
     for (int key = topKey; key >= 0; --key)
     {
         const auto y = keyToY (key);
@@ -2882,6 +2886,7 @@ void PianoRollView::paint (juce::Graphics& g)
             g.setColour (juce::Colour (0xff15171a));
             g.fillRect (grid.getX(), y + keyHeight - 1, grid.getWidth(), 1);
         }
+    }
     }
 
     // --- Bar/beat lines (the timeline bar above shows the numbers) ---
@@ -3094,6 +3099,10 @@ void PianoRollView::paint (juce::Graphics& g)
     g.setColour (juce::Colour (0xff232529));
     g.fillRect (keys);
 
+    {
+    juce::Graphics::ScopedSaveState keysOnly (g);   // the keys stop at the lanes (the last one is cut, not drawn over them)
+    g.reduceClipRegion (keys);
+
     for (int key = topKey; key >= 0; --key)
     {
         const auto y = keyToY (key);
@@ -3143,6 +3152,7 @@ void PianoRollView::paint (juce::Graphics& g)
             g.drawText (noteNames::name (key), keys.getX() + 2, y, keys.getWidth() - 8, keyHeight,
                         juce::Justification::centredRight);
         }
+    }
     }
 
     // --- Playhead ---
