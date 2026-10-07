@@ -104,15 +104,10 @@ public:
 
         if (engine.getTrackInstrument (trackId) != 0)   // in an instrument folder: the whole row its dark blue-grey
         {
-            const auto colour = AudioEngine::colourFromHex (AudioEngine::instrumentTrackColour, juce::Colours::grey);
-            g.setColour (selected ? colour.brighter (0.45f) : colour);
+            // Selected: the theme's selected-track colour (as any track)
+            g.setColour (selected ? theme::colour (theme::Token::channelSelectedBg)
+                                  : AudioEngine::colourFromHex (AudioEngine::instrumentTrackColour, juce::Colours::grey));
             g.fillRoundedRectangle (bounds, theme::corner);
-
-            if (selected)
-            {
-                g.setColour (theme::colour (theme::Token::selectionBorder));
-                g.drawRoundedRectangle (bounds.reduced (0.5f), theme::corner, 1.0f);
-            }
         }
         else
         {
