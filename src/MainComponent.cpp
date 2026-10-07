@@ -734,11 +734,13 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     const auto safe = juce::Component::SafePointer<MainComponent> (this);
     juce::PopupMenu menu;
 
-    menu.addItem ("Set output...", [safe, id] { if (safe != nullptr) safe->chooseTrackOutput (id); });
+    // A track in an instrument folder: its routing is the instrument's (no output or port choices here),
+    // and removing it removes the instrument (with all its tracks)
+    const auto instrument = engine.getTrackInstrument (id);
 
-    if (const auto instrument = engine.getTrackInstrument (id); instrument != 0)   // its instrument folder's
-        menu.addItem ("Remove instrument '" + engine.getInstrumentName (instrument) + "'...",
-                      [safe, instrument] { if (safe != nullptr) safe->removeInstrumentAsking (instrument); });
+    if (instrument == 0)
+        menu.addItem ("Set output...", [safe, id] { if (safe != nullptr) safe->chooseTrackOutput (id); });
+
     menu.addItem ("Open / close instrument GUI (" + keys::Bindings::describe (keys::Bindings::get().keysFor ("track.instrumentGui")) + ")",
                   ! engine.getTrackOutputs (id).empty(), false,
                   [safe, id] { if (safe != nullptr) safe->openTrackPluginWindow (id); });
@@ -749,7 +751,9 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
         if (safe != nullptr)
             safe->engine.setTrackRecordReplace (id, ! safe->engine.isTrackRecordReplace (id));
     });
-    menu.addItem ("Port and channel...", [safe, id] { if (safe != nullptr) safe->showTrackOutputConfig (id); });
+    if (instrument == 0)
+        menu.addItem ("Port and channel...", [safe, id] { if (safe != nullptr) safe->showTrackOutputConfig (id); });
+
     menu.addSeparator();
 
     // Contextual add (ISSUES.md "Sidebar"): the new track lands right below this one
@@ -793,7 +797,7 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     });
 
     menu.addSubMenu ("Move to folder", moveTo);
-    if (engine.getTrackInstrument (id) == 0)   // (in an instrument folder only the folder is coloured)
+    if (instrument == 0)   // (in an instrument folder only the folder is coloured)
         menu.addSubMenu ("Color", colours::buildMenu (engine.getTrackColour (id),
                                                       [safe, id] (juce::String hex)
                                                       { if (safe != nullptr) safe->engine.setTrackColour (id, hex); }));
@@ -811,10 +815,13 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     menu.addItem ("Clear clip", engine.getTrackSequence (id) != nullptr, false,
                   [safe, id] { if (safe != nullptr) safe->engine.setTrackSequence (id, nullptr); });
     menu.addSeparator();
-    menu.addItem ("Remove track", [safe, id]
-    {
-        juce::MessageManager::callAsync ([safe, id] { if (safe != nullptr) safe->removeTrack (id); });
-    });
+    if (instrument != 0)
+        menu.addItem ("Remove instrument...", [safe, instrument] { if (safe != nullptr) safe->removeInstrumentAsking (instrument); });
+    else
+        menu.addItem ("Remove track", [safe, id]
+        {
+            juce::MessageManager::callAsync ([safe, id] { if (safe != nullptr) safe->removeTrack (id); });
+        });
 
     menu.showMenuAsync (juce::PopupMenu::Options());
 }
