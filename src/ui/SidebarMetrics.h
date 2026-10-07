@@ -56,8 +56,7 @@ namespace sidebar
     {
         return item.instrument != 0 ? trackRowHeight()
              : item.folder != 0     ? folderRowHeight
-             : item.channel != 0    ? 2 * midiRowHeight   // audio: its name, and its meter under it
-                                    : midiRowHeight;
+                                    : midiRowHeight;   // MIDI tracks and audio rows
     }
 
     // One shared scroll offset; views poll 'revision' from their timers.

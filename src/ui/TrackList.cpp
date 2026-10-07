@@ -516,9 +516,11 @@ public:
 
         theme::paintTrackBox (g, bounds, theme::Token::trackAudioBg, selected, subselected);
 
+        const auto font = sidebar::folderFont (15.0f);   // the typewriter, as the MIDI tracks
         g.setColour (sidebar::rowTextColour);
-        g.setFont (sidebar::rowFont (14.0f, false));
-        g.drawText (engine.getAudioChannelName (channelId), nameArea, juce::Justification::centredLeft, true);
+        g.setFont (font);
+        g.drawText (engine.getAudioChannelName (channelId), nameArea.translated (0, sidebar::visualCentreOffset (font)),
+                    juce::Justification::centredLeft, true);
     }
 
     void resized() override
