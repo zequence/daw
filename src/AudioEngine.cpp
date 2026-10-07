@@ -1397,21 +1397,39 @@ void AudioEngine::syncFolderGroups()
         while (! enclosing.empty() && enclosing.back().first >= item.depth)
             enclosing.pop_back();
 
-        if (item.folder != 0)
+        // The innermost group around this item (a grouped folder enclosing it)
+        const auto groupAround = [&]
+        {
+            AudioChannelId bus = 0;
+
+            for (auto around = enclosing.rbegin(); around != enclosing.rend() && bus == 0; ++around)
+                bus = getFolderGroupBus (around->second);
+
+            return bus;
+        };
+
+        const auto route = [this] (AudioChannelId strip, AudioChannelId wanted)
+        {
+            const auto current = getAudioChannelOutput (strip);
+
+            if (strip != 0 && current != wanted && (current == 0 || isGroupBus (current)))
+                setAudioChannelOutput (strip, wanted);
+        };
+
+        if (item.folder != 0)   // a group inside a group feeds it
+        {
+            route (getFolderGroupBus (item.folder), groupAround());
             enclosing.push_back ({ item.depth, item.folder });
+        }
+
+        if (item.instrument != 0)
+            route (getInstrumentGroupBus (item.instrument), groupAround());
 
         if (item.channel == 0 || isBus (item.channel))
             continue;
 
-        AudioChannelId wanted = getInstrumentGroupBus (getAudioChannelInput (item.channel));   // its instrument's group first
-
-        for (auto around = enclosing.rbegin(); around != enclosing.rend() && wanted == 0; ++around)
-            wanted = getFolderGroupBus (around->second);
-
-        const auto current = getAudioChannelOutput (item.channel);
-
-        if (current != wanted && (current == 0 || isGroupBus (current)))
-            setAudioChannelOutput (item.channel, wanted);
+        const auto instrumentGroup = getInstrumentGroupBus (getAudioChannelInput (item.channel));   // its instrument's group first
+        route (item.channel, instrumentGroup != 0 ? instrumentGroup : groupAround());
     }
 }
 
@@ -1443,8 +1461,12 @@ bool AudioEngine::setAudioChannelOutput (AudioChannelId id, AudioChannelId targe
 
     auto* channel = audioChannels.count (id) > 0 ? &audioChannels[id] : (buses.count (id) > 0 ? &buses[id] : nullptr);
 
-    if (channel == nullptr || id == target || (buses.count (id) > 0 && target != 0))   // buses go to the master (for now)
+    if (channel == nullptr)
         return false;
+
+    for (auto along = target; along != 0; along = getAudioChannelOutput (along))   // a bus may go to a bus - never round in a loop
+        if (along == id)
+            return false;
 
     channel->output = target;
     routeStrip (channel->node, target);
@@ -1455,6 +1477,9 @@ bool AudioEngine::setAudioChannelOutput (AudioChannelId id, AudioChannelId targe
 AudioEngine::AudioChannelId AudioEngine::getAudioChannelOutput (AudioChannelId id) const
 {
     if (auto it = audioChannels.find (id); it != audioChannels.end())
+        return it->second.output;
+
+    if (auto it = buses.find (id); it != buses.end())
         return it->second.output;
 
     return 0;
@@ -2621,7 +2646,8 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
     const auto pushInstrument = [&] (InstrumentId instrument, int depth, FolderId parent)
     {
         placed.insert (instrument);
-        items.push_back ({ 0, 0, depth, parent, instrument, 0, isInstrumentGrouped (instrument) });
+        items.push_back ({ 0, 0, depth, parent, instrument, 0,
+                           isInstrumentGrouped (instrument) && ! isGroupBus (getAudioChannelOutput (getInstrumentGroupBus (instrument))) });
 
         if (skipCollapsed && ! isInstrumentExpanded (instrument))
             return;
@@ -2644,7 +2670,8 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
         {
             if (child.isFolder)
             {
-                items.push_back ({ child.id, 0, depth, parent, 0, 0, midiDomain && isFolderGrouped (child.id) });
+                items.push_back ({ child.id, 0, depth, parent, 0, 0,
+                                   midiDomain && isFolderGrouped (child.id) && ! isGroupBus (getAudioChannelOutput (getFolderGroupBus (child.id))) });
 
                 if (! (skipCollapsed && isFolderCollapsed (child.id)))
                     visit (child.id, depth + 1);

@@ -756,6 +756,7 @@ void MainComponent::addTracks (const AddTrackDialog::Choice& choice)
                         if (name.isNotEmpty())
                             safe->engine.setInstrumentName (instrumentId, name);
 
+                        safe->engine.setInstrumentGrouped (instrumentId, true);   // grouped by default
                         const auto track = safe->engine.addTrack (name);
                         safe->engine.addTrackOutput (track, instrumentId, 1);
 
@@ -1078,6 +1079,7 @@ void MainComponent::chooseNewInstrumentFor (AudioEngine::TrackId trackId)
                                         return;
                                     }
 
+                                    safe->engine.setInstrumentGrouped (instrumentId, true);   // grouped by default
                                     safe->engine.clearTrackOutputs (trackId);
                                     safe->engine.addTrackOutput (trackId, instrumentId, 1);
                                     safe->autoNameTrackForOutput (trackId, instrumentId);

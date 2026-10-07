@@ -167,6 +167,34 @@ public:
             expect (engine.getBusIds().empty());
         }
 
+                beginTest ("groups within groups: a grouped instrument in a grouped folder feeds the folder's group, untagged");
+        {
+            const auto folder = engine.addFolder (true, "Brass");
+            engine.setTrackFolder (first, folder);
+            engine.setTrackFolder (second, folder);
+            engine.setInstrumentGrouped (instrument, true);
+            engine.setFolderGrouped (folder, true);
+
+            const auto inner = engine.getInstrumentGroupBus (instrument), outer = engine.getFolderGroupBus (folder);
+            expectEquals (engine.getAudioChannelOutput (channel), inner);
+            expectEquals (engine.getAudioChannelOutput (inner), outer);
+            expect (! engine.setAudioChannelOutput (outer, inner), "no loops");
+
+            bool instrumentTagged = true;
+
+            for (auto& item : engine.getSidebarItems (true, true))
+                if (item.instrument == (int) instrument)
+                    instrumentTagged = item.tagged;
+
+            expect (! instrumentTagged, "inside a group: no tag");
+
+            engine.setFolderGrouped (folder, false);
+            expectEquals (engine.getAudioChannelOutput (inner), 0);
+            engine.setInstrumentGrouped (instrument, false);
+            engine.setTrackFolder (first, 0);
+            engine.setTrackFolder (second, 0);
+        }
+
                 beginTest ("membership follows routing");
         {
             engine.clearTrackOutputs (second);

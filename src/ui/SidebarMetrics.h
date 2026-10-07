@@ -154,6 +154,10 @@ namespace sidebar
         if (automationModeSetting())
             std::erase_if (items, [] (const AudioEngine::SidebarItem& item) { return item.member != 0; });
 
+        // Audio a group sums: hidden altogether (the group stands for it)
+        std::erase_if (items, [&engine] (const AudioEngine::SidebarItem& item)
+                       { return item.channel != 0 && engine.isGroupBus (engine.getAudioChannelOutput (item.channel)); });
+
         return items;
     }
 

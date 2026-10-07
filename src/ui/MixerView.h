@@ -790,6 +790,12 @@ private:
             g.setColour (isHighlighted ? base.brighter (0.25f) : base);
             g.fillPath (panel);
 
+            if (owner.engine.isGroupBus (channelId))   // its tape and expand button on a plate of the button's colour
+            {
+                g.setColour (theme::colour (theme::Token::buttonBg).brighter (0.08f));
+                g.fillRoundedRectangle (juce::Rectangle<float> (3.0f, 3.0f, (float) w - 6.0f, 38.0f), 3.0f);
+            }
+
             {
                 juce::Graphics::ScopedSaveState state (g);
                 g.reduceClipRegion (panel);
@@ -1758,19 +1764,28 @@ private:
 
         for (auto& item : engine.getSidebarItems (true, false))
         {
-            if (item.folder != 0 && engine.isFolderGrouped (item.folder))   // a group: its bus where the folder is
-                ids.push_back (engine.getFolderGroupBus (item.folder));
-            else if (item.instrument != 0 && engine.isInstrumentGrouped (item.instrument))   // (or the instrument)
-                ids.push_back (engine.getInstrumentGroupBus (item.instrument));
-            else if (item.channel != 0)
-            {
-                // The channels a group sums show only while the group is expanded (their inserts and
-                // settings at hand without undoing the group); otherwise the group stands for them
-                const auto output = engine.getAudioChannelOutput (item.channel);
+            // A group's strip stands where its folder (or instrument) is; what a group sums shows only
+            // while that group - and every group it goes on into - is expanded (inserts and settings at
+            // hand without undoing the group); groups within groups expand in turn
+            AudioEngine::AudioChannelId strip = 0;
 
-                if (! engine.isGroupBus (output) || expandedGroups.count (output) > 0)
-                    ids.push_back (item.channel);
-            }
+            if (item.folder != 0)
+                strip = engine.getFolderGroupBus (item.folder);
+            else if (item.instrument != 0)
+                strip = engine.getInstrumentGroupBus (item.instrument);
+            else if (item.channel != 0 && ! engine.isGroupBus (item.channel))
+                strip = item.channel;
+
+            if (strip == 0)
+                continue;
+
+            auto shown = true;
+
+            for (auto into = engine.getAudioChannelOutput (strip); shown && engine.isGroupBus (into); into = engine.getAudioChannelOutput (into))
+                shown = expandedGroups.count (into) > 0;
+
+            if (shown)
+                ids.push_back (strip);
         }
 
         std::erase_if (expandedGroups, [&ids] (auto bus) { return std::find (ids.begin(), ids.end(), bus) == ids.end(); });
