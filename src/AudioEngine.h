@@ -452,6 +452,10 @@ public:
     bool isFolderGrouped (FolderId) const;
     AudioChannelId getFolderGroupBus (FolderId) const;   // 0: not grouped
     bool isGroupBus (AudioChannelId) const;
+
+    // The colour of a channel's name tag: a group's own (a folder group starts with a copy of the first
+    // instrument colour inside it, then is its own to change - setFolderColour), else its instrument's
+    juce::String getChannelTagColour (AudioChannelId) const;
     FolderId getGroupBusFolder (AudioChannelId) const;   // the folder a group bus sums (0: none)
 
     // Where a channel's strip goes: the master (0) or a bus

@@ -522,6 +522,17 @@ private:
             output.setColour (juce::Label::outlineColourId, juce::Colours::white.withAlpha (0.12f));
             addAndMakeVisible (output);
 
+            expandButton.setTooltip ("Show the channels this group sums (their inserts and settings), beside it");
+            expandButton.setWantsKeyboardFocus (false);
+            expandButton.onClick = [this]
+            {
+                if (! owner.expandedGroups.erase (channelId))
+                    owner.expandedGroups.insert (channelId);
+
+                owner.shownIds.clear();   // the strips are rebuilt on the next tick
+            };
+            addChildComponent (expandButton);
+
             refreshName();
             syncControls();
             updateLevelText();
@@ -554,10 +565,11 @@ private:
                                                 : owner.engine.getAudioChannelName (channelId),
                           juce::dontSendNotification);
 
-            // A channel's tape: its instrument's colour (as in the track view), cream without one
+            expandButton.setButtonText (juce::String::fromUTF8 (owner.expandedGroups.count (channelId) > 0 ? "\xe2\x97\x82" : "\xe2\x96\xb8"));
+
+            // A channel's tape: its tag colour (as in the track view: a group's own, else its instrument's), cream without one
             if (kind == Kind::channel)
-                name.setTapeColour (AudioEngine::colourFromHex (owner.engine.getInstrumentColour (owner.engine.getAudioChannelInput (channelId)),
-                                                                mixer::tape::cream));
+                name.setTapeColour (AudioEngine::colourFromHex (owner.engine.getChannelTagColour (channelId), mixer::tape::cream));
         }
 
         void updateLevelText()
@@ -772,7 +784,10 @@ private:
             juce::Graphics g (image);
             juce::Path panel;
             panel.addRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
-            g.setColour (isHighlighted ? owner.style().panel.brighter (0.25f) : owner.style().panel);
+            // A group's strip: tinted (it stands for the channels it sums)
+            const auto base = owner.engine.isGroupBus (channelId) ? owner.style().panel.interpolatedWith (juce::Colour (0xff4f6d8f), 0.28f)
+                                                                  : owner.style().panel;
+            g.setColour (isHighlighted ? base.brighter (0.25f) : base);
             g.fillPath (panel);
 
             {
@@ -873,7 +888,21 @@ private:
         void resized() override
         {
             auto area = getLocalBounds().reduced (4);
-            name.setBounds (area.removeFromTop (36));   // the tape: its writing as large as the track view's
+            {
+                auto top = area.removeFromTop (36);   // the tape: its writing as large as the track view's
+
+                if (owner.engine.isGroupBus (channelId))   // a group: its expand button beside the tape
+                {
+                    expandButton.setBounds (top.removeFromRight (18).withSizeKeepingCentre (18, 18));
+                    expandButton.setVisible (true);
+                }
+                else
+                {
+                    expandButton.setVisible (false);
+                }
+
+                name.setBounds (top);
+            }
             area.removeFromTop (4);
 
             if (kind == Kind::master)
@@ -1069,6 +1098,9 @@ private:
         }
 
         bool inRack = false;   // the strip beside the rack
+
+        // A group's: shows (or hides again) the channels it sums, beside it
+        juce::TextButton expandButton { juce::String::fromUTF8 ("\xe2\x96\xb8") };
         MixerView& owner;
         const Kind kind;
         const AudioEngine::AudioChannelId channelId;   // channels
@@ -1730,9 +1762,18 @@ private:
                 ids.push_back (engine.getFolderGroupBus (item.folder));
             else if (item.instrument != 0 && engine.isInstrumentGrouped (item.instrument))   // (or the instrument)
                 ids.push_back (engine.getInstrumentGroupBus (item.instrument));
-            else if (item.channel != 0 && ! engine.isGroupBus (engine.getAudioChannelOutput (item.channel)))
-                ids.push_back (item.channel);   // (the channels a group sums don't show: the group does)
+            else if (item.channel != 0)
+            {
+                // The channels a group sums show only while the group is expanded (their inserts and
+                // settings at hand without undoing the group); otherwise the group stands for them
+                const auto output = engine.getAudioChannelOutput (item.channel);
+
+                if (! engine.isGroupBus (output) || expandedGroups.count (output) > 0)
+                    ids.push_back (item.channel);
+            }
         }
+
+        std::erase_if (expandedGroups, [&ids] (auto bus) { return std::find (ids.begin(), ids.end(), bus) == ids.end(); });
 
         if (ids != shownIds)
         {
@@ -1817,6 +1858,7 @@ private:
     std::unique_ptr<Strip> master;
     std::vector<AudioEngine::AudioChannelId> shownIds;
     std::set<AudioEngine::AudioChannelId> highlighted;
+    std::set<AudioEngine::AudioChannelId> expandedGroups;   // groups showing the channels they sum
     int lastRevision = -1, syncCounter = 0;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MixerView)

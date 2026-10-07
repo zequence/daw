@@ -352,7 +352,8 @@ public:
 
         if (wasGrouped && ! nameLabel.isBeingEdited())   // a group: its name on tape (as an instrument's)
             nameTape.draw (g, nameLabel.getBounds().withHeight (getHeight()).withY (0), engine.getFolderName (folderId),
-                           mixer::tape::cream, juce::jmin (48.0f, (float) getHeight() * 0.8f));
+                           AudioEngine::colourFromHex (engine.getFolderColour (folderId), mixer::tape::cream),
+                           juce::jmin (48.0f, (float) getHeight() * 0.8f));
     }
 
     void resized() override
@@ -757,7 +758,7 @@ public:
         // Its name on tape (as a group's): its instrument's colour, cream for a bus
         {
             nameTape.draw (g, nameArea.withHeight (getHeight()).withY (0), engine.getAudioChannelName (channelId),
-                           AudioEngine::colourFromHex (engine.getInstrumentColour (engine.getAudioChannelInput (channelId)), mixer::tape::cream),
+                           AudioEngine::colourFromHex (engine.getChannelTagColour (channelId), mixer::tape::cream),
                            juce::jmin (48.0f, (float) getHeight() * 0.8f));
         }
     }
@@ -1447,6 +1448,16 @@ void TrackList::showFolderMenu (AudioEngine::FolderId folderId)
     }
 
     menu.addSubMenu ("Move to folder", moveTo);
+
+    if (engine.isFolderGrouped (folderId))   // a group's tag colour (its own, copied when it was made)
+        menu.addSubMenu ("Color", colours::buildMenu (engine.getFolderColour (folderId), [safe, folderId] (juce::String hex)
+        {
+            if (safe != nullptr)
+            {
+                safe->engine.setFolderColour (folderId, hex);
+                safe->refresh();
+            }
+        }));
     menu.addSeparator();
     menu.addItem ("Remove folder (contents move up)", [safe, folderId]
     {

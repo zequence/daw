@@ -1257,6 +1257,30 @@ void AudioEngine::setFolderGrouped (FolderId id, bool grouped)
         const auto bus = addBus (it->second.name);
         buses[bus].folder = id;   // (a bus's folder: the folder it sums)
         folders[id].groupBus = bus;
+
+        // Its colour: a copy of the first instrument colour inside it (then its own) - unless it has one
+        // already (chosen before: kept through ungrouping and grouping again)
+        int folderDepth = folders[id].colour.isNotEmpty() ? std::numeric_limits<int>::max() : -1;
+
+        for (auto& item : getSidebarItems (true, false))
+        {
+            if (folderDepth < 0)
+            {
+                if (item.folder == id)
+                    folderDepth = item.depth;
+
+                continue;
+            }
+
+            if (item.depth <= folderDepth)
+                break;
+
+            if (item.instrument != 0 && getInstrumentColour (item.instrument).isNotEmpty())
+            {
+                folders[id].colour = getInstrumentColour (item.instrument);
+                break;
+            }
+        }
     }
     else
     {
@@ -1321,6 +1345,19 @@ AudioEngine::AudioChannelId AudioEngine::getFolderGroupBus (FolderId id) const
 {
     const auto it = folders.find (id);
     return it != folders.end() ? it->second.groupBus : 0;
+}
+
+juce::String AudioEngine::getChannelTagColour (AudioChannelId id) const
+{
+    if (auto bus = buses.find (id); bus != buses.end())
+    {
+        if (bus->second.folder != 0)
+            return getFolderColour (bus->second.folder);
+
+        return getInstrumentColour (bus->second.input);   // an instrument's group (or "" for a plain bus)
+    }
+
+    return getInstrumentColour (getAudioChannelInput (id));
 }
 
 bool AudioEngine::isGroupBus (AudioChannelId id) const
