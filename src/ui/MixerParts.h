@@ -320,9 +320,23 @@ struct Meter final : juce::Component
 // and a chunky brushed-metal cap with grip ridges and a white index line at the level
 struct LevelFader final : juce::Slider
 {
-    LevelFader() : juce::Slider (juce::Slider::LinearVertical, juce::Slider::NoTextBox) {}
+    LevelFader() : juce::Slider (juce::Slider::LinearVertical, juce::Slider::NoTextBox)   { setLookAndFeel (&travel()); }
+    ~LevelFader() override   { setLookAndFeel (nullptr); }
 
     static constexpr float capHeight = 51.0f, capWidth = 29.0f;
+
+    // The travel stops half a cap short of each end, so the cap stays whole at the top and bottom
+    // (the slider's ends are inset by the look-and-feel's "thumb radius")
+    struct Travel final : juce::LookAndFeel_V4
+    {
+        int getSliderThumbRadius (juce::Slider&) override   { return (int) std::ceil (capHeight * 0.5f) + 3; }
+    };
+
+    static Travel& travel()
+    {
+        static Travel lookAndFeel;
+        return lookAndFeel;
+    }
 
     void paint (juce::Graphics& g) override
     {
