@@ -89,6 +89,9 @@ public:
             scale = juce::jlimit (0.4f, 2.0f, (float) engine.getSettingsFile().getDoubleValue ("mixerZoom", 1.0));
 
         applyScale();
+
+        if (rack != nullptr)
+            rack->setBounds (getLocalBounds());
     }
 
     void fitSize()
@@ -241,7 +244,22 @@ private:
 
             // The inserts sit behind the EQ and dynamics: this flips between them
             flip.setTooltip ("Show the inserts (in place of the EQ and dynamics) - click again for the EQ");
-            flip.onClick = [this] { showInserts (flip.getToggleState()); };
+            // A channel's INSERTS button opens its rack (in the rack: closes it); the Aux buses flip in place
+            flip.onClick = [this]
+            {
+                if (kind != Kind::channel)
+                {
+                    showInserts (flip.getToggleState());
+                    return;
+                }
+
+                flip.setToggleState (inRack, juce::dontSendNotification);
+                juce::MessageManager::callAsync ([safe = juce::Component::SafePointer<MixerView> (&owner), id = channelId, closing = inRack]
+                {
+                    if (safe != nullptr)
+                        closing ? safe->closeRack() : safe->openRack (id);
+                });
+            };
 
             if (kind != Kind::master)
                 addAndMakeVisible (flip);
@@ -485,7 +503,7 @@ private:
                     if (safe == nullptr)
                         return;
 
-                    if (safe->owner.onBeforeInsertRemove) safe->owner.onBeforeInsertRemove (id, slot);
+                    safe->owner.beforeInsertRemove (id, slot);
                     safe->owner.engine.removeInsert (id, slot);
                 });
             }
@@ -517,7 +535,7 @@ private:
                     if (safe == nullptr)
                         return;
 
-                    if (safe->owner.onBeforeInsertRemove) safe->owner.onBeforeInsertRemove (id, slot);   // a replaced effect's window
+                    safe->owner.beforeInsertRemove (id, slot);   // a replaced effect's editor and window
                     safe->owner.engine.addInsert (id, slot, type);
                 });
             }
@@ -870,6 +888,7 @@ private:
             fader.setBounds (faderArea);
         }
 
+        bool inRack = false;   // the strip beside the rack
         MixerView& owner;
         const Kind kind;
         const AudioEngine::AudioChannelId channelId;   // channels
@@ -900,6 +919,320 @@ private:
         mixer::Meter meter;
         juce::TextButton solo { "S" }, mute { "M" };
     };
+
+
+    //==========================================================================
+    // The rack: one channel's inserts as rack units, every plugin's own editor open in its unit at
+    // its own size, top to bottom in slot order (a plugin that resizes itself re-flows the rack).
+    // Empty slots are blank panels (click: the effects menu). The channel's strip stands at the left.
+    // The editors are native windows, so the rack is never zoomed; the mixer's zoom stays outside it.
+    struct Rack final : juce::Component, private juce::ComponentListener
+    {
+        Rack (MixerView& o, AudioEngine::AudioChannelId id) : owner (o), channelId (id)
+        {
+            strip = std::make_unique<Strip> (o, Kind::channel, id, 0);
+            strip->inRack = true;
+            strip->flip.setToggleState (true, juce::dontSendNotification);
+            strip->setSize (stripWidth, stripHeight);
+            stripView.setViewedComponent (strip.get(), false);
+            stripView.setScrollBarsShown (true, false);
+            addAndMakeVisible (stripView);
+
+            column.rack = this;
+            view.setViewedComponent (&column, false);
+            addAndMakeVisible (view);
+            sync();
+        }
+
+        ~Rack() override
+        {
+            for (auto& unit : units)
+                dropEditor (unit);
+        }
+
+        static constexpr int headerHeight = 22, emptyHeight = 24, ear = 18, gap = 6, minWidth = 420;
+
+        struct Unit
+        {
+            int slot = 0;
+            juce::String name;
+            bool bypassed = false;
+            juce::AudioPluginInstance* plugin = nullptr;
+            std::unique_ptr<juce::AudioProcessorEditor> editor;
+            juce::Rectangle<int> panel, header, led;
+        };
+
+        // The drawn rack: rails at the sides, a faceplate per unit, blank panels for empty slots
+        struct Column final : juce::Component
+        {
+            void paint (juce::Graphics& g) override
+            {
+                g.fillAll (juce::Colour (0xff141619));   // the rack's inside
+                const auto w = getWidth();
+
+                for (auto x : { 0, w - ear })   // the rails, with their holes
+                {
+                    g.setColour (juce::Colour (0xff3b4046));
+                    g.fillRect (x, 0, ear, getHeight());
+                    g.setColour (juce::Colours::black.withAlpha (0.6f));
+
+                    for (int y = 6; y < getHeight(); y += 15)
+                        g.fillRoundedRectangle ((float) x + (float) ear * 0.5f - 3.0f, (float) y, 6.0f, 8.0f, 2.0f);
+                }
+
+                for (auto& unit : rack->units)
+                {
+                    const auto panel = unit.panel.toFloat();
+                    g.setGradientFill (juce::ColourGradient (juce::Colour (0xff4a4f56), 0.0f, panel.getY(),
+                                                             juce::Colour (0xff33373c), 0.0f, panel.getBottom(), false));
+                    g.fillRect (panel);
+                    g.setColour (juce::Colours::black.withAlpha (0.7f));
+                    g.drawRect (panel, 1.0f);
+
+                    for (auto p : { juce::Point<float> (panel.getX() + 7.0f, panel.getY() + 7.0f), { panel.getRight() - 7.0f, panel.getY() + 7.0f } })
+                    {
+                        g.setColour (juce::Colour (0xffa9adb3));
+                        g.fillEllipse (juce::Rectangle<float> (5.0f, 5.0f).withCentre (p));
+                        g.setColour (juce::Colours::black.withAlpha (0.6f));
+                        g.drawLine (p.x - 1.8f, p.y + 1.0f, p.x + 1.8f, p.y - 1.0f, 0.9f);
+                    }
+
+                    g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+                    const auto text = unit.header.reduced (18, 0);
+
+                    if (unit.plugin == nullptr)
+                    {
+                        g.setColour (juce::Colours::white.withAlpha (0.3f));
+                        g.drawText (juce::String (unit.slot + 1) + "   empty - click to add an effect", text, juce::Justification::centredLeft, false);
+                        continue;
+                    }
+
+                    // The bypass LED: lit while the effect is in
+                    const auto lamp = unit.led.toFloat().withSizeKeepingCentre (9.0f, 9.0f);
+                    g.setColour (juce::Colour (0xff0c0d0f));
+                    g.fillEllipse (lamp.expanded (1.5f));
+                    g.setColour (unit.bypassed ? juce::Colour (0xff2a3a2c) : juce::Colour (0xff62d26f));
+                    g.fillEllipse (lamp);
+
+                    g.setColour (juce::Colours::white.withAlpha (unit.bypassed ? 0.45f : 0.9f));
+                    g.drawText (juce::String (unit.slot + 1) + "   " + unit.name, text.withTrimmedLeft (18), juce::Justification::centredLeft, false);
+                    g.setColour (juce::Colours::white.withAlpha (0.5f));
+                    g.drawText (juce::String::fromUTF8 ("\xe2\x96\xbe"), text, juce::Justification::centredRight, false);
+                }
+            }
+
+            void mouseDown (const juce::MouseEvent& event) override
+            {
+                for (auto& unit : rack->units)
+                    if (unit.header.contains (event.getPosition()) || (unit.plugin == nullptr && unit.panel.contains (event.getPosition())))
+                    {
+                        rack->clicked (unit, event);
+                        return;
+                    }
+            }
+
+            Rack* rack = nullptr;
+        };
+
+        void clicked (Unit& unit, const juce::MouseEvent& event)
+        {
+            const auto slot = unit.slot;
+            const auto id = channelId;
+            auto& engine = owner.engine;
+
+            if (unit.plugin != nullptr && unit.led.expanded (4).contains (event.getPosition()) && ! event.mods.isPopupMenu())
+            {
+                engine.setInsertBypassed (id, slot, ! unit.bypassed);
+                return;
+            }
+
+            juce::PopupMenu menu;
+
+            if (unit.plugin != nullptr)
+            {
+                const auto safe = juce::Component::SafePointer<MixerView> (&owner);
+                menu.addItem ("Bypass", true, unit.bypassed, [&engine, id, slot, bypassed = unit.bypassed] { engine.setInsertBypassed (id, slot, ! bypassed); });
+                menu.addSeparator();
+                juce::PopupMenu replace;
+                strip->addEffectsMenu (replace, slot);
+                menu.addSubMenu ("Replace with", replace);
+                menu.addItem ("Remove", [safe, id, slot]
+                {
+                    if (safe == nullptr)
+                        return;
+
+                    safe->beforeInsertRemove (id, slot);
+                    safe->engine.removeInsert (id, slot);
+                });
+            }
+            else
+            {
+                strip->addEffectsMenu (menu, slot);
+            }
+
+            menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&column));
+        }
+
+        // The editor goes before its plugin does (removed or replaced)
+        void dropEditor (Unit& unit)
+        {
+            if (unit.editor != nullptr)
+            {
+                unit.editor->removeComponentListener (this);
+                unit.editor.reset();   // (its destructor tells the plugin)
+            }
+        }
+
+        void dropEditor (int slot)
+        {
+            for (auto& unit : units)
+                if (unit.slot == slot)
+                    dropEditor (unit);
+        }
+
+        // Follows the engine: new effects get their editor, changed names and bypass repaint
+        void sync()
+        {
+            const auto inserts = owner.engine.getInserts (channelId);
+            auto changed = units.size() != (size_t) AudioEngine::insertSlots;
+            units.resize ((size_t) AudioEngine::insertSlots);
+
+            for (int slot = 0; slot < AudioEngine::insertSlots; ++slot)
+            {
+                auto& unit = units[(size_t) slot];
+                unit.slot = slot;
+                const auto it = std::find_if (inserts.begin(), inserts.end(), [slot] (const auto& i) { return i.slot == slot; });
+                auto* plugin = it != inserts.end() ? owner.engine.getInsertPlugin (channelId, slot) : nullptr;
+
+                if (plugin != unit.plugin)
+                {
+                    dropEditor (unit);   // (its plugin went through beforeInsertRemove, which dropped it already)
+                    unit.plugin = plugin;
+
+                    if (plugin != nullptr)
+                    {
+                        auto* editor = plugin->hasEditor() ? plugin->createEditorAndMakeActive() : nullptr;
+
+                        if (editor == nullptr)
+                            editor = new juce::GenericAudioProcessorEditor (*plugin);
+
+                        unit.editor.reset (editor);
+                        column.addAndMakeVisible (editor);
+                        editor->addComponentListener (this);
+                    }
+
+                    changed = true;
+                }
+
+                const auto name = it != inserts.end() ? it->name : juce::String();
+                const auto bypassed = it != inserts.end() && it->bypassed;
+
+                if (name != unit.name || bypassed != unit.bypassed)
+                {
+                    unit.name = name;
+                    unit.bypassed = bypassed;
+                    column.repaint();
+                }
+            }
+
+            if (changed)
+                layoutUnits();
+        }
+
+        // As wide as the widest editor; each editor centred in its unit, at its own size
+        void layoutUnits()
+        {
+            auto inner = minWidth;
+
+            for (auto& unit : units)
+                if (unit.editor != nullptr)
+                    inner = juce::jmax (inner, unit.editor->getWidth() + 8);
+
+            const auto width = inner + 2 * ear;
+            auto y = gap;
+
+            for (auto& unit : units)
+            {
+                const auto editorHeight = unit.editor != nullptr ? unit.editor->getHeight() + 4 : 0;
+                unit.panel = { ear, y, inner, unit.editor != nullptr ? headerHeight + editorHeight : emptyHeight };
+                unit.header = unit.panel.withHeight (unit.editor != nullptr ? headerHeight : emptyHeight);
+                unit.led = unit.header.withWidth (14).translated (20, 0);
+
+                if (unit.editor != nullptr)
+                    unit.editor->setTopLeftPosition (ear + (inner - unit.editor->getWidth()) / 2, y + headerHeight);   // never resized by us
+
+                y = unit.panel.getBottom() + (unit.editor != nullptr ? gap : 2);
+            }
+
+            column.setSize (width, y + gap);
+            column.repaint();
+        }
+
+        void componentMovedOrResized (juce::Component&, bool, bool wasResized) override
+        {
+            if (wasResized)   // a plugin resized itself (its own size option)
+                layoutUnits();
+        }
+
+        void resized() override
+        {
+            auto area = getLocalBounds();
+            stripView.setBounds (area.removeFromLeft (stripWidth + stripView.getScrollBarThickness() + 8).reduced (4, 0));
+            view.setBounds (area);
+        }
+
+        void paint (juce::Graphics& g) override   { g.fillAll (theme::colour (theme::Token::surfaceContent)); }
+
+        void tick()
+        {
+            strip->tick();
+            strip->syncControls();
+            sync();
+        }
+
+        MixerView& owner;
+        const AudioEngine::AudioChannelId channelId;
+        std::unique_ptr<Strip> strip;
+        juce::Viewport stripView, view;
+        Column column;
+        std::vector<Unit> units;
+    };
+
+    std::unique_ptr<Rack> rack;
+
+public:
+    // The rack for a channel (its strip's INSERTS button): the other strips step aside
+    void openRack (AudioEngine::AudioChannelId id)
+    {
+        if (onBeforeInsertRemove)
+            onBeforeInsertRemove (id, -1);   // its inserts' windows close: the rack shows their editors
+
+        rack = std::make_unique<Rack> (*this, id);
+        addAndMakeVisible (*rack);
+        outer.setVisible (false);
+        resized();
+    }
+
+    void closeRack()
+    {
+        rack.reset();
+        outer.setVisible (true);
+        resized();
+    }
+
+    bool isRackOpen() const   { return rack != nullptr; }
+
+    // Before an insert goes (removed or replaced): its editor in the rack and its window close first
+    void beforeInsertRemove (AudioEngine::AudioChannelId id, int slot)
+    {
+        if (rack != nullptr && rack->channelId == id)
+            rack->dropEditor (slot);
+
+        if (onBeforeInsertRemove)
+            onBeforeInsertRemove (id, slot);
+    }
+
+private:
 
     //==========================================================================
     void timerCallback() override
@@ -943,6 +1276,9 @@ private:
         }
 
         master->tick();
+
+        if (rack != nullptr)
+            rack->tick();
         master->syncControls();
     }
 

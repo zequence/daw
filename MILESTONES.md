@@ -776,7 +776,10 @@ output show as placeholders); (2) output selection and multi-output instruments
 (one strip per USED output pair); (3) the six Aux buses and the sends; (4) the EQ and dynamics (the SSL-style
 processing behind the knobs); (5) insert effects (STARTED 2026-10-07: channel inserts work -
 an empty slot's menu lists the scanned effects by category, a full slot opens its window, right-click
-bypasses / replaces / removes; pre-fader, in slot order; saved with their state. Still to do: the Aux
+bypasses / replaces / removes; pre-fader, in slot order; saved with their state. The rack (a channel's INSERTS button):
+the other strips step aside, the channel's strip stays at the left, and its inserts stand as rack units
+with every plugin's editor open at once, at its own size (re-flowing when a plugin resizes itself);
+empty slots are blank panels that offer the effects; Esc or INSERTS again goes back. Still to do: the Aux
 buses' and the master's inserts, undo, the API commands, the section's IN switch).
 Later: the mixer docked under the arrangement like the MIDI editor.
 
