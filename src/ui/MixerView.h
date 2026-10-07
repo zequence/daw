@@ -212,7 +212,11 @@ private:
             addAndMakeVisible (name);
 
             inserts.setTooltip (placeholderTip);
-            inserts.slots = kind == Kind::aux ? 8 : 16;   // channels and the master 16 inserts, Aux buses 8
+            inserts.slots = kind == Kind::aux ? 8 : 16;
+            insertsIn.led = true;
+            insertsIn.setToggleState (true, juce::dontSendNotification);
+            insertsIn.setTooltip ("All the inserts on / off - " + placeholderTip);
+            inserts.addAndMakeVisible (insertsIn);   // channels and the master 16 inserts, Aux buses 8
             addChildComponent (inserts);
 
             // The inserts sit behind the EQ and dynamics: this flips between them
@@ -707,6 +711,7 @@ private:
                 area.setTop (juce::jmax (columnY[0], columnY[1]) + pad + 2);
             }
 
+            insertsIn.setBounds (42, 0, 34, 13);   // in the inserts' box, beside their caption
             output.setBounds (area.removeFromBottom (20));
             area.removeFromBottom (4);
             level.setBounds (area.removeFromBottom (16));
@@ -749,6 +754,7 @@ private:
         juce::Label name, level, output;
         mixer::Placeholder inserts { "Inserts", 8 };
         mixer::LitButton flip { "INSERTS", juce::Colour (0xff9fb3c8) };
+        mixer::LitButton insertsIn { "IN", juce::Colour (0xff62d26f) };   // the whole insert section on/off
         mixer::Knob drive { "DRIVE", owner.style().driveCap, false };
 
         Section eq { "EQ" }, dynamics { "DYNAMICS" }, aux { "AUX" };
