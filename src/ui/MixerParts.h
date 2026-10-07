@@ -264,11 +264,33 @@ namespace tape
         return juce::Font (juce::FontOptions (hasPrint ? juce::String ("Segoe Print") : juce::String(), height, juce::Font::bold));
     }
 
-    inline juce::Colour inkFor (juce::Colour tapeColour)
+    // WCAG's relative luminance (0..1, linear light) and contrast ratio (1..21)
+    inline double luminance (juce::Colour c)
     {
-        return tapeColour.getPerceivedBrightness() > 0.55f
-                 ? tapeColour.withSaturation (juce::jmin (1.0f, tapeColour.getSaturation() * 1.2f + 0.25f)).withBrightness (0.17f)
-                 : tapeColour.withSaturation (tapeColour.getSaturation() * 0.3f).withBrightness (0.97f);
+        const auto linear = [] (float v) { return v <= 0.04045f ? v / 12.92 : std::pow ((v + 0.055) / 1.055, 2.4); };
+        return 0.2126 * linear (c.getFloatRed()) + 0.7152 * linear (c.getFloatGreen()) + 0.0722 * linear (c.getFloatBlue());
+    }
+
+    inline double contrast (juce::Colour a, juce::Colour b)
+    {
+        const auto la = luminance (a), lb = luminance (b);
+        return (juce::jmax (la, lb) + 0.05) / (juce::jmin (la, lb) + 0.05);
+    }
+
+    // The ink for a tape: dark on a background lighter than WCAG's crossover (luminance ~0.18, where
+    // black and white text contrast equally), light below it - tinted with the tape's hue, then made
+    // darker / lighter until it reaches 7:1 (WCAG's AAA level)
+    inline juce::Colour inkFor (juce::Colour background)
+    {
+        const auto dark = luminance (background) > 0.179;
+        auto ink = dark ? background.withSaturation (juce::jmin (1.0f, background.getSaturation() + 0.35f)).withBrightness (0.30f)
+                        : background.withSaturation (background.getSaturation() * 0.35f).withBrightness (0.90f);
+
+        for (int i = 0; i < 40 && contrast (ink, background) < 7.0; ++i)
+            ink = dark ? ink.withBrightness (ink.getBrightness() * 0.9f)
+                       : ink.withBrightness (juce::jmin (1.0f, ink.getBrightness() + 0.03f)).withSaturation (ink.getSaturation() * 0.85f);
+
+        return ink;
     }
 
     // centred: in the middle of 'area' (a mixer strip), else at its left (a sidebar row)
@@ -316,8 +338,9 @@ namespace tape
 
         g.setColour (juce::Colours::black.withAlpha (0.35f));   // lifted a hair off what it's stuck on
         g.fillPath (path, juce::AffineTransform::translation (0.6f, 1.2f));
-        g.setGradientFill (juce::ColourGradient (colour.brighter (0.08f), strip.getX(), strip.getY(),
-                                                 colour.darker (0.12f), strip.getX(), strip.getBottom(), false));
+        // The colour at full strength (a slight sheen only), the grain light
+        g.setGradientFill (juce::ColourGradient (colour.brighter (0.04f), strip.getX(), strip.getY(),
+                                                 colour.darker (0.06f), strip.getX(), strip.getBottom(), false));
         g.fillPath (path);
 
         {
@@ -326,7 +349,7 @@ namespace tape
 
             for (auto y = strip.getY() + 1.5f; y < strip.getBottom(); y += 1.7f)
             {
-                g.setColour ((random.nextBool() ? juce::Colours::white : colour.darker (0.8f)).withAlpha (0.05f + random.nextFloat() * 0.05f));
+                g.setColour ((random.nextBool() ? juce::Colours::white : colour.darker (0.8f)).withAlpha (0.025f + random.nextFloat() * 0.03f));
                 g.fillRect (strip.getX(), y, strip.getWidth(), 0.7f);
             }
         }

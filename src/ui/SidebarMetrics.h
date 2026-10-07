@@ -13,12 +13,13 @@ namespace sidebar
     inline int& trackRowHeightSetting()   { static int height = minTrackRowHeight; return height; }
     inline int trackRowHeight()           { return trackRowHeightSetting(); }
 
-    constexpr int folderRowHeight = 28;      // about half a channel row
+    constexpr int folderRowHeight = 28;
+    constexpr int instrumentRowHeight = 32;   // room for its name on tape      // about half a channel row
     constexpr int indentPerLevel = 10;
 
     inline int heightOf (const AudioEngine::SidebarItem& item)
     {
-        return item.folder != 0 || item.instrument != 0 ? folderRowHeight : trackRowHeight();
+        return item.instrument != 0 ? instrumentRowHeight : (item.folder != 0 ? folderRowHeight : trackRowHeight());
     }
 
     // One shared scroll offset; views poll 'revision' from their timers.
