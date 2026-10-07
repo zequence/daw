@@ -154,9 +154,10 @@ namespace sidebar
         if (automationModeSetting())
             std::erase_if (items, [] (const AudioEngine::SidebarItem& item) { return item.member != 0; });
 
-        // Audio a group sums: hidden altogether (the group stands for it)
+        // Audio a group sums: hidden altogether (the group stands for it) - not audio tracks
         std::erase_if (items, [&engine] (const AudioEngine::SidebarItem& item)
-                       { return item.channel != 0 && engine.isGroupBus (engine.getAudioChannelOutput (item.channel)); });
+                       { return item.channel != 0 && ! engine.isAudioTrack (item.channel)   // (audio tracks stay: rows of their own)
+                                && engine.isGroupBus (engine.getAudioChannelOutput (item.channel)); });
 
         // An instrument with one output is that channel: no audio row of its own
         std::erase_if (items, [&engine] (const AudioEngine::SidebarItem& item)
