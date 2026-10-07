@@ -250,81 +250,129 @@ struct LitButton : juce::Button
 //==========================================================================
 // A strip's name on a bit of masking tape: cream, a little crooked, torn at both ends, written in
 // marker. Each name gets its own small tilt and tear (from its text), like tape stuck on by hand.
-struct TapeLabel final : juce::Label
+// Tape: a strip of masking tape with a name written on it in marker - cream by default, any colour
+// (the ink follows: dark on light tape, light on dark, tinted with the tape's hue). A little crooked,
+// torn at both ends; each name gets its own tilt and tear (from its text). Long names are written
+// smaller (down to about 3/4), then cut with a dot.
+namespace tape
 {
-    static juce::Font markerFont()
+    inline const juce::Colour cream { 0xffe9d68e };
+
+    inline juce::Font markerFont (float height)
     {
         static const auto hasPrint = juce::Font::findAllTypefaceNames().contains ("Segoe Print");
-        return juce::Font (juce::FontOptions (hasPrint ? juce::String ("Segoe Print") : juce::String(), 17.5f, juce::Font::bold));
+        return juce::Font (juce::FontOptions (hasPrint ? juce::String ("Segoe Print") : juce::String(), height, juce::Font::bold));
     }
 
-    void paint (juce::Graphics& g) override
+    inline juce::Colour inkFor (juce::Colour tapeColour)
     {
-        if (isBeingEdited())
-            return;
+        return tapeColour.getPerceivedBrightness() > 0.55f
+                 ? tapeColour.withSaturation (juce::jmin (1.0f, tapeColour.getSaturation() * 1.2f + 0.25f)).withBrightness (0.17f)
+                 : tapeColour.withSaturation (tapeColour.getSaturation() * 0.3f).withBrightness (0.97f);
+    }
 
-        const auto area = getLocalBounds().toFloat().reduced (3.0f, 2.5f);
-        auto text = getText();
+    // centred: in the middle of 'area' (a mixer strip), else at its left (a sidebar row)
+    inline void draw (juce::Graphics& g, juce::Rectangle<float> area, const juce::String& name, juce::Colour colour,
+                      float fontHeight, bool centred = true)
+    {
+        auto text = name;
         juce::Random random (text.hashCode());   // (from the whole name, before shortening)
+        auto font = markerFont (fontHeight);
+        const auto room = area.getWidth() - 18.0f;
 
-        // A longer name is written smaller (down to about 3/4); still too long: its first characters and a dot
-        auto font = markerFont();
-
-        while (font.getHeight() > 13.0f && juce::GlyphArrangement::getStringWidth (font, text) > area.getWidth() - 18.0f)
+        while (font.getHeight() > fontHeight * 0.75f && juce::GlyphArrangement::getStringWidth (font, text) > room)
             font = font.withHeight (font.getHeight() - 0.5f);
 
-        if (juce::GlyphArrangement::getStringWidth (font, text) > area.getWidth() - 18.0f)
+        if (juce::GlyphArrangement::getStringWidth (font, text) > room)
         {
             auto n = text.length();
 
-            while (n > 1 && juce::GlyphArrangement::getStringWidth (font, text.substring (0, n) + ".") > area.getWidth() - 18.0f)
+            while (n > 1 && juce::GlyphArrangement::getStringWidth (font, text.substring (0, n) + ".") > room)
                 --n;
 
             text = text.substring (0, n).trimEnd() + ".";
         }
 
         const auto width = juce::jmin (area.getWidth(), juce::GlyphArrangement::getStringWidth (font, text) + 18.0f);
-        const auto tape = area.withSizeKeepingCentre (width, area.getHeight());
+        const auto strip = centred ? area.withSizeKeepingCentre (width, area.getHeight()) : area.withWidth (width);
 
-        // The outline: straight along the top and bottom, torn (zigzag) at the ends
-        juce::Path path;
-        path.startNewSubPath (tape.getX(), tape.getY());
-        path.lineTo (tape.getRight(), tape.getY());
+        juce::Path path;   // straight along the top and bottom, torn (zigzag) at the ends
+        path.startNewSubPath (strip.getX(), strip.getY());
+        path.lineTo (strip.getRight(), strip.getY());
 
-        for (auto y = tape.getY() + 2.0f; y < tape.getBottom(); y += 2.0f)
-            path.lineTo (tape.getRight() - random.nextFloat() * 2.2f, y);
+        for (auto y = strip.getY() + 2.0f; y < strip.getBottom(); y += 2.0f)
+            path.lineTo (strip.getRight() - random.nextFloat() * 2.2f, y);
 
-        path.lineTo (tape.getRight(), tape.getBottom());
-        path.lineTo (tape.getX(), tape.getBottom());
+        path.lineTo (strip.getRight(), strip.getBottom());
+        path.lineTo (strip.getX(), strip.getBottom());
 
-        for (auto y = tape.getBottom() - 2.0f; y > tape.getY(); y -= 2.0f)
-            path.lineTo (tape.getX() + random.nextFloat() * 2.2f, y);
+        for (auto y = strip.getBottom() - 2.0f; y > strip.getY(); y -= 2.0f)
+            path.lineTo (strip.getX() + random.nextFloat() * 2.2f, y);
 
         path.closeSubPath();
 
         juce::Graphics::ScopedSaveState state (g);
-        g.addTransform (juce::AffineTransform::rotation ((random.nextFloat() - 0.5f) * 0.06f, tape.getCentreX(), tape.getCentreY()));
+        g.addTransform (juce::AffineTransform::rotation ((random.nextFloat() - 0.5f) * 0.06f, strip.getCentreX(), strip.getCentreY()));
 
-        g.setColour (juce::Colours::black.withAlpha (0.35f));   // lifted a hair off the panel
+        g.setColour (juce::Colours::black.withAlpha (0.35f));   // lifted a hair off what it's stuck on
         g.fillPath (path, juce::AffineTransform::translation (0.6f, 1.2f));
-        g.setGradientFill (juce::ColourGradient (juce::Colour (0xfff1e19c), tape.getX(), tape.getY(),
-                                                 juce::Colour (0xffdcc57f), tape.getX(), tape.getBottom(), false));
+        g.setGradientFill (juce::ColourGradient (colour.brighter (0.08f), strip.getX(), strip.getY(),
+                                                 colour.darker (0.12f), strip.getX(), strip.getBottom(), false));
         g.fillPath (path);
 
         {
             juce::Graphics::ScopedSaveState fibres (g);   // the paper's grain
             g.reduceClipRegion (path);
 
-            for (auto y = tape.getY() + 1.5f; y < tape.getBottom(); y += 1.7f)
+            for (auto y = strip.getY() + 1.5f; y < strip.getBottom(); y += 1.7f)
             {
-                g.setColour ((random.nextBool() ? juce::Colours::white : juce::Colour (0xff7a6a48)).withAlpha (0.05f + random.nextFloat() * 0.05f));
-                g.fillRect (tape.getX(), y, tape.getWidth(), 0.7f);
+                g.setColour ((random.nextBool() ? juce::Colours::white : colour.darker (0.8f)).withAlpha (0.05f + random.nextFloat() * 0.05f));
+                g.fillRect (strip.getX(), y, strip.getWidth(), 0.7f);
             }
         }
 
-        g.setColour (juce::Colour (0xff1c2233));   // marker ink
+        g.setColour (inkFor (colour));
         g.setFont (font);
-        g.drawText (text, tape.reduced (5.0f, 0.0f).translated (0.0f, -0.5f), juce::Justification::centred, false);
+        g.drawText (text, strip.reduced (5.0f, 0.0f).translated (0.0f, -0.5f), juce::Justification::centred, false);
+    }
+
+    // A tape drawn once into an image (at the screen's pixel scale), again only when its name,
+    // colour or size changes - for rows that repaint often
+    struct Cached
+    {
+        void draw (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& name, juce::Colour colour, float fontHeight)
+        {
+            const auto scale = g.getInternalContext().getPhysicalPixelScaleFactor();
+            const auto key = name + "|" + colour.toString() + "|" + juce::String (area.getWidth()) + "x" + juce::String (area.getHeight())
+                               + "|" + juce::String (scale) + "|" + juce::String (fontHeight);
+
+            if (key != lastKey)
+            {
+                lastKey = key;
+                image = juce::Image (juce::Image::ARGB, juce::jmax (1, juce::roundToInt ((float) area.getWidth() * scale)),
+                                     juce::jmax (1, juce::roundToInt ((float) area.getHeight() * scale)), true);
+                juce::Graphics ig (image);
+                ig.addTransform (juce::AffineTransform::scale (scale));
+                tape::draw (ig, area.withZeroOrigin().toFloat().reduced (2.0f, 2.5f), name, colour, fontHeight, false);
+            }
+
+            g.drawImage (image, area.toFloat());
+        }
+
+        juce::Image image;
+        juce::String lastKey;
+    };
+}
+
+// A strip's name label on tape (double-click edits it in the mixer)
+struct TapeLabel final : juce::Label
+{
+    static juce::Font markerFont()   { return tape::markerFont (17.5f); }
+
+    void paint (juce::Graphics& g) override
+    {
+        if (! isBeingEdited())
+            tape::draw (g, getLocalBounds().toFloat().reduced (3.0f, 2.5f), getText(), tape::cream, 17.5f);
     }
 };
 

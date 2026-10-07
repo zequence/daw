@@ -425,9 +425,9 @@ private:
             const auto cx = bounds.getX() + 13.0f, cy = bounds.getCentreY();
 
             if (collapsed)
-                triangle.addTriangle (cx - 3.0f, cy - 5.0f, cx - 3.0f, cy + 5.0f, cx + 5.0f, cy);
+                triangle.addTriangle (cx - 1.5f, cy - 3.0f, cx - 1.5f, cy + 3.0f, cx + 3.0f, cy);
             else
-                triangle.addTriangle (cx - 5.0f, cy - 3.0f, cx + 5.0f, cy - 3.0f, cx, cy + 5.0f);
+                triangle.addTriangle (cx - 3.0f, cy - 1.5f, cx + 3.0f, cy - 1.5f, cx, cy + 3.0f);
 
             g.setColour (juce::Colours::white.withAlpha (0.7f));
             g.fillPath (triangle);

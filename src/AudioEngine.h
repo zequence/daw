@@ -284,8 +284,8 @@ public:
     // and its audio a dark red-grey (getTrackColour gives a track in one that blue-grey)
     juce::String getInstrumentColour (InstrumentId) const;
     void setInstrumentColour (InstrumentId, const juce::String& hex);   // "#rrggbb", "" = none
-    static constexpr const char* instrumentTrackColour = "#4b5566";
-    static constexpr const char* instrumentAudioColour = "#664c50";
+    static constexpr const char* instrumentTrackColour = "#3a3e46";   // dark grey, a touch of blue
+    static constexpr const char* instrumentAudioColour = "#45393b";   // dark grey, a touch of red
 
     std::vector<SidebarItem> getSidebarItems (bool midiDomain, bool skipCollapsed) const;
     std::vector<TrackId> getArrangeTrackOrder() const;   // visible tracks, tree order

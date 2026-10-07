@@ -2,6 +2,7 @@
 #include "ColorPalette.h"
 #include "ThemedLookAndFeel.h"
 #include "../engine/AudioChannelProcessor.h"
+#include "MixerParts.h"
 
 namespace
 {
@@ -100,11 +101,26 @@ public:
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
 
-        theme::paintRowBox (g, bounds, false, selected);
+        if (engine.getTrackInstrument (trackId) != 0)   // in an instrument folder: the whole row its dark blue-grey
+        {
+            const auto colour = AudioEngine::colourFromHex (AudioEngine::instrumentTrackColour, juce::Colours::grey);
+            g.setColour (selected ? colour.brighter (0.45f) : colour);
+            g.fillRoundedRectangle (bounds, theme::corner);
 
-        // The track color shows as a left border only; uncolored = grey (ISSUES.md)
-        g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (trackId), juce::Colour (0xff6d7178)));
-        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
+            if (selected)
+            {
+                g.setColour (theme::colour (theme::Token::selectionBorder));
+                g.drawRoundedRectangle (bounds.reduced (0.5f), theme::corner, 1.0f);
+            }
+        }
+        else
+        {
+            theme::paintRowBox (g, bounds, false, selected);
+
+            // The track color shows as a left border only; uncolored = grey (ISSUES.md)
+            g.setColour (AudioEngine::colourFromHex (engine.getTrackColour (trackId), juce::Colour (0xff6d7178)));
+            g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
+        }
 
         // Shown in the MIDI editor: a bar on the right edge - wider and brighter for the edited one
         const auto& shown = owner.editorTracks;
@@ -240,9 +256,9 @@ public:
         const auto cx = bounds.getX() + 18.0f, cy = bounds.getCentreY();
 
         if (collapsed)
-            triangle.addTriangle (cx - 3.0f, cy - 5.0f, cx - 3.0f, cy + 5.0f, cx + 5.0f, cy);
+            triangle.addTriangle (cx - 1.5f, cy - 3.0f, cx - 1.5f, cy + 3.0f, cx + 3.0f, cy);
         else
-            triangle.addTriangle (cx - 5.0f, cy - 3.0f, cx + 5.0f, cy - 3.0f, cx, cy + 5.0f);
+            triangle.addTriangle (cx - 3.0f, cy - 1.5f, cx + 3.0f, cy - 1.5f, cx, cy + 3.0f);
 
         g.setColour (juce::Colours::white.withAlpha (0.7f));
         g.fillPath (triangle);
@@ -359,18 +375,15 @@ public:
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
         theme::paintRowBox (g, bounds, true, selected);
 
-        // Its colour as the left border (grey without one)
         const auto tracks = engine.getInstrumentTracks (instrumentId);
-        g.setColour (AudioEngine::colourFromHex (engine.getInstrumentColour (instrumentId), juce::Colour (0xff6d7178)));
-        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
 
         juce::Path triangle;
         const auto cx = bounds.getX() + 18.0f, cy = bounds.getCentreY();
 
         if (! engine.isInstrumentExpanded (instrumentId))
-            triangle.addTriangle (cx - 3.0f, cy - 5.0f, cx - 3.0f, cy + 5.0f, cx + 5.0f, cy);
+            triangle.addTriangle (cx - 1.5f, cy - 3.0f, cx - 1.5f, cy + 3.0f, cx + 3.0f, cy);
         else
-            triangle.addTriangle (cx - 5.0f, cy - 3.0f, cx + 5.0f, cy - 3.0f, cx, cy + 5.0f);
+            triangle.addTriangle (cx - 3.0f, cy - 1.5f, cx + 3.0f, cy - 1.5f, cx, cy + 3.0f);
 
         g.setColour (juce::Colours::white.withAlpha (0.7f));
         g.fillPath (triangle);
@@ -381,9 +394,9 @@ public:
         g.setColour (juce::Colours::white.withAlpha (0.4f));
         g.drawText (count, text.removeFromRight (64).withTrimmedRight (8), juce::Justification::centredRight, false);
 
-        g.setColour (juce::Colours::white.withAlpha (0.9f));
-        g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
-        g.drawText (engine.getInstrumentName (instrumentId), text, juce::Justification::centredLeft, true);
+        // Its name on tape - the tape takes the instrument's colour (cream without one); drawn once, cached
+        const auto colour = AudioEngine::colourFromHex (engine.getInstrumentColour (instrumentId), mixer::tape::cream);
+        nameTape.draw (g, text.withTrimmedLeft (2), engine.getInstrumentName (instrumentId), colour, 16.0f);
     }
 
 private:
@@ -392,6 +405,7 @@ private:
     const AudioEngine::InstrumentId instrumentId;
     const int depth;
     bool selected = false;
+    mixer::tape::Cached nameTape;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (InstrumentRow)
 };
@@ -440,10 +454,10 @@ public:
     void paint (juce::Graphics& g) override
     {
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
-        theme::paintRowBox (g, bounds, false, false);
 
-        g.setColour (AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey));   // audio: red-grey
-        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
+        // An instrument's audio: the whole row its dark red-grey
+        g.setColour (AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey));
+        g.fillRoundedRectangle (bounds, theme::corner);
 
         g.setColour (juce::Colours::white.withAlpha (0.85f));
         g.setFont (juce::FontOptions (13.0f));
