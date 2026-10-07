@@ -58,11 +58,13 @@ target_compile_definitions(OrchestralDAW PRIVATE
     JUCE_APPLICATION_VERSION_STRING="$<TARGET_PROPERTY:OrchestralDAW,JUCE_VERSION>")
 
 # Bravura, the SMuFL reference music font (SIL Open Font License 1.1, resources/fonts/Bravura-OFL.txt):
-# articulation symbols in the MIDI editor and the expression map editor
+# articulation symbols in the MIDI editor and the expression map editor.
+# Special Elite by Astigmatic, a worn typewriter (Apache License 2.0, resources/fonts/SpecialElite-Apache-2.0.txt):
+# folder names in the sidebar
 juce_add_binary_data(OrchestralDAWData
     HEADER_NAME AppBinaryData.h
     NAMESPACE AppBinaryData
-    SOURCES resources/fonts/Bravura.otf)
+    SOURCES resources/fonts/Bravura.otf resources/fonts/SpecialElite-Regular.ttf)
 
 target_link_libraries(OrchestralDAW
     PRIVATE
