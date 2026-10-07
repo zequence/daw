@@ -176,8 +176,8 @@ public:
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
         // Same text color as the tracks; the bold smaller font sets folders apart (ISSUES.md)
-        nameLabel.setFont (sidebar::folderFont (13.5f));   // as the tracks'
-        nameLabel.setColour (juce::Label::textColourId, sidebar::rowTextColour);
+        nameLabel.setFont (sidebar::folderNameFont (15.0f));
+        nameLabel.setColour (juce::Label::textColourId, theme::colour (theme::Token::folderText));
         nameLabel.onTextChange = [this]
         {
             engine.setFolderName (folderId, nameLabel.getText());
@@ -192,6 +192,7 @@ public:
         if (! nameLabel.isBeingEdited())
             nameLabel.setText (engine.getFolderName (folderId), juce::dontSendNotification);
 
+        nameLabel.setColour (juce::Label::textColourId, theme::colour (theme::Token::folderText));   // (the theme may change)
         repaint();
     }
 

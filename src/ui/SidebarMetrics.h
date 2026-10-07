@@ -89,6 +89,17 @@ namespace sidebar
         }
     }
 
+    // A folder's name: elegant, simple and thin (Segoe UI Light, a little spaced); coloured by the theme
+    inline juce::Font folderNameFont (float height)
+    {
+        static const auto hasSegoe = juce::Font::findAllTypefaceNames().contains ("Segoe UI");
+
+        if (! hasSegoe)
+            return juce::Font (juce::FontOptions (height)).withExtraKerningFactor (0.05f);
+
+        return juce::Font (juce::FontOptions ("Segoe UI", height, juce::Font::plain).withStyle ("Light").withKerningFactor (0.05f));
+    }
+
     inline const juce::Colour rowTextColour { 0xffd4d6da };   // the rows' names: a very light grey, not white
 
     inline juce::Font rowFont (float height, bool folder)
