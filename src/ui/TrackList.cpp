@@ -19,7 +19,7 @@ public:
         nameLabel.setText (engine.getTrackName (trackId), juce::dontSendNotification);
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
-        nameLabel.setFont (sidebar::rowFont (14.5f, false));
+        nameLabel.setFont (sidebar::folderFont (15.0f));   // the typewriter, as the folders (smaller: the row is)
         nameLabel.setColour (juce::Label::textColourId, sidebar::rowTextColour);
         nameLabel.onTextChange = [this]
         {
@@ -135,7 +135,7 @@ public:
         soloButton.setBounds (area.removeFromLeft (20));
         muteButton.setBounds (area.removeFromLeft (20).expanded (1, 0).withTrimmedRight (1));   // shares S's right edge
         area.removeFromLeft (6);
-        nameLabel.setBounds (area);
+        nameLabel.setBounds (area.translated (0, sidebar::visualCentreOffset (nameLabel.getFont())));
     }
 
 private:
@@ -253,7 +253,8 @@ public:
 
     void resized() override
     {
-        nameLabel.setBounds (getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 17).reduced (0, 2));
+        nameLabel.setBounds (getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 17).reduced (0, 2)
+                                 .translated (0, sidebar::visualCentreOffset (nameLabel.getFont())));
     }
 
 private:
