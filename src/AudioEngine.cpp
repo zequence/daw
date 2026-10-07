@@ -1927,8 +1927,29 @@ void AudioEngine::setTrackColour (TrackId id, const juce::String& hex)
 
 juce::String AudioEngine::getTrackColour (TrackId id) const
 {
+    if (getTrackInstrument (id) != 0)   // inside an instrument folder: the folder has the colour
+        return instrumentTrackColour;
+
     auto* track = findTrack (id);
     return track != nullptr ? track->colour : juce::String();
+}
+
+juce::String AudioEngine::getInstrumentColour (InstrumentId id) const
+{
+    const auto it = instruments.find (id);
+    return it != instruments.end() ? it->second.colour : juce::String();
+}
+
+void AudioEngine::setInstrumentColour (InstrumentId id, const juce::String& hex)
+{
+    if (auto it = instruments.find (id); it != instruments.end() && it->second.colour != hex)
+    {
+        it->second.colour = hex;
+        auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+        data->setProperty ("id", id);
+        data->setProperty ("change", "colour");
+        emitEvent ("instrumentChanged", data);
+    }
 }
 
 void AudioEngine::setFolderColour (FolderId id, const juce::String& hex)
@@ -2689,6 +2710,7 @@ bool AudioEngine::saveProject (const juce::File& file)
         e->setAttribute ("id", id);
         e->setAttribute ("name", instrument.name);
         e->setAttribute ("expanded", instrument.expanded);
+        e->setAttribute ("colour", instrument.colour);
 
         if (auto* plugin = getInstrumentPlugin (id))
         {
@@ -2984,6 +3006,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
                 state->idMap[element->getIntAttribute ("id")] = newId;
                 setInstrumentExpanded (newId, element->getBoolAttribute ("expanded", false));
+                setInstrumentColour (newId, element->getStringAttribute ("colour"));
 
                 if (auto* stateElement = element->getChildByName ("STATE"))
                 {

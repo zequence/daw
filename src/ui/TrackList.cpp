@@ -359,10 +359,9 @@ public:
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
         theme::paintRowBox (g, bounds, true, selected);
 
-        // Its first track's colour as the left border (grey without one)
+        // Its colour as the left border (grey without one)
         const auto tracks = engine.getInstrumentTracks (instrumentId);
-        g.setColour (AudioEngine::colourFromHex (tracks.empty() ? juce::String() : engine.getTrackColour (tracks.front()),
-                                                 juce::Colour (0xff6d7178)));
+        g.setColour (AudioEngine::colourFromHex (engine.getInstrumentColour (instrumentId), juce::Colour (0xff6d7178)));
         g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
 
         juce::Path triangle;
@@ -443,7 +442,7 @@ public:
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
         theme::paintRowBox (g, bounds, false, false);
 
-        g.setColour (juce::Colour (0xff3a6fbf).withAlpha (0.8f));   // audio: a blue left border
+        g.setColour (AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey));   // audio: red-grey
         g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
 
         g.setColour (juce::Colours::white.withAlpha (0.85f));

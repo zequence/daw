@@ -280,6 +280,13 @@ public:
     std::vector<TrackId> getInstrumentTracks (InstrumentId) const;   // whose first output it is, in tree order
     InstrumentId getTrackInstrument (TrackId) const;                 // its first output's instrument (0: none)
 
+    // Only an instrument folder itself takes a colour: inside it, its MIDI tracks are a dark blue-grey
+    // and its audio a dark red-grey (getTrackColour gives a track in one that blue-grey)
+    juce::String getInstrumentColour (InstrumentId) const;
+    void setInstrumentColour (InstrumentId, const juce::String& hex);   // "#rrggbb", "" = none
+    static constexpr const char* instrumentTrackColour = "#4b5566";
+    static constexpr const char* instrumentAudioColour = "#664c50";
+
     std::vector<SidebarItem> getSidebarItems (bool midiDomain, bool skipCollapsed) const;
     std::vector<TrackId> getArrangeTrackOrder() const;   // visible tracks, tree order
 
@@ -517,6 +524,7 @@ private:
         AudioChannelId audioChannel = 0;
         std::vector<MidiChannelInfo> midiChannels;  // named channels (manual + synced)
         bool expanded = false;                      // its folder in the MIDI tree (collapsed by default)
+        juce::String colour;                        // its folder's ("#rrggbb", "" = none)
     };
 
     struct Insert

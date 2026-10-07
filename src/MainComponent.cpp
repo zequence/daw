@@ -300,6 +300,15 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         const auto safe = juce::Component::SafePointer<MainComponent> (this);
         juce::PopupMenu menu;
         menu.addItem ("Open the instrument's window", [safe, instrument] { if (safe != nullptr) safe->openPluginWindow (instrument); });
+        menu.addSubMenu ("Color", colours::buildMenu (engine.getInstrumentColour (instrument), [safe, instrument] (juce::String hex)
+        {
+            if (safe != nullptr)
+            {
+                safe->engine.setInstrumentColour (instrument, hex);
+                safe->trackList.refresh();
+                safe->arrangementView.repaint();
+            }
+        }));
         menu.addSeparator();
         menu.addItem ("Remove instrument...", [safe, instrument] { if (safe != nullptr) safe->removeInstrumentAsking (instrument); });
         menu.showMenuAsync (juce::PopupMenu::Options());
@@ -784,9 +793,10 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     });
 
     menu.addSubMenu ("Move to folder", moveTo);
-    menu.addSubMenu ("Color", colours::buildMenu (engine.getTrackColour (id),
-                                                  [safe, id] (juce::String hex)
-                                                  { if (safe != nullptr) safe->engine.setTrackColour (id, hex); }));
+    if (engine.getTrackInstrument (id) == 0)   // (in an instrument folder only the folder is coloured)
+        menu.addSubMenu ("Color", colours::buildMenu (engine.getTrackColour (id),
+                                                      [safe, id] (juce::String hex)
+                                                      { if (safe != nullptr) safe->engine.setTrackColour (id, hex); }));
     menu.addSeparator();
     menu.addItem ("Demo clip", [safe, id]
     {

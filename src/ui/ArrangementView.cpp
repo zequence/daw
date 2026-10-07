@@ -826,8 +826,9 @@ void ArrangementView::paint (juce::Graphics& g)
             {
                 if (groupKey (item) != 0)
                     g.setColour (theme::colour (theme::Token::arrangeLaneFolder));
-                else if (item.channel != 0)   // an instrument's audio: its own, slightly blue lane (no regions yet)
-                    g.setColour (theme::colour (theme::Token::arrangeLaneOdd).interpolatedWith (juce::Colour (0xff3a6fbf), 0.08f));
+                else if (item.channel != 0)   // an instrument's audio: a red-grey tinted lane (no regions yet)
+                    g.setColour (theme::colour (theme::Token::arrangeLaneOdd)
+                                   .interpolatedWith (AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey), 0.25f));
                 else
                     g.setColour (theme::colour (trackParity % 2 == 0 ? theme::Token::arrangeLaneEven : theme::Token::arrangeLaneOdd));
 
@@ -903,8 +904,7 @@ void ArrangementView::paint (juce::Graphics& g)
                 // A folder lane (or an instrument folder's): one region per stretch of content inside it
                 const auto group = groupKey (item);
                 const auto folderTracks = tracksInFolder (group);
-                const auto colour = group > 0 ? engine.getFolderColour (group)
-                                              : (folderTracks.empty() ? juce::String() : engine.getTrackColour (folderTracks.front()));
+                const auto colour = group > 0 ? engine.getFolderColour (group) : engine.getInstrumentColour (-group);
                 const auto base = AudioEngine::colourFromHex (colour, juce::Colour (0xff8a8f98));
                 const auto style = theme::regionStyle (base, false);
 
