@@ -329,6 +329,47 @@ struct TapeLabel final : juce::Label
 };
 
 //==========================================================================
+// The compressor's gain reduction: a thin amber bar growing down from the top (0 to -20 dB)
+struct GainReductionMeter final : juce::Component, juce::SettableTooltipClient
+{
+    static constexpr float range = 20.0f;
+
+    void update (float reductionDb)   // <= 0
+    {
+        // Falls back a little slower than it rises, like the needle it stands for
+        shown = juce::jmin (reductionDb, shown * 0.8f + reductionDb * 0.2f);
+
+        if (const auto pixels = juce::roundToInt (juce::jlimit (0.0f, 1.0f, -shown / range) * (float) getHeight()); pixels != lastPixels)
+        {
+            lastPixels = pixels;
+            repaint();
+        }
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        const auto area = getLocalBounds().toFloat();
+        g.setColour (juce::Colour (0xff101113));
+        g.fillRoundedRectangle (area, 1.5f);
+
+        for (auto db : { 3.0f, 6.0f, 10.0f })   // marks
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.18f));
+            g.fillRect (area.getX(), area.getY() + db / range * area.getHeight(), area.getWidth(), 1.0f);
+        }
+
+        if (lastPixels > 0)
+        {
+            g.setColour (juce::Colour (0xffe8a33a));
+            g.fillRoundedRectangle (area.withHeight ((float) lastPixels).reduced (1.0f, 0.0f), 1.0f);
+        }
+    }
+
+    float shown = 0.0f;
+    int lastPixels = 0;
+};
+
+//==========================================================================
 // A level meter: peak (bright) over RMS (body), a peak-hold line, a clip light (click resets)
 struct Meter final : juce::Component
 {

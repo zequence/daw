@@ -431,6 +431,12 @@ private:
             addAndMakeVisible (fader);
             addAndMakeVisible (meter);
 
+            if (kind != Kind::master)   // the compressor's gain reduction, on the fader's other side
+            {
+                reductionMeter.setTooltip ("Gain reduction (the dynamics), 0 to -20 dB");
+                addAndMakeVisible (reductionMeter);
+            }
+
             level.setJustificationType (juce::Justification::centred);
             level.setFont (juce::FontOptions (11.0f));
             level.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.7f));
@@ -667,7 +673,12 @@ private:
             level.setVisible (fader.isMouseButtonDown());   // the fader's dB shows only while it moves
 
             if (auto* p = processor())
+            {
                 meter.update (p->getLastPeak(), p->getLastRms());
+
+                if (kind == Kind::channel)
+                    reductionMeter.update (p->getStrip().getGainReduction());
+            }
         }
 
         void paint (juce::Graphics& g) override
@@ -977,6 +988,13 @@ private:
             buttons.removeFromBottom (4);
             solo.setBounds (buttons.removeFromBottom (22));
             faderArea.removeFromLeft (2);
+
+            if (kind != Kind::master)
+            {
+                reductionMeter.setBounds (faderArea.removeFromLeft (5));
+                faderArea.removeFromLeft (2);
+            }
+
             fader.setBounds (faderArea);
         }
 
@@ -1010,6 +1028,7 @@ private:
         mixer::Knob pan { {}, owner.style().panCap, true };
         mixer::LevelFader fader;
         mixer::Meter meter;
+        mixer::GainReductionMeter reductionMeter;
         juce::TextButton solo { "S" }, mute { "M" };
     };
 
