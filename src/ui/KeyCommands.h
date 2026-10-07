@@ -28,7 +28,6 @@ namespace keys
         static const std::vector<Command> list {
             { "view.midiArrange",     "Global", "MIDI arrangement",                            { K (K::F1Key) } },
             { "view.midiEditor",      "Global", "MIDI editor",                                 { K (K::F2Key) } },
-            { "view.audioArrange",    "Global", "Audio arrangement (automation)",              { K (K::F3Key) } },
             { "view.mixer",           "Global", "Mixer (again: back)",                         { K (K::F4Key) } },
             { "transport.playStop",   "Global", "Start / stop playback",                       { K (K::spaceKey) } },
             { "transport.home",       "Global", "Back to the beginning",                       { K (K::homeKey) } },

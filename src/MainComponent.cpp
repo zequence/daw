@@ -111,13 +111,8 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     menuButton.setTooltip ("Main menu");
     menuButton.onClick = [this] { showMainMenu(); };
 
-    midiDomainButton.setTooltip ("Midi domain: the arrangement and the track list");
-    midiDomainButton.onClick = [this] { setDomain (Domain::midi); };
-
-    audioDomainButton.setTooltip ("Audio domain: audio regions and the channel list");
-    audioDomainButton.onClick = [this] { setDomain (Domain::audio); };
     // The Instruments and History buttons toggle: clicking again returns to the
-    // domain's arrange view (ISSUES.md "Top bar").
+    // arrangement (ISSUES.md "Top bar").
     instrumentsButton.setTooltip ("The instrument rack (I), in a pane on the right (click again or Esc to close)");
     historyButton.setTooltip ("Global history (H), in a pane on the right: click an entry to time-travel (click again or Esc to close)");
     // In the side pane they're its tabs: a click switches to the other (the expand button closes the pane)
@@ -203,7 +198,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     timeLabel.setFont (juce::FontOptions (14.0f));
     timeLabel.setInterceptsMouseClicks (false, false);
 
-    for (auto* b : { &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &perfButton })
+    for (auto* b : { &menuButton, &instrumentsButton, &historyButton, &perfButton })
         theme::setButtonRole (*b, "topbar");
 
     perfButton.setTooltip ("Performance monitor (F12)");
@@ -256,15 +251,12 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     // The X on every view over the arrangement: back to the arrangement
     for (auto* close : { &pianoRollView.closeButton, &instrumentsView.closeButton, &instrumentEditorView.closeButton,
                          &expressionMapView.closeButton, &historyView.closeButton })
-        close->onClick = [this] { showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions); };
+        close->onClick = [this] { showContent (ContentView::midiRegions); };
 
 
     pianoRollView.closeButton.onClick = [this]
     {
-        if (isEditorDockedShowing())
-            setEditorDocked (false);
-        else
-            showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
+        setEditorDocked (false);
     };
 
     instrumentsView.closeButton.onClick = [this] { toggleSidePane (SidePane::instruments); };
@@ -467,15 +459,15 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     statusLabel.setFont (juce::FontOptions (12.0f));
 
     for (auto* c : std::initializer_list<juce::Component*> {
-             &menuButton, &midiDomainButton, &audioDomainButton, &instrumentsButton, &historyButton, &sidePaneButton,
+             &menuButton, &instrumentsButton, &historyButton, &sidePaneButton,
              &rtzButton, &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &bpmLabel, &positionLabel, &timeLabel, &perfButton,
-             &sidebarHeader, &masterMeter, &trackList, &channelList, &sidebarResizer, &sidePaneResizer, &dockHandle,
-             &timelineBar, &arrangementView, &audioRegionsView, &pianoRollView, &mixerView,
+             &masterMeter, &trackList, &sidebarResizer, &sidePaneResizer, &dockHandle,
+             &timelineBar, &arrangementView, &pianoRollView, &mixerView,
              &instrumentsView, &instrumentEditorView, &expressionMapView, &historyView, &settingsView,
              &statusLabel })
         addAndMakeVisible (c);
 
-    for (auto* b : std::initializer_list<juce::Component*> { &menuButton, &midiDomainButton, &audioDomainButton,
+    for (auto* b : std::initializer_list<juce::Component*> { &menuButton,
                                                              &instrumentsButton, &historyButton, &sidePaneButton, &rtzButton,
                                                              &playButton, &recordButton, &loopButton, &returnOnStopButton, &snapButton, &perfButton })
         b->setWantsKeyboardFocus (false);
@@ -766,7 +758,6 @@ void MainComponent::selectTrack (AudioEngine::TrackId id, bool forceArm)
     lap ("views");
 
     historyView.setSelectedTrack (id);
-    updatePlaceholders();
     lap ("rest");
 
     if (! slowSteps.isEmpty())
@@ -1104,21 +1095,14 @@ void MainComponent::closeInsertWindows (AudioEngine::AudioChannelId channel, int
         it = it->first.first == channel && (slot < 0 || it->first.second == slot) ? insertWindows.erase (it) : std::next (it);
 }
 
-//==============================================================================
-void MainComponent::setDomain (Domain newDomain)
-{
-    domain = newDomain;
-    showContent (domain == Domain::midi ? ContentView::midiRegions : ContentView::audioRegions);
-}
 
 void MainComponent::showContent (ContentView view)
 {
     contentView = view;
 
-    if (view == ContentView::midiRegions || view == ContentView::audioRegions)
+    if (view == ContentView::midiRegions)
         mainView = view;
 
-    updatePlaceholders();
     updateViewVisibility();
     resized();   // the arrangement shares its area with the editor's panel
 }
@@ -1252,7 +1236,6 @@ void MainComponent::newProject()
         safe->loopButton.setToggleState (false, juce::dontSendNotification);
         safe->bpmLabel.setText (juce::String (safe->engine.getTempoBpm(), 1), juce::dontSendNotification);
         safe->trackList.setSelectedTrack (0);
-        safe->setDomain (Domain::midi);
         safe->updateWindowTitle();
         safe->statusLabel.setText ("New project", juce::dontSendNotification);
     });
@@ -1302,7 +1285,6 @@ void MainComponent::applyLoadedProject (const juce::File& file, bool ok, const j
 
     const auto trackIds = engine.getTrackIds();
     selectTrack (trackIds.empty() ? 0 : trackIds.front(), false);
-    setDomain (Domain::midi);
     updateWindowTitle();
 
     if (isShowing())
@@ -1415,7 +1397,6 @@ void MainComponent::updateViewVisibility()
     pianoRollView.setVisible (isEditorShowing());
     dockHandle.setVisible (contentView == ContentView::midiRegions);
     mixerView.setVisible (contentView == ContentView::mixer);
-    audioRegionsView.setVisible (contentView == ContentView::audioRegions);
     instrumentsView.setVisible (sidePane == SidePane::instruments);
     instrumentEditorView.setVisible (contentView == ContentView::instrumentEditor);
     expressionMapView.setVisible (contentView == ContentView::expressionMaps);
@@ -1426,33 +1407,12 @@ void MainComponent::updateViewVisibility()
     sidePaneButton.setButtonText (sidePane != SidePane::none ? juce::String::fromUTF8 ("\xc2\xbb") : juce::String::fromUTF8 ("\xc2\xab"));
     sidePaneButton.setToggleState (sidePane != SidePane::none, juce::dontSendNotification);
 
-    trackList.setVisible (domain == Domain::midi);
-    channelList.setVisible (domain == Domain::audio);
-    // Midi: dark blue/cyan; Audio: dried blood. Black text on both
-    sidebarHeader.set (domain == Domain::midi ? "MIDI" : "AUDIO",
-                       juce::Colour (domain == Domain::midi ? 0xff3aa6c4 : 0xffc0504a).withMultipliedBrightness (0.8f).withAlpha (0.57f));   // a bit darker, see-through
-
-    midiDomainButton.setToggleState (domain == Domain::midi, juce::dontSendNotification);
-    audioDomainButton.setToggleState (domain == Domain::audio, juce::dontSendNotification);
     instrumentsButton.setToggleState (sidePane == SidePane::instruments, juce::dontSendNotification);
-
-    // The domain buttons (the sidebar's top) show the domain in its colour: Midi blue, Audio red
-    for (auto [button, colour] : { std::pair (&midiDomainButton, 0xff3aa6c4u), std::pair (&audioDomainButton, 0xffc0504au) })
-        button->setColour (juce::TextButton::buttonOnColourId, juce::Colour (colour).withMultipliedBrightness (0.8f));
 
     settingsView.setVisible (settingsOpen);
 
     if (settingsOpen)
         settingsView.toFront (false);
-}
-
-void MainComponent::updatePlaceholders()
-{
-    const auto channelCount = (int) engine.getAudioChannelIds().size();
-    audioRegionsView.setDetails ({ "Coming: audio regions and automation lanes for the audio channels.",
-                                   "",
-                                   juce::String (channelCount) + (channelCount == 1 ? " audio channel" : " audio channels")
-                                     + " - their strips are in the sidebar and the mixer (F4)." });
 }
 
 void MainComponent::togglePerfPanel()
@@ -1621,8 +1581,6 @@ void MainComponent::timerCallback()
     if (trackList.isShowing())
         trackList.refresh();
 
-    if (channelList.isShowing())
-        channelList.refresh();
 
     if (instrumentsView.isShowing())
         instrumentsView.refresh();
@@ -1633,8 +1591,6 @@ void MainComponent::timerCallback()
     if (expressionMapView.isShowing())
         expressionMapView.refresh();
 
-    if (audioRegionsView.isShowing())
-        updatePlaceholders();
 
     // Status line
     auto& dm = engine.getDeviceManager();
@@ -1982,27 +1938,21 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         return true;
     }
 
-    // The views: F1 MIDI arrangement, F2 MIDI editor, F3 audio arrangement, F4 mixer (again: back)
+    // The views: F1 the arrangement, F2 the MIDI editor (its panel), F4 the mixer (again: back)
     if (keys::matches ("view.midiArrange", key))
     {
-        setDomain (Domain::midi);
+        showContent (ContentView::midiRegions);
         return true;
     }
 
     if (keys::matches ("view.midiEditor", key))
     {
-        if (domain != Domain::midi)
-            domain = Domain::midi;
+        if (contentView != ContentView::midiRegions)
+            showContent (ContentView::midiRegions);
 
         if (! isEditorShowing())
             openEditorOn (tracksToEdit(), selectedTrack);
 
-        return true;
-    }
-
-    if (keys::matches ("view.audioArrange", key))
-    {
-        setDomain (Domain::audio);
         return true;
     }
 
@@ -2202,18 +2152,13 @@ void MainComponent::resized()
 
     // The sidebar lists start at the same y as the content views (below the
     // timeline bar), so their rows share the arrangement's Y axis exactly.
-    // Its top (the timeline bar's height): Menu, then the Midi / Audio buttons (the domain in its colour)
+    // Its top (the timeline bar's height): Menu
     auto sidebarTop = sidebar.removeFromTop (timelineHeight).reduced (6, 0);
     sidebarTop = sidebarTop.withSizeKeepingCentre (sidebarTop.getWidth(), juce::jmin (28, sidebarTop.getHeight() - 4));
-    sidebarHeader.setVisible (false);
     menuButton.setBounds (sidebarTop.removeFromLeft (40));
 
-    // One page for everything (MIDI and audio together): no domain buttons
-    midiDomainButton.setVisible (false);
-    audioDomainButton.setVisible (false);
 
     trackList.setBounds (sidebar);
-    channelList.setBounds (sidebar);
 
     sidebarResizer.setBounds (area.removeFromLeft (6));
 
@@ -2222,7 +2167,7 @@ void MainComponent::resized()
     // arrangement lanes and the piano roll grid below it.
     timelineBar.setBounds (area.removeFromTop (timelineHeight));
 
-    for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView, &audioRegionsView,
+    for (auto* view : std::initializer_list<juce::Component*> { &arrangementView, &pianoRollView,
                                                                 &instrumentEditorView, &expressionMapView, &mixerView })
         view->setBounds (area);
 

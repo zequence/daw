@@ -6,7 +6,6 @@
 #include "PluginScanProcess.h"
 #include "diagnostics/PerformancePanel.h"
 #include "ui/TrackList.h"
-#include "ui/AudioChannelList.h"
 #include "ui/InstrumentsView.h"
 #include "ui/InstrumentEditorView.h"
 #include "ui/SettingsView.h"
@@ -22,7 +21,7 @@
 #include "ui/MixerView.h"
 
 // The single-window shell:
-//   sidebar (menu, domain buttons, tracks) + content container + side pane / the transport bar
+//   sidebar (menu, tracks) + content container + side pane / the transport bar
 //   (right, top or bottom: the main menu) / status.
 // Settings overlays the whole UI; everything else swaps inside the content container.
 class CommandDispatcher;
@@ -45,7 +44,7 @@ public:
     void confirmQuit();
 
 private:
-    enum class ContentView { midiRegions, audioRegions, instrumentEditor, expressionMaps, mixer };   // (the MIDI editor: a panel under the arrangement)   // Instruments and History: the side pane
+    enum class ContentView { midiRegions, instrumentEditor, expressionMaps, mixer };   // (the MIDI editor: a panel under the arrangement)   // Instruments and History: the side pane
 
     // Instruments and History open as a pane on the right, beside the arrangement or the editor
     enum class SidePane { none, instruments, history };
@@ -54,7 +53,6 @@ private:
     void toggleSidePane (SidePane);
     void zoomTrackHeight (int direction);   // +1 taller, -1 shorter (saved in the settings)
     ContentView mainView = ContentView::midiRegions;   // where the instrument / map editors go back to
-    enum class Domain { midi, audio };
 
     //==============================================================================
     void addTrack();
@@ -71,7 +69,6 @@ private:
     void closeInsertWindows (AudioEngine::AudioChannelId, int slot);   // slot -1: all
     void openTrackPluginWindow (AudioEngine::TrackId);   // toggles the track's (first) instrument GUI
 
-    void setDomain (Domain);
     void showContent (ContentView);
     void showMainMenu();
     void confirmDiscard (const juce::String& action, std::function<void()> proceed);
@@ -87,7 +84,6 @@ private:
     void openSettings();
     void closeSettings();
     void updateViewVisibility();
-    void updatePlaceholders();
     void togglePerfPanel();
     void toggleEditor (bool draw);
     void openEditorOn (std::vector<AudioEngine::TrackId> tracks, AudioEngine::TrackId edited = 0);   // edited: that one (else the top one)
@@ -105,7 +101,7 @@ private:
     McpProcess& mcpProcess;
 
     // Topbar
-    juce::TextButton menuButton { "Menu" }, midiDomainButton { "Midi" }, audioDomainButton { "Audio" },
+    juce::TextButton menuButton { "Menu" },
                      instrumentsButton { "Instruments" }, historyButton { "History" };   // right side: the side pane
     // The transport unit: a visually grouped panel with the colorized transport
     // buttons, the position readout (bars.beats + time) and the tempo.
@@ -231,56 +227,7 @@ private:
     // Sidebar. The track list and the arrangement share one vertical scroll
     // (same Y axis); declared before both.
     sidebar::VerticalScroll trackScroll;
-    // Above the lists: MIDI / AUDIO in a block of the domain's colour, the letters in
-    // the background colour (inverted). At the sidebar's minimum width the space beside the
-    // block equals the space above and below it; the letters fill it (both words the same size).
-    struct SidebarHeader final : juce::Component
-    {
-        static constexpr int minSidebarWidth = 150;
-        static constexpr int margin = 12;                                  // around the block, every side
-        static constexpr int blockWidth = minSidebarWidth - 2 * margin, padding = 16;
-
-        static juce::Font font()
-        {
-            auto base = juce::Font (juce::FontOptions (12.0f, juce::Font::bold | juce::Font::italic).withKerningFactor (0.12f));
-            const auto width = juce::GlyphArrangement::getStringWidth (base, "AUDIO");   // the longer word
-            return base.withHeight (12.0f * (float) (blockWidth - 2 * padding) / juce::jmax (1.0f, width));
-        }
-
-        // The block fits the strip it's given (as tall as the timeline bar): its letters shrink to
-        // the height there is, never wider than at the minimum sidebar width
-        juce::Font fittedFont (int blockHeight) const
-        {
-            const auto widthFit = font();
-            const auto heightFit = widthFit.withHeight ((float) blockHeight / 0.95f * 0.8f);
-            return heightFit.getHeight() < widthFit.getHeight() ? heightFit : widthFit;
-        }
-
-        void set (const juce::String& newText, juce::Colour newColour)
-        {
-            text = newText;
-            colour = newColour;
-            repaint();
-        }
-
-        void paint (juce::Graphics& g) override
-        {
-            const auto blockHeight = juce::jmax (8, getHeight() - 4);   // 2 px above and below
-            const auto block = juce::Rectangle<int> (0, 0, juce::jmin (blockWidth, getWidth() - 2 * margin), blockHeight)
-                                   .withCentre ({ getWidth() / 2, getHeight() / 2 });
-
-            g.setColour (colour);
-            g.fillRoundedRectangle (block.toFloat(), theme::corner);
-            g.setColour (theme::colour (theme::Token::surfaceWindow));
-            g.setFont (fittedFont (blockHeight));
-            g.drawText (text, block, juce::Justification::centred, false);
-        }
-
-        juce::String text;
-        juce::Colour colour;
-    } sidebarHeader;
     TrackList trackList { engine, trackScroll };
-    AudioChannelList channelList { engine };
     int sidebarWidth = 0;            // 0 = not yet computed (defaults to ~15% of the window)
 
     struct SidebarResizer final : juce::Component
@@ -311,7 +258,6 @@ private:
     TimelineBar timelineBar { engine, commandDispatcher, timeAxis };
 
     // Content views
-    PlaceholderView audioRegionsView { "Audio arrangement" };
     MixerView mixerView { engine };
     ArrangementView arrangementView { engine, commandDispatcher, timeAxis, trackScroll };
     PianoRollView pianoRollView { engine, commandDispatcher, timeAxis };
@@ -322,7 +268,6 @@ private:
     SettingsView settingsView { engine };
 
     ContentView contentView = ContentView::midiRegions;
-    Domain domain = Domain::midi;
     bool settingsOpen = false;
 
     // Bottom

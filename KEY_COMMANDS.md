@@ -26,7 +26,6 @@ A key that is typed into a text field goes to the field.
 |---|---|---|
 | MIDI arrangement | F1 | `view.midiArrange` |
 | MIDI editor | F2 | `view.midiEditor` |
-| Audio arrangement (automation) | F3 | `view.audioArrange` |
 | Mixer (again: back) | F4 | `view.mixer` |
 | Start / stop playback | Space | `transport.playStop` |
 | Back to the beginning | Home | `transport.home` |

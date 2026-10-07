@@ -728,7 +728,7 @@ only; manual renames always win.
 
 A mixer for the audio channels: names, level faders, pan, solo, mute, meters,
 aux sends, insert effects and output selection. F4 opens it (F1 MIDI arrangement,
-F2 MIDI editor, F3 audio arrangement / automation); M stays mute.
+F2 MIDI editor); M stays mute.
 
 Today an audio channel is one stereo strip per instrument (gain, mute, a block
 peak) wired straight to the device's stereo output, and only the instrument's
