@@ -783,6 +783,30 @@ empty slots are blank panels that offer the effects; Esc or INSERTS again goes b
 buses' and the master's inserts, undo, the API commands, the section's IN switch).
 Later: the mixer docked under the arrangement like the MIDI editor.
 
+## Rack and plugin GUI stress test (planned 2026-10-07)
+
+The mixer's rack shows a channel's inserts with every plugin editor open at once, and the last
+rack is kept out of sight after it closes (so reopening is instant). Measure what that costs
+before relying on it:
+
+- **Hidden rack.** With a rack kept out of sight, does CPU / GPU use (Perf, F12) stay up compared
+  with no rack? Which plugins keep drawing while unseen (timers, animated meters, GPU editors)?
+  If it costs, choose: hide the kept rack completely (more plugins stop drawing; maybe the white
+  first-paint again on reopening), or drop the keeping.
+- **Many units.** A rack with all 16 slots filled (modelled EQs, compressors, tape, reverbs):
+  opening time, scrolling, the busy box, UI stalls (the perf log), audio dropouts while it loads.
+- **Many racks.** Opening racks on several channels in turn (each replaces the kept one): leaks
+  (memory over time), plugin editors that don't let go.
+- **Resizing plugins.** Plugins using their own size option inside the rack; very large editors
+  (wider than the window); HiDPI / scaled displays.
+- **Keys and focus.** Plugins that take the keyboard or make their own windows (seen: Softube):
+  the transport's keys must keep working; typing into a plugin's text field (only in its own window).
+- **Odd plugins.** Plugins without an editor (the generic one), plugins that crash or hang while
+  their editor opens, plugins that keep resizing (the rack shows after 5 s regardless).
+
+Outcome: numbers in the perf log, a list of plugins that misbehave, and the decision on keeping
+the hidden rack.
+
 ## Non-linear patching (far field)
 
 Generator/logic nodes patched together, running live (DESIGN.md pillar 2).
