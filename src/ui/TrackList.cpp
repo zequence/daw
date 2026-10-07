@@ -106,9 +106,7 @@ public:
         if (engine.getTrackInstrument (trackId) != 0)   // in an instrument folder: the whole row its dark blue-grey
         {
             // Selected: the theme's selected-track colour (as any track)
-            g.setColour (selected      ? theme::colour (theme::Token::channelSelectedBg)
-                         : subselected ? theme::colour (theme::Token::channelSubselectedBg)
-                                       : AudioEngine::colourFromHex (AudioEngine::instrumentTrackColour, juce::Colours::grey));
+            g.setColour (theme::rowColour (AudioEngine::colourFromHex (AudioEngine::instrumentTrackColour, juce::Colours::grey), selected, subselected));
             g.fillRoundedRectangle (bounds, theme::corner);
         }
         else
@@ -512,8 +510,7 @@ public:
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
 
         // An instrument's audio: the whole row its dark red-grey (subselected: that colour)
-        g.setColour (subselected ? theme::colour (theme::Token::channelSubselectedBg)
-                                 : AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey));
+        g.setColour (theme::rowColour (AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey), false, subselected));
         g.fillRoundedRectangle (bounds, theme::corner);
 
         g.setColour (sidebar::rowTextColour);

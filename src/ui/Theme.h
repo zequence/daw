@@ -44,7 +44,6 @@ namespace theme
     C (arrangeGutterBorder, "arrange.gutter.border", "Arrange / audio", "Name gutter border", (int) Token::borderSubtle, 0xff2e3136, false) \
     C (channelBg,        "channel.bg",        "Channel",  "Channel background",        -1,                      0xff2b2e33, false) \
     C (channelSelectedBg,"channel.selected.bg","Channel", "Selected channel background",-1,                      0xff4a5363, false) \
-    C (channelSubselectedBg,"channel.subselected.bg","Channel", "Subselected background (inside a selected folder or instrument)", -1, 0xff3a414c, false) \
     C (channelBorder,    "channel.border",    "Channel",  "Channel border",            -1,                      0x00000000, true)  \
 \
     C (channelEdited,    "channel.edited",    "Channel",  "Shown in the MIDI editor (right edge)", -1,           0xff3aa6c4, false) \
@@ -60,6 +59,8 @@ namespace theme
     C (trackArmOn,       "track.arm.on",      "Track buttons", "Record-arm button (armed)", -1,                 0xffd50000, false) \
     C (trackSoloOn,      "track.solo.on",     "Track buttons", "Solo button (soloed)",  -1,                     0xffdaa520, false) \
     C (trackMuteOn,      "track.mute.on",     "Track buttons", "Mute button (muted)",   -1,                     0xffc47f00, false)     C (menuBg,           "menu.bg",           "Menus",    "Menu background",           (int) Token::surfacePanel, 0xff232529, false)     C (menuText,         "menu.text",         "Menus",    "Menu text",                 -1,                      0xffe6e8eb, false)     C (menuHeaderText,   "menu.header.text",  "Menus",    "Menu section header text",  -1,                      0xff8e959e, false)     C (menuHighlightBg,  "menu.highlight.bg", "Menus",    "Highlighted item background", (int) Token::selectionBg, 0xff39404d, false)     C (menuHighlightText,"menu.highlight.text","Menus",   "Highlighted item text",     -1,                      0xffffffff, false)     C (menuBorder,       "menu.border",       "Menus",    "Menu border",               -1,                      0xff3a3e45, false) \
+    N (rowSelectedBrightness, "row.selected.brightness",  "Channel",     "Selected: brighter by (1 = white)",    0.16f, 0.0f, 1.0f) \
+    N (rowSubselectedBrightness,"row.subselected.brightness","Channel",  "Subselected (inside a selected folder or instrument): brighter by", 0.07f, 0.0f, 1.0f) \
     N (regionBgOpacity,       "region.bg.opacity",        "MIDI region", "Background opacity",                   0.6f,  0.0f, 1.0f) \
     N (regionBgBrightness,    "region.bg.brightness",     "MIDI region", "Background brightness",                1.2f,  0.3f, 2.0f) \
     N (regionBgSelectedOpacity,"region.bg.selopacity",    "MIDI region", "Selected background opacity",          0.95f, 0.0f, 1.0f) \
@@ -417,12 +418,17 @@ namespace theme
 
     // The rounded box of a channel row or a folder row in the sidebar lists:
     // background, then the always-on border, then the selection outline.
-    // subselected: inside a selected folder or instrument (selected with it, in its own colour)
+    // A row's background when selected - brighter, towards white by the theme's amount - or subselected
+    // (inside a selected folder or instrument: brighter, by less)
+    inline juce::Colour rowColour (juce::Colour base, bool selected, bool subselected)
+    {
+        const auto amount = selected ? number (Token::rowSelectedBrightness) : subselected ? number (Token::rowSubselectedBrightness) : 0.0f;
+        return base.interpolatedWith (juce::Colours::white, juce::jlimit (0.0f, 1.0f, amount));
+    }
+
     inline void paintRowBox (juce::Graphics& g, juce::Rectangle<float> bounds, bool isFolder, bool selected, bool subselected = false)
     {
-        g.setColour (selected ? colour (isFolder ? Token::selectionBg : Token::channelSelectedBg)
-                              : subselected ? colour (Token::channelSubselectedBg)
-                                            : colour (isFolder ? Token::folderBg : Token::channelBg));
+        g.setColour (rowColour (colour (isFolder ? Token::folderBg : Token::channelBg), selected, subselected));
         g.fillRoundedRectangle (bounds, corner);
 
         g.setColour (colour (isFolder ? Token::folderBorder : Token::channelBorder));
