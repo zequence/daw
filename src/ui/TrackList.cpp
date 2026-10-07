@@ -20,7 +20,7 @@ public:
         nameLabel.setText (engine.getTrackName (trackId), juce::dontSendNotification);
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
-        nameLabel.setFont (sidebar::folderFont (15.0f));   // the typewriter, as the folders (smaller: the row is)
+        nameLabel.setFont (sidebar::folderFont (13.5f));   // the typewriter, as the folders (smaller: the row is)
         nameLabel.setColour (juce::Label::textColourId, sidebar::rowTextColour);
         nameLabel.onTextChange = [this]
         {
@@ -176,7 +176,7 @@ public:
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
         // Same text color as the tracks; the bold smaller font sets folders apart (ISSUES.md)
-        nameLabel.setFont (sidebar::folderFont (15.0f));   // as the tracks'
+        nameLabel.setFont (sidebar::folderFont (13.5f));   // as the tracks'
         nameLabel.setColour (juce::Label::textColourId, sidebar::rowTextColour);
         nameLabel.onTextChange = [this]
         {
@@ -536,7 +536,7 @@ public:
 
         sidebar::drawTrackIcon (g, iconBox.toFloat(), sidebar::TrackKind::audio, sidebar::rowTextColour.withAlpha (0.8f));
 
-        const auto font = sidebar::folderFont (15.0f);   // the typewriter, as the MIDI tracks
+        const auto font = sidebar::folderFont (13.5f);   // the typewriter, as the MIDI tracks
         g.setColour (sidebar::rowTextColour);
         g.setFont (font);
         g.drawText (engine.getAudioChannelName (channelId), nameArea.translated (0, sidebar::visualCentreOffset (font)),
