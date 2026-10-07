@@ -650,7 +650,7 @@ void TrackList::setSelectedTrack (AudioEngine::TrackId id)
 
 void TrackList::refresh()
 {
-    auto freshItems = engine.getSidebarItems (true, true);
+    auto freshItems = sidebar::visibleItems (engine);
 
     if (freshItems != items)
     {

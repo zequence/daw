@@ -132,6 +132,7 @@ private:
     bool isEditorShowing() const            { return isEditorDockedShowing(); }
     bool isMixerShowing() const             { return isDockOpen() && dockPage == DockPage::mixer; }
     void showDockPage (DockPage);           // opens the panel on that page
+    void setAutomationMode (bool);          // F2: the MIDI tracks hidden (sidebar::automationModeSetting)
     void setEditorDocked (bool);
 
     struct DockHandle final : juce::Component, juce::SettableTooltipClient

@@ -127,6 +127,22 @@ namespace sidebar
         return trackRowHeight() + (item.instrument != 0 ? instrumentExtraHeight : 0);
     }
 
+    // Automation mode (F2): only what can be automated shows - the MIDI tracks step out of the
+    // sidebar and the arrangement (folders, instruments and their audio stay); any other view puts
+    // them back
+    inline bool& automationModeSetting()   { static bool on = false; return on; }
+
+    // The rows the sidebar and the arrangement show (the same list: one Y axis)
+    inline std::vector<AudioEngine::SidebarItem> visibleItems (const AudioEngine& engine)
+    {
+        auto items = engine.getSidebarItems (true, true);
+
+        if (automationModeSetting())
+            std::erase_if (items, [] (const AudioEngine::SidebarItem& item) { return item.member != 0; });
+
+        return items;
+    }
+
     // One shared scroll offset; views poll 'revision' from their timers.
     struct VerticalScroll
     {

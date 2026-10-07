@@ -1120,8 +1120,22 @@ void MainComponent::setEditorDocked (bool docked)
     dockHandle.repaint();
 }
 
+void MainComponent::setAutomationMode (bool on)
+{
+    if (sidebar::automationModeSetting() == on)
+        return;
+
+    sidebar::automationModeSetting() = on;
+    trackList.refresh();
+    arrangementView.repaint();
+    statusLabel.setText (on ? "Automation mode: the MIDI tracks are hidden (F1, F3 or F4 brings them back)" : juce::String(),
+                         juce::dontSendNotification);
+}
+
 void MainComponent::showDockPage (DockPage page)
 {
+    setAutomationMode (false);   // the editor or the mixer: out of automation mode
+
     if (contentView != ContentView::midiRegions)
         showContent (ContentView::midiRegions);
 
@@ -1936,7 +1950,19 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         return true;
     }
 
-    // The views: F1 the arrangement alone (the panel closes), F2 the MIDI editor, F3 the mixer (in the panel)
+    // The views: F1 the arrangement alone (the panel closes), F2 automation mode, F3 the MIDI editor, F4 the
+    // mixer (in the panel); anything but F2 leaves automation mode (the MIDI tracks come back)
+    if (keys::matches ("view.automation", key))
+    {
+        showContent (ContentView::midiRegions);
+        setEditorDocked (false);
+        setAutomationMode (true);
+        return true;
+    }
+
+    if (keys::matches ("view.midiArrange", key) || keys::matches ("view.midiEditor", key) || keys::matches ("view.mixer", key))
+        setAutomationMode (false);
+
     if (keys::matches ("view.midiArrange", key))
     {
         showContent (ContentView::midiRegions);

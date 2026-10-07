@@ -25,8 +25,9 @@ A key that is typed into a text field goes to the field.
 | Command | Default | Id |
 |---|---|---|
 | The arrangement alone (closes the panel under it) | F1 | `view.midiArrange` |
-| MIDI editor, in the panel under the arrangement (again: closes) | F2 | `view.midiEditor` |
-| Mixer, in the panel under the arrangement (again: closes) | F3 | `view.mixer` |
+| Automation mode: only what can be automated (the MIDI tracks hidden) | F2 | `view.automation` |
+| MIDI editor, in the panel under the arrangement (again: closes) | F3 | `view.midiEditor` |
+| Mixer, in the panel under the arrangement (again: closes) | F4 | `view.mixer` |
 | Start / stop playback | Space | `transport.playStop` |
 | Back to the beginning | Home | `transport.home` |
 | Close the open view / go back (deselects first in the MIDI editor and arrangement) | Esc | `view.back` |

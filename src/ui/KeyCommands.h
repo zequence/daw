@@ -27,8 +27,9 @@ namespace keys
 
         static const std::vector<Command> list {
             { "view.midiArrange",     "Global", "The arrangement alone (closes the panel under it)", { K (K::F1Key) } },
-            { "view.midiEditor",      "Global", "MIDI editor, in the panel under the arrangement (again: closes)", { K (K::F2Key) } },
-            { "view.mixer",           "Global", "Mixer, in the panel under the arrangement (again: closes)",{ K (K::F3Key) } },
+            { "view.automation",      "Global", "Automation mode: only what can be automated (the MIDI tracks hidden)", { K (K::F2Key) } },
+            { "view.midiEditor",      "Global", "MIDI editor, in the panel under the arrangement (again: closes)", { K (K::F3Key) } },
+            { "view.mixer",           "Global", "Mixer, in the panel under the arrangement (again: closes)",{ K (K::F4Key) } },
             { "transport.playStop",   "Global", "Start / stop playback",                       { K (K::spaceKey) } },
             { "transport.home",       "Global", "Back to the beginning",                       { K (K::homeKey) } },
             { "view.back",            "Global", "Close the open view / go back (deselects first in the MIDI editor and arrangement)", { K (K::escapeKey) } },

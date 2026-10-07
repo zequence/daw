@@ -75,7 +75,7 @@ private:
 
     using Items = std::vector<AudioEngine::SidebarItem>;
 
-    Items itemsNow() const                   { return engine.getSidebarItems (true, true); }
+    Items itemsNow() const                   { return sidebar::visibleItems (engine); }
     static int contentHeight (const Items&);
     int rowTop (const Items&, size_t index) const;        // view-local y (scroll applied)
     int itemIndexAt (const Items&, int y) const;          // -1 when below all rows
