@@ -281,7 +281,8 @@ public:
     InstrumentId getTrackInstrument (TrackId) const;                 // its first output's instrument (0: none)
 
     // Only an instrument folder itself takes a colour: inside it, its MIDI tracks are a dark blue-grey
-    // and its audio a dark red-grey (getTrackColour gives a track in one that blue-grey)
+    // and its audio a dark red-grey (in the sidebar); its regions take the instrument's colour 20% darker
+    // (getTrackColour gives a track in one that)
     juce::String getInstrumentColour (InstrumentId) const;
     void setInstrumentColour (InstrumentId, const juce::String& hex);   // "#rrggbb", "" = none
     static constexpr const char* instrumentTrackColour = "#3a3e46";   // dark grey, a touch of blue

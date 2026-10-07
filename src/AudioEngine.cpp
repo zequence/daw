@@ -1927,8 +1927,10 @@ void AudioEngine::setTrackColour (TrackId id, const juce::String& hex)
 
 juce::String AudioEngine::getTrackColour (TrackId id) const
 {
-    if (getTrackInstrument (id) != 0)   // inside an instrument folder: the folder has the colour
-        return instrumentTrackColour;
+    // Inside an instrument folder: the instrument's colour (the folder's grey without one), 20% darker
+    if (const auto instrument = getTrackInstrument (id); instrument != 0)
+        return "#" + colourFromHex (getInstrumentColour (instrument), juce::Colour (0xff8a8f98))
+                       .withMultipliedBrightness (0.8f).toDisplayString (false).toLowerCase();
 
     auto* track = findTrack (id);
     return track != nullptr ? track->colour : juce::String();

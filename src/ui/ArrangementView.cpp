@@ -826,12 +826,6 @@ void ArrangementView::paint (juce::Graphics& g)
             {
                 if (groupKey (item) != 0)
                     g.setColour (theme::colour (theme::Token::arrangeLaneFolder));
-                else if (item.channel != 0)   // an instrument's audio: its red-grey lane (no regions yet)
-                    g.setColour (theme::colour (theme::Token::arrangeLaneOdd)
-                                   .interpolatedWith (AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey), 0.5f));
-                else if (item.member != 0 && engine.getTrackInstrument (item.member) != 0)   // an instrument's MIDI: its blue-grey
-                    g.setColour (theme::colour (trackParity % 2 == 0 ? theme::Token::arrangeLaneEven : theme::Token::arrangeLaneOdd)
-                                   .interpolatedWith (AudioEngine::colourFromHex (AudioEngine::instrumentTrackColour, juce::Colours::grey), 0.5f));
                 else
                     g.setColour (theme::colour (trackParity % 2 == 0 ? theme::Token::arrangeLaneEven : theme::Token::arrangeLaneOdd));
 
