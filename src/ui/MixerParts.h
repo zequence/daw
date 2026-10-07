@@ -255,7 +255,7 @@ struct TapeLabel final : juce::Label
     static juce::Font markerFont()
     {
         static const auto hasPrint = juce::Font::findAllTypefaceNames().contains ("Segoe Print");
-        return juce::Font (juce::FontOptions (hasPrint ? juce::String ("Segoe Print") : juce::String(), 12.5f, juce::Font::bold));
+        return juce::Font (juce::FontOptions (hasPrint ? juce::String ("Segoe Print") : juce::String(), 14.5f, juce::Font::bold));
     }
 
     void paint (juce::Graphics& g) override
@@ -263,12 +263,24 @@ struct TapeLabel final : juce::Label
         if (isBeingEdited())
             return;
 
-        const auto text = getText();
         const auto font = markerFont();
         const auto area = getLocalBounds().toFloat().reduced (3.0f, 2.5f);
+        auto text = getText();
+        juce::Random random (text.hashCode());   // (from the whole name, before shortening)
+
+        // Too long: its first characters and a dot
+        if (juce::GlyphArrangement::getStringWidth (font, text) > area.getWidth() - 18.0f)
+        {
+            auto n = text.length();
+
+            while (n > 1 && juce::GlyphArrangement::getStringWidth (font, text.substring (0, n) + ".") > area.getWidth() - 18.0f)
+                --n;
+
+            text = text.substring (0, n).trimEnd() + ".";
+        }
+
         const auto width = juce::jmin (area.getWidth(), juce::GlyphArrangement::getStringWidth (font, text) + 18.0f);
         const auto tape = area.withSizeKeepingCentre (width, area.getHeight());
-        juce::Random random (text.hashCode());
 
         // The outline: straight along the top and bottom, torn (zigzag) at the ends
         juce::Path path;
@@ -291,8 +303,8 @@ struct TapeLabel final : juce::Label
 
         g.setColour (juce::Colours::black.withAlpha (0.35f));   // lifted a hair off the panel
         g.fillPath (path, juce::AffineTransform::translation (0.6f, 1.2f));
-        g.setGradientFill (juce::ColourGradient (juce::Colour (0xffeee5c8), tape.getX(), tape.getY(),
-                                                 juce::Colour (0xffd8cba4), tape.getX(), tape.getBottom(), false));
+        g.setGradientFill (juce::ColourGradient (juce::Colour (0xfff1e19c), tape.getX(), tape.getY(),
+                                                 juce::Colour (0xffdcc57f), tape.getX(), tape.getBottom(), false));
         g.fillPath (path);
 
         {
@@ -308,7 +320,7 @@ struct TapeLabel final : juce::Label
 
         g.setColour (juce::Colour (0xff1c2233));   // marker ink
         g.setFont (font);
-        g.drawText (text, tape.reduced (5.0f, 0.0f).translated (0.0f, -0.5f), juce::Justification::centred, true);
+        g.drawText (text, tape.reduced (5.0f, 0.0f).translated (0.0f, -0.5f), juce::Justification::centred, false);
     }
 };
 
