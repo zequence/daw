@@ -14,8 +14,20 @@ namespace sidebar
     inline int trackRowHeight()           { return trackRowHeightSetting(); }
 
     constexpr int folderRowHeight = 28;
-    constexpr int instrumentRowHeight = 36;   // room for its name on tape      // about half a channel row
+    constexpr int instrumentRowHeight = 36;   // room for its name on tape
     constexpr int indentPerLevel = 10;
+
+    // The rows' names (folders, MIDI tracks, audio): Segoe UI - lighter and narrower than the default
+    // sans, orderly - regular for tracks and audio, semibold for folders (instruments are on tape)
+    inline juce::Font rowFont (float height, bool folder)
+    {
+        static const auto hasSegoe = juce::Font::findAllTypefaceNames().contains ("Segoe UI");
+
+        if (! hasSegoe)
+            return juce::Font (juce::FontOptions (height, folder ? juce::Font::bold : juce::Font::plain));
+
+        return juce::Font (juce::FontOptions ("Segoe UI", height, juce::Font::plain).withStyle (folder ? "Semibold" : "Regular"));
+    }
 
     inline int heightOf (const AudioEngine::SidebarItem& item)
     {

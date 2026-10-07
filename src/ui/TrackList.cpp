@@ -19,7 +19,7 @@ public:
         nameLabel.setText (engine.getTrackName (trackId), juce::dontSendNotification);
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
-        nameLabel.setFont (juce::FontOptions (15.0f));
+        nameLabel.setFont (sidebar::rowFont (14.5f, false));
         nameLabel.onTextChange = [this]
         {
             engine.setTrackName (trackId, nameLabel.getText());
@@ -173,7 +173,7 @@ public:
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
         // Same text color as the tracks; the bold smaller font sets folders apart (ISSUES.md)
-        nameLabel.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+        nameLabel.setFont (sidebar::rowFont (14.0f, true));
         nameLabel.onTextChange = [this]
         {
             engine.setFolderName (folderId, nameLabel.getText());
@@ -460,7 +460,7 @@ public:
         g.fillRoundedRectangle (bounds, theme::corner);
 
         g.setColour (juce::Colours::white.withAlpha (0.85f));
-        g.setFont (juce::FontOptions (13.0f));
+        g.setFont (sidebar::rowFont (14.0f, false));
         g.drawText (juce::String::fromUTF8 ("\xe2\x99\xab ") + engine.getAudioChannelName (channelId), nameArea, juce::Justification::centredLeft, true);
 
         // The level in dB: a meter (green, yellow from -12, red at 0) and its peak as a number
