@@ -220,7 +220,7 @@ public:
         // inside it, ready for multi-channel work.
         if (! owner.finishRowDrag (folderId))
         {
-            if (event.x < depth * indentPerLevel + 26)
+            if (event.x < depth * indentPerLevel + 18)
                 engine.setFolderCollapsed (folderId, ! engine.isFolderCollapsed (folderId));
             else
                 owner.selectFolder (folderId);
@@ -248,14 +248,10 @@ public:
         auto bounds = getLocalBounds().withTrimmedLeft (depth * indentPerLevel).toFloat().reduced (2.0f, 1.5f);
         theme::paintRowBox (g, bounds, true, selected);
 
-        // Folder color as a left border; uncolored = grey (like tracks)
-        g.setColour (AudioEngine::colourFromHex (engine.getFolderColour (folderId), juce::Colour (0xff6d7178)));
-        g.fillRect (bounds.getX() + 1.0f, bounds.getY() + 1.0f, 8.0f, bounds.getHeight() - 2.0f);
-
-        // Collapse triangle
+        // Collapse triangle (folders have no colour: it sits near the edge)
         const auto collapsed = engine.isFolderCollapsed (folderId);
         juce::Path triangle;
-        const auto cx = bounds.getX() + 18.0f, cy = bounds.getCentreY();
+        const auto cx = bounds.getX() + 9.0f, cy = bounds.getCentreY();
 
         if (collapsed)
             triangle.addTriangle (cx - 1.5f, cy - 3.0f, cx - 1.5f, cy + 3.0f, cx + 3.0f, cy);
@@ -268,7 +264,7 @@ public:
 
     void resized() override
     {
-        nameLabel.setBounds (getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 29).reduced (0, 2));
+        nameLabel.setBounds (getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 17).reduced (0, 2));
     }
 
 private:
@@ -1091,15 +1087,6 @@ void TrackList::showFolderMenu (AudioEngine::FolderId folderId)
     }
 
     menu.addSubMenu ("Move to folder", moveTo);
-    menu.addSubMenu ("Color", colours::buildMenu (engine.getFolderColour (folderId),
-                                                  [safe, folderId] (juce::String hex)
-                                                  {
-                                                      if (safe != nullptr)
-                                                      {
-                                                          safe->engine.setFolderColour (folderId, hex);
-                                                          safe->refresh();
-                                                      }
-                                                  }));
     menu.addSeparator();
     menu.addItem ("Remove folder (contents move up)", [safe, folderId]
     {

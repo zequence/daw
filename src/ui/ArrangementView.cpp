@@ -901,7 +901,7 @@ void ArrangementView::paint (juce::Graphics& g)
                 // A folder lane (or an instrument folder's): one region per stretch of content inside it
                 const auto group = groupKey (item);
                 const auto folderTracks = tracksInFolder (group);
-                const auto colour = group > 0 ? engine.getFolderColour (group) : engine.getInstrumentColour (-group);
+                const auto colour = group > 0 ? juce::String() : engine.getInstrumentColour (-group);   // (folders: no colour, the grey)
                 const auto base = AudioEngine::colourFromHex (colour, juce::Colour (0xff8a8f98));
                 const auto style = theme::regionStyle (base, false);
 
