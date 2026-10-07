@@ -17,15 +17,6 @@ namespace sidebar
 
     constexpr int indentPerLevel = 10;
 
-    // The rows' names (folders, MIDI tracks, audio): Segoe UI - lighter and narrower than the default
-    // sans, orderly - regular for tracks and audio, semibold for folders (instruments are on tape)
-    // A folder's name: typed on a worn typewriter, like the label on an archive box (Special Elite, embedded)
-    inline juce::Font folderFont (float height)
-    {
-        static const auto typeface = juce::Typeface::createSystemTypefaceFor (AppBinaryData::SpecialEliteRegular_ttf,
-                                                                              AppBinaryData::SpecialEliteRegular_ttfSize);
-        return juce::Font (juce::FontOptions (typeface).withHeight (height));
-    }
 
     // How far to move a label down so its letters (cap height) sit in the middle of the row - a label
     // centres the font's whole box, and some fonts (Special Elite) carry more above the letters than below
@@ -89,16 +80,19 @@ namespace sidebar
         }
     }
 
-    // A folder's name: elegant, simple and thin (Segoe UI Light, a little spaced); coloured by the theme
-    inline juce::Font folderNameFont (float height)
+
+    // The rows' type (Inter, embedded): MIDI and audio names in Regular; folders in SemiBold capitals,
+    // spaced, in their own colour - headings in the same family (the instrument's tape is the one
+    // decorative touch)
+    inline juce::Font interFont (float height, bool semiBold)
     {
-        static const auto hasSegoe = juce::Font::findAllTypefaceNames().contains ("Segoe UI");
-
-        if (! hasSegoe)
-            return juce::Font (juce::FontOptions (height)).withExtraKerningFactor (0.05f);
-
-        return juce::Font (juce::FontOptions ("Segoe UI", height, juce::Font::plain).withStyle ("Light").withKerningFactor (0.05f));
+        static const auto regular = juce::Typeface::createSystemTypefaceFor (AppBinaryData::InterRegular_ttf, AppBinaryData::InterRegular_ttfSize);
+        static const auto semi = juce::Typeface::createSystemTypefaceFor (AppBinaryData::InterSemiBold_ttf, AppBinaryData::InterSemiBold_ttfSize);
+        return juce::Font (juce::FontOptions (semiBold ? semi : regular).withHeight (height));
     }
+
+    inline juce::Font trackNameFont()    { return interFont (13.0f, false); }
+    inline juce::Font folderNameFont()   { return interFont (12.0f, true).withExtraKerningFactor (0.08f); }
 
     inline const juce::Colour rowTextColour { 0xffd4d6da };   // the rows' names: a very light grey, not white
 
