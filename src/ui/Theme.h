@@ -49,6 +49,8 @@ namespace theme
     C (trackMidiBg,      "track.midi.bg",     "Tracks",   "MIDI track background",     -1,                      0xff3a3e46, false) \
     C (trackAudioBg,     "track.audio.bg",    "Tracks",   "Audio track background",    -1,                      0xff45393b, false) \
     C (folderBorder,     "folder.border",     "Tracks",   "Folder border",             -1,                      0x00000000, true)  \
+    N (rowSelectedBrightness, "row.selected.brightness",  "Tracks",      "Selected: brighter by (1 = white)",    0.16f, 0.0f, 1.0f) \
+    N (rowSubselectedBrightness,"row.subselected.brightness","Tracks",   "Subselected (inside a selected folder or instrument): brighter by", 0.07f, 0.0f, 1.0f) \
     C (buttonBg,         "button.bg",         "Buttons",  "Button background",         -1,                      0xff263238, false) \
     C (buttonOn,         "button.on",         "Buttons",  "Button background (on / selected)", -1,              0xff181f22, false) \
     C (buttonAccentOn,   "button.accent.on",  "Buttons",  "Toggle button background (on)", -1,                  0xff4682b4, false) \
@@ -59,8 +61,6 @@ namespace theme
     C (trackArmOn,       "track.arm.on",      "Track buttons", "Record-arm button (armed)", -1,                 0xffd50000, false) \
     C (trackSoloOn,      "track.solo.on",     "Track buttons", "Solo button (soloed)",  -1,                     0xffdaa520, false) \
     C (trackMuteOn,      "track.mute.on",     "Track buttons", "Mute button (muted)",   -1,                     0xffc47f00, false)     C (menuBg,           "menu.bg",           "Menus",    "Menu background",           (int) Token::surfacePanel, 0xff232529, false)     C (menuText,         "menu.text",         "Menus",    "Menu text",                 -1,                      0xffe6e8eb, false)     C (menuHeaderText,   "menu.header.text",  "Menus",    "Menu section header text",  -1,                      0xff8e959e, false)     C (menuHighlightBg,  "menu.highlight.bg", "Menus",    "Highlighted item background", (int) Token::selectionBg, 0xff39404d, false)     C (menuHighlightText,"menu.highlight.text","Menus",   "Highlighted item text",     -1,                      0xffffffff, false)     C (menuBorder,       "menu.border",       "Menus",    "Menu border",               -1,                      0xff3a3e45, false) \
-    N (rowSelectedBrightness, "row.selected.brightness",  "Tracks",      "Selected: brighter by (1 = white)",    0.16f, 0.0f, 1.0f) \
-    N (rowSubselectedBrightness,"row.subselected.brightness","Tracks",   "Subselected (inside a selected folder or instrument): brighter by", 0.07f, 0.0f, 1.0f) \
     N (regionBgOpacity,       "region.bg.opacity",        "MIDI region", "Background opacity",                   0.6f,  0.0f, 1.0f) \
     N (regionBgBrightness,    "region.bg.brightness",     "MIDI region", "Background brightness",                1.2f,  0.3f, 2.0f) \
     N (regionBgSelectedOpacity,"region.bg.selopacity",    "MIDI region", "Selected background opacity",          0.95f, 0.0f, 1.0f) \
