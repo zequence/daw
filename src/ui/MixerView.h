@@ -967,14 +967,16 @@ private:
         {
             void paint (juce::Graphics& g) override
             {
-                g.fillAll (juce::Colour (0xff141619));   // the rack's inside
-                const auto w = getWidth();
+                g.fillAll (theme::colour (theme::Token::surfaceContent));   // beside the rack (it scrolls there too)
+                const auto w = rack->rackWidth;
+                g.setColour (juce::Colour (0xff141619));   // the rack's inside
+                g.fillRect (0, 0, w, getHeight());
 
-                for (auto x : { 0, w - ear })   // the rails, with their holes
+                for (auto x : { 0, w - ear })   // the rails: black, with their holes
                 {
-                    g.setColour (juce::Colour (0xff3b4046));
+                    g.setColour (juce::Colour (0xff0b0b0c));
                     g.fillRect (x, 0, ear, getHeight());
-                    g.setColour (juce::Colours::black.withAlpha (0.6f));
+                    g.setColour (juce::Colour (0xff2a2c30));
 
                     for (int y = 6; y < getHeight(); y += 15)
                         g.fillRoundedRectangle ((float) x + (float) ear * 0.5f - 3.0f, (float) y, 6.0f, 8.0f, 2.0f);
@@ -1164,7 +1166,8 @@ private:
                 y = unit.panel.getBottom() + (unit.editor != nullptr ? gap : 2);
             }
 
-            column.setSize (width, y + gap);
+            rackWidth = width;   // the column fills the view, so the wheel scrolls beside the rack too
+            column.setSize (juce::jmax (width, view.getMaximumVisibleWidth()), juce::jmax (y + gap, view.getMaximumVisibleHeight()));
             column.repaint();
         }
 
@@ -1179,6 +1182,7 @@ private:
             auto area = getLocalBounds();
             stripView.setBounds (area.removeFromLeft (stripWidth + stripView.getScrollBarThickness() + 8).reduced (4, 0));
             view.setBounds (area);
+            layoutUnits();
         }
 
         void paint (juce::Graphics& g) override   { g.fillAll (theme::colour (theme::Token::surfaceContent)); }
@@ -1196,6 +1200,7 @@ private:
         juce::Viewport stripView, view;
         Column column;
         std::vector<Unit> units;
+        int rackWidth = 0;
     };
 
     std::unique_ptr<Rack> rack;
