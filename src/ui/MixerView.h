@@ -46,6 +46,9 @@ public:
         if (! event.mods.isPopupMenu())
             return;
 
+        if (auto* slots = dynamic_cast<mixer::Placeholder*> (event.eventComponent); slots != nullptr && slots->onSlotClicked != nullptr)
+            return;   // the inserts have their own menu
+
         juce::PopupMenu styles;
         styles.addItem (mixer::ConsoleStyle::ssl().name, true, true, [] {});
         juce::PopupMenu menu;
@@ -103,7 +106,14 @@ public:
         layoutBody();
     }
 
-    int levelTop = 0;   // where a channel strip's pan and fader begin (the other strips follow it)
+    int levelTop = 0;
+
+public:
+    // An insert's window (MainComponent owns the plugin windows); the hook before an insert goes,
+    // so its window closes before the plugin is deleted
+    std::function<void (AudioEngine::AudioChannelId, int slot)> onOpenInsert, onBeforeInsertRemove;
+
+private:   // where a channel strip's pan and fader begin (the other strips follow it)
     float scale = 0.0f;   // 0 = not yet read from the settings
 
     void paint (juce::Graphics& g) override
@@ -213,6 +223,12 @@ private:
 
             inserts.setTooltip (placeholderTip);
             inserts.slots = kind == Kind::aux ? 8 : 16;
+            if (kind == Kind::channel)
+            {
+                inserts.setTooltip ("Click an empty slot to add an effect, a full one to open it (right-click: bypass, remove)");
+                inserts.onSlotClicked = [this] (int slot, const juce::MouseEvent& event) { insertClicked (slot, event); };
+            }
+
             insertsIn.led = true;
             insertsIn.setToggleState (true, juce::dontSendNotification);
             insertsIn.setTooltip ("All the inserts on / off - " + placeholderTip);
@@ -436,6 +452,105 @@ private:
 
             if (kind == Kind::channel)
                 solo.setToggleState (owner.engine.isAudioChannelSoloed (channelId), juce::dontSendNotification);
+        }
+
+        // The inserts (channels): the effects menu by category on an empty slot, the effect's window on a
+        // full one; right-click a full one for its menu (removing is a menu item, never the click itself)
+        void insertClicked (int slot, const juce::MouseEvent& event)
+        {
+            auto& engine = owner.engine;
+            const auto inserts = engine.getInserts (channelId);
+            const auto it = std::find_if (inserts.begin(), inserts.end(), [slot] (const auto& i) { return i.slot == slot; });
+            const auto safe = juce::Component::SafePointer<Strip> (this);
+            const auto id = channelId;
+
+            if (it != inserts.end() && ! event.mods.isPopupMenu())
+            {
+                if (owner.onOpenInsert) owner.onOpenInsert (id, slot);
+                return;
+            }
+
+            juce::PopupMenu menu;
+
+            if (it != inserts.end())
+            {
+                menu.addItem ("Open " + it->name, [safe, id, slot] { if (safe != nullptr && safe->owner.onOpenInsert) safe->owner.onOpenInsert (id, slot); });
+                menu.addItem ("Bypass", true, it->bypassed, [safe, id, slot, bypassed = it->bypassed]
+                              { if (safe != nullptr) safe->owner.engine.setInsertBypassed (id, slot, ! bypassed); });
+                menu.addSeparator();
+                juce::PopupMenu replace;
+                addEffectsMenu (replace, slot);
+                menu.addSubMenu ("Replace with", replace);
+                menu.addItem ("Remove", [safe, id, slot]
+                {
+                    if (safe == nullptr)
+                        return;
+
+                    if (safe->owner.onBeforeInsertRemove) safe->owner.onBeforeInsertRemove (id, slot);
+                    safe->owner.engine.removeInsert (id, slot);
+                });
+            }
+            else
+            {
+                addEffectsMenu (menu, slot);
+            }
+
+            menu.showMenuAsync (juce::PopupMenu::Options().withTargetComponent (&this->inserts));
+        }
+
+        // The effects by category (VST3's subcategories, e.g. "Fx|EQ" -> EQ), each a submenu
+        void addEffectsMenu (juce::PopupMenu& menu, int slot)
+        {
+            std::map<juce::String, juce::PopupMenu> categories;
+            const auto safe = juce::Component::SafePointer<Strip> (this);
+            const auto id = channelId;
+
+            for (const auto& type : owner.engine.getEffectTypes())
+            {
+                auto parts = juce::StringArray::fromTokens (type.category, "|", {});
+                parts.removeString ("Fx");
+                parts.removeEmptyStrings();
+                const auto category = parts.isEmpty() ? juce::String ("Other") : parts[0];
+                const auto label = type.name + (type.manufacturerName.isNotEmpty() ? "  (" + type.manufacturerName + ")" : juce::String());
+
+                categories[category].addItem (label, [safe, id, slot, type]
+                {
+                    if (safe == nullptr)
+                        return;
+
+                    if (safe->owner.onBeforeInsertRemove) safe->owner.onBeforeInsertRemove (id, slot);   // a replaced effect's window
+                    safe->owner.engine.addInsert (id, slot, type);
+                });
+            }
+
+            if (categories.empty())
+                menu.addItem ("No effects found - scan for plugins in Settings", false, false, [] {});
+
+            for (auto& [name, submenu] : categories)
+                menu.addSubMenu (name, submenu);
+        }
+
+        void syncInserts()
+        {
+            if (kind != Kind::channel)
+                return;
+
+            std::vector<juce::String> names ((size_t) inserts.slots);
+            std::vector<bool> bypassed ((size_t) inserts.slots);
+
+            for (const auto& insert : owner.engine.getInserts (channelId))
+                if (insert.slot < inserts.slots)
+                {
+                    names[(size_t) insert.slot] = insert.name;
+                    bypassed[(size_t) insert.slot] = insert.bypassed;
+                }
+
+            if (names != inserts.names || bypassed != inserts.bypassed)
+            {
+                inserts.names = std::move (names);
+                inserts.bypassed = std::move (bypassed);
+                inserts.repaint();
+            }
         }
 
         void tick()
@@ -822,6 +937,7 @@ private:
             {
                 strip->syncControls();
                 strip->refreshName();
+                strip->syncInserts();
             }
         }
 

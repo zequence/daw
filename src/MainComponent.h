@@ -67,6 +67,8 @@ private:
     void autoNameTrackForOutput (AudioEngine::TrackId, AudioEngine::InstrumentId);
     void chooseNewInstrumentFor (AudioEngine::TrackId);
     void openPluginWindow (AudioEngine::InstrumentId);
+    void openInsertWindow (AudioEngine::AudioChannelId, int slot);
+    void closeInsertWindows (AudioEngine::AudioChannelId, int slot);   // slot -1: all
     void openTrackPluginWindow (AudioEngine::TrackId);   // toggles the track's (first) instrument GUI
 
     void setDomain (Domain);
@@ -329,6 +331,7 @@ private:
     AudioEngine::TrackId selectedTrack = 0;
     int lastEngineRevision = -1;    // topbar widgets follow engine mutations
     std::map<AudioEngine::InstrumentId, std::unique_ptr<PluginWindow>> pluginWindows;
+    std::map<std::pair<AudioEngine::AudioChannelId, int>, std::unique_ptr<PluginWindow>> insertWindows;   // (channel, slot)
 
     // Without a TooltipWindow, component tooltips never show (ISSUES.md "Global")
     juce::TooltipWindow tooltipWindow { this, 700 };

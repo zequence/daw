@@ -159,7 +159,8 @@ struct Knob : juce::Slider
 
         if (alwaysShowValue || isMouseButtonDown())
         {
-            g.setColour (juce::Colours::white.withAlpha (isMouseButtonDown() ? 0.95f : 0.4f));
+            const auto ink = cap.getPerceivedBrightness() > 0.6f ? juce::Colours::black : juce::Colours::white;   // dark on light caps (dynamics, aux)
+            g.setColour (ink.withAlpha (isMouseButtonDown() ? 0.95f : 0.4f));
             g.setFont (juce::FontOptions (alwaysShowValue ? 10.5f : 10.0f, juce::Font::bold));
             g.drawText (format (getValue()), skirt.expanded (6.0f).toNearestInt(), juce::Justification::centred, false);
         }
@@ -419,15 +420,41 @@ struct Placeholder final : juce::Component, juce::SettableTooltipClient
         for (int i = 0; i < slots; ++i)
         {
             const auto slot = area.removeFromTop (area.getHeight() / (float) (slots - i)).reduced (0.0f, 1.0f);
-            g.setColour (juce::Colour (0xff202328));
+            const auto name = i < (int) names.size() ? names[(size_t) i] : juce::String();
+            const auto off = i < (int) bypassed.size() && bypassed[(size_t) i];
+            g.setColour (juce::Colour (name.isEmpty() ? 0xff202328 : 0xff2c3a48));
             g.fillRoundedRectangle (slot, theme::corner);
-            g.setColour (juce::Colours::white.withAlpha (0.12f));
+            g.setColour (juce::Colours::white.withAlpha (name.isEmpty() ? 0.12f : 0.25f));
             g.drawRoundedRectangle (slot, theme::corner, 1.0f);
+
+            if (name.isNotEmpty())
+            {
+                g.setColour (juce::Colours::white.withAlpha (off ? 0.35f : 0.85f));
+                g.setFont (juce::FontOptions (juce::jmin (10.0f, slot.getHeight() - 3.0f)));
+                g.drawText (name, slot.reduced (4.0f, 0.0f).toNearestInt(), juce::Justification::centredLeft, true);
+            }
         }
+    }
+
+    // Which slot a point is in (-1: the caption)
+    int slotAt (int y) const
+    {
+        const auto top = 13.5f, height = ((float) getHeight() - 0.5f - top) / (float) juce::jmax (1, slots);
+        return (float) y < top ? -1 : juce::jlimit (0, slots - 1, (int) (((float) y - top) / height));
+    }
+
+    void mouseDown (const juce::MouseEvent& event) override
+    {
+        if (onSlotClicked != nullptr)
+            if (const auto slot = slotAt (event.y); slot >= 0)
+                onSlotClicked (slot, event);
     }
 
     juce::String caption;
     int slots;
+    std::vector<juce::String> names;     // what each slot holds (inserts); empty = an empty slot
+    std::vector<bool> bypassed;
+    std::function<void (int slot, const juce::MouseEvent&)> onSlotClicked;
 };
 
 }   // namespace mixer

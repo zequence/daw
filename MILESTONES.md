@@ -774,7 +774,10 @@ Phases, each usable on its own: (1) the strip basics - names, fader, pan, solo,
 mute, meters, master bus, the view and F4 (DONE 2026-10-06; inserts, sends and
 output show as placeholders); (2) output selection and multi-output instruments
 (one strip per USED output pair); (3) the six Aux buses and the sends; (4) the EQ and dynamics (the SSL-style
-processing behind the knobs); (5) insert effects.
+processing behind the knobs); (5) insert effects (STARTED 2026-10-07: channel inserts work -
+an empty slot's menu lists the scanned effects by category, a full slot opens its window, right-click
+bypasses / replaces / removes; pre-fader, in slot order; saved with their state. Still to do: the Aux
+buses' and the master's inserts, undo, the API commands, the section's IN switch).
 Later: the mixer docked under the arrangement like the MIDI editor.
 
 ## Non-linear patching (far field)

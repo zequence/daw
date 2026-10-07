@@ -50,6 +50,9 @@ public:
     // Instruments only, sorted by manufacturer.
     juce::Array<juce::PluginDescription> getInstrumentTypes() const;
 
+    // Effects only (what the mixer's inserts offer), sorted by name
+    juce::Array<juce::PluginDescription> getEffectTypes() const;
+
     //==============================================================================
     // The instrument rack
     using InstrumentCallback = std::function<void (InstrumentId, const juce::String& error)>;
@@ -397,6 +400,25 @@ public:
     juce::PropertiesFile& getSettingsFile()   { return settings; }
     void connectMasterOutput();   // the master bus to the device (once the graph has channels)
 
+    //==============================================================================
+    // Inserts: a channel's effect plugins, in slots 0 - 15, in series between its source (the
+    // instrument) and its strip (pan, fader) - pre-fader. Adding loads the plugin asynchronously.
+    static constexpr int insertSlots = 16;
+    using InsertCallback = std::function<void (bool ok, const juce::String& error)>;
+    void addInsert (AudioChannelId, int slot, const juce::PluginDescription&, InsertCallback = {});   // replaces what is in the slot
+    void removeInsert (AudioChannelId, int slot);
+    void setInsertBypassed (AudioChannelId, int slot, bool);
+
+    struct InsertInfo
+    {
+        int slot = 0;
+        juce::String name;
+        bool bypassed = false;
+    };
+
+    std::vector<InsertInfo> getInserts (AudioChannelId) const;
+    juce::AudioPluginInstance* getInsertPlugin (AudioChannelId, int slot) const;
+
     // Where the library of expression maps lives (model/ExpressionMapLibrary.h): the user data folder'"'"'s Maps
     // unless a test points it elsewhere. Projects hold their own copies of maps.
     juce::File getMapLibraryDir() const              { return mapLibraryDir; }
@@ -479,9 +501,17 @@ private:
         std::vector<MidiChannelInfo> midiChannels;  // named channels (manual + synced)
     };
 
+    struct Insert
+    {
+        NodeID node;
+        juce::String name;
+        bool bypassed = false;
+    };
+
     struct AudioChannel
     {
         NodeID node;
+        std::map<int, Insert> inserts;              // slot -> effect, in series before the strip
         InstrumentId input = 0;                     // 0 = none (device inputs later)
         juce::String name;
         bool named = false;                         // renamed in the mixer: the source's name no longer applies
@@ -617,6 +647,8 @@ private:
     NodeID audioOutNode, midiInNode, recorderNode, masterNode;
     void applySolo();   // silences the channels that aren't soloed while any is
     void emitChannelChanged (AudioChannelId, const juce::String& change);
+    void rewireChannelInputs (AudioChannelId);   // source -> inserts (slot order) -> strip
+    void restoreInserts (AudioChannelId, const juce::XmlElement* audioChannelXml, std::function<void()> done);
     std::unique_ptr<MidiRecorder> recorder;
     bool recordingSawPlayback = false;
 

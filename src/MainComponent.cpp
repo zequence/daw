@@ -46,6 +46,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     {
         if (safe != nullptr)
             safe->pluginWindows.clear();
+            safe->insertWindows.clear();
     };
 
     dispatcher.onAfterProjectChange = [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::File& file)
@@ -306,7 +307,13 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     };
 
     instrumentsView.onOpenPluginGui = [this] (auto id) { openPluginWindow (id); };
-    commandDispatcher.onBeforeInstrumentRemove = [this] (int id) { pluginWindows.erase (id); };
+    commandDispatcher.onBeforeInstrumentRemove = [this] (int id)
+    {
+        pluginWindows.erase (id);
+        closeInsertWindows (engine.getAudioChannelForInstrument (id), -1);   // its channel's inserts go with it
+    };
+    mixerView.onOpenInsert = [this] (auto channel, int slot) { openInsertWindow (channel, slot); };
+    mixerView.onBeforeInsertRemove = [this] (auto channel, int slot) { closeInsertWindows (channel, slot); };
 
     // MIDI controllers (Settings > Audio & MIDI): their assigned controls choose articulations
     engine.onControllerMidi = [this] (const juce::MidiMessage& message)
@@ -578,6 +585,8 @@ MainComponent::~MainComponent()
     engine.getKnownPlugins().removeChangeListener (this);
 
     pluginWindows.clear();
+
+    insertWindows.clear();
 }
 
 //==============================================================================
@@ -927,6 +936,47 @@ void MainComponent::openPluginWindow (AudioEngine::InstrumentId instrumentId)
     };
 }
 
+// An insert's window: like an instrument's (one per insert, kept until closed)
+void MainComponent::openInsertWindow (AudioEngine::AudioChannelId channel, int slot)
+{
+    const auto key = std::pair (channel, slot);
+    auto& window = insertWindows[key];
+
+    if (window != nullptr)
+    {
+        window->setVisible (true);
+        window->toFront (true);
+        window->ensureOnScreen();
+        return;
+    }
+
+    auto* plugin = engine.getInsertPlugin (channel, slot);
+
+    if (plugin == nullptr)
+    {
+        insertWindows.erase (key);
+        return;
+    }
+
+    const auto onTop = engine.getSettingsFile().getBoolValue (SettingsView::pluginWindowsOnTopKey, true);
+    window = std::make_unique<PluginWindow> (*plugin, engine.getAudioChannelName (channel) + " - " + plugin->getName(), onTop);
+    window->onKey = [safe = juce::Component::SafePointer<MainComponent> (this)] (const juce::KeyPress& key)
+    {
+        return safe != nullptr && safe->keyPressed (key);
+    };
+    window->onClose = [safe = juce::Component::SafePointer<MainComponent> (this), key]
+    {
+        juce::MessageManager::callAsync ([safe, key] { if (safe != nullptr) safe->insertWindows.erase (key); });
+    };
+}
+
+// Closes a channel's insert windows (slot -1: all of them) - before their plugins are deleted
+void MainComponent::closeInsertWindows (AudioEngine::AudioChannelId channel, int slot)
+{
+    for (auto it = insertWindows.begin(); it != insertWindows.end();)
+        it = it->first.first == channel && (slot < 0 || it->first.second == slot) ? insertWindows.erase (it) : std::next (it);
+}
+
 //==============================================================================
 void MainComponent::setDomain (Domain newDomain)
 {
@@ -1069,6 +1119,8 @@ void MainComponent::newProject()
             return;
 
         safe->pluginWindows.clear();
+
+        safe->insertWindows.clear();
         safe->engine.clearProject();
         safe->currentProjectFile = juce::File();
         safe->selectedTrack = 0;
@@ -1099,6 +1151,7 @@ void MainComponent::loadProjectDialog()
 
                 const auto file = chooser.getResult();
                 safe->pluginWindows.clear();
+                safe->insertWindows.clear();
                 safe->statusLabel.setText ("Loading " + file.getFileName() + "...", juce::dontSendNotification);
 
                 safe->engine.loadProject (file, [safe, file] (bool ok, const juce::String& warnings)

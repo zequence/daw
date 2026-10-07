@@ -488,6 +488,9 @@ void AudioEngine::removeInstrument (InstrumentId id)
 
     if (auto channelIt = audioChannels.find (instrument->audioChannel); channelIt != audioChannels.end())
     {
+        for (auto& [slot, insert] : channelIt->second.inserts)
+            graph.removeNode (insert.node);
+
         graph.removeNode (channelIt->second.node);
         audioChannels.erase (channelIt);
     }
@@ -941,6 +944,207 @@ int AudioEngine::getNumLoadedInstruments() const
 }
 
 //==============================================================================
+//==============================================================================
+juce::Array<juce::PluginDescription> AudioEngine::getEffectTypes() const
+{
+    juce::Array<juce::PluginDescription> effects;
+
+    for (const auto& type : knownPlugins.getTypes())
+        if (! type.isInstrument)
+            effects.add (type);
+
+    std::sort (effects.begin(), effects.end(), [] (const auto& a, const auto& b) { return a.name.compareIgnoreCase (b.name) < 0; });
+    return effects;
+}
+
+void AudioEngine::addInsert (AudioChannelId channelId, int slot, const juce::PluginDescription& description, InsertCallback callback)
+{
+    if (audioChannels.find (channelId) == audioChannels.end() || slot < 0 || slot >= insertSlots)
+    {
+        if (callback) callback (false, "No such channel or slot");
+        return;
+    }
+
+    auto* device = deviceManager.getCurrentAudioDevice();
+    const auto sampleRate = device != nullptr ? device->getCurrentSampleRate() : 48000.0;
+    const auto blockSize  = device != nullptr ? device->getCurrentBufferSizeSamples() : 512;
+    std::weak_ptr<int> alive = lifetimeToken;
+    juce::Logger::writeToLog ("Loading insert: " + description.name + " (" + description.fileOrIdentifier + ")");
+
+    formatManager.createPluginInstanceAsync (description, sampleRate, blockSize,
+        [this, alive, channelId, slot, callback, name = description.name]
+        (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error)
+        {
+            if (alive.expired())
+                return;
+
+            auto it = audioChannels.find (channelId);
+
+            if (instance == nullptr || it == audioChannels.end())
+            {
+                juce::Logger::writeToLog ("FAILED to load insert: " + name + (error.isNotEmpty() ? " - " + error : juce::String()));
+                if (callback) callback (false, error.isNotEmpty() ? error : juce::String ("The channel is gone"));
+                return;
+            }
+
+            if (auto old = it->second.inserts.find (slot); old != it->second.inserts.end())
+                graph.removeNode (old->second.node, updateKind());
+
+            Insert insert;
+            insert.name = name;
+            insert.node = graph.addNode (std::move (instance), std::nullopt, updateKind())->nodeID;
+            it->second.inserts[slot] = insert;
+            rewireChannelInputs (channelId);
+            emitChannelChanged (channelId, "inserts");
+
+            if (callback) callback (true, {});
+        });
+}
+
+void AudioEngine::removeInsert (AudioChannelId channelId, int slot)
+{
+    if (auto it = audioChannels.find (channelId); it != audioChannels.end())
+        if (auto insert = it->second.inserts.find (slot); insert != it->second.inserts.end())
+        {
+            graph.removeNode (insert->second.node, updateKind());
+            it->second.inserts.erase (insert);
+            rewireChannelInputs (channelId);
+            emitChannelChanged (channelId, "inserts");
+        }
+}
+
+void AudioEngine::setInsertBypassed (AudioChannelId channelId, int slot, bool bypassed)
+{
+    if (auto it = audioChannels.find (channelId); it != audioChannels.end())
+        if (auto insert = it->second.inserts.find (slot); insert != it->second.inserts.end())
+        {
+            insert->second.bypassed = bypassed;
+
+            if (auto* node = graph.getNodeForId (insert->second.node))
+                node->setBypassed (bypassed);
+
+            emitChannelChanged (channelId, "inserts");
+        }
+}
+
+std::vector<AudioEngine::InsertInfo> AudioEngine::getInserts (AudioChannelId channelId) const
+{
+    std::vector<InsertInfo> result;
+
+    if (auto it = audioChannels.find (channelId); it != audioChannels.end())
+        for (auto& [slot, insert] : it->second.inserts)
+            result.push_back ({ slot, insert.name, insert.bypassed });
+
+    return result;
+}
+
+juce::AudioPluginInstance* AudioEngine::getInsertPlugin (AudioChannelId channelId, int slot) const
+{
+    if (auto it = audioChannels.find (channelId); it != audioChannels.end())
+        if (auto insert = it->second.inserts.find (slot); insert != it->second.inserts.end())
+            if (auto* node = graph.getNodeForId (insert->second.node))
+                return dynamic_cast<juce::AudioPluginInstance*> (node->getProcessor());
+
+    return nullptr;
+}
+
+// A channel's signal chain: its instrument, then each insert in slot order, then the strip. The
+// audio connections out of the instrument and the inserts are made afresh (MIDI ones stay).
+void AudioEngine::rewireChannelInputs (AudioChannelId channelId)
+{
+    auto it = audioChannels.find (channelId);
+
+    if (it == audioChannels.end())
+        return;
+
+    std::vector<NodeID> chain;
+
+    if (auto* instrument = findInstrument (it->second.input))
+        chain.push_back (instrument->pluginNode);
+
+    for (auto& [slot, insert] : it->second.inserts)
+        chain.push_back (insert.node);
+
+    for (auto& connection : graph.getConnections())
+        if (! connection.source.isMIDI() && std::find (chain.begin(), chain.end(), connection.source.nodeID) != chain.end())
+            graph.removeConnection (connection, updateKind());
+
+    if (chain.empty())
+        return;
+
+    chain.push_back (it->second.node);
+
+    for (size_t i = 0; i + 1 < chain.size(); ++i)
+    {
+        auto* from = graph.getNodeForId (chain[i]);
+        auto* to = graph.getNodeForId (chain[i + 1]);
+
+        if (from == nullptr || to == nullptr)
+            continue;
+
+        const auto outs = from->getProcessor()->getTotalNumOutputChannels();
+        const auto ins = juce::jmax (1, juce::jmin (2, to->getProcessor()->getTotalNumInputChannels()));
+
+        for (int ch = 0; ch < ins; ++ch)   // a mono source feeds both sides
+            if (outs > 0)
+                graph.addConnection ({ { chain[i], juce::jmin (ch, outs - 1) }, { chain[i + 1], ch } }, updateKind());
+    }
+}
+
+// A loaded project's inserts for a channel, one after another (each loads asynchronously)
+void AudioEngine::restoreInserts (AudioChannelId channelId, const juce::XmlElement* audioChannelXml, std::function<void()> done)
+{
+    auto elements = std::make_shared<std::vector<const juce::XmlElement*>>();
+
+    if (audioChannelXml != nullptr)
+        for (auto* i : audioChannelXml->getChildWithTagNameIterator ("INSERT"))
+            elements->push_back (i);
+
+    auto next = std::make_shared<std::function<void (size_t)>>();
+    *next = [this, channelId, elements, next, done] (size_t index)
+    {
+        if (index >= elements->size())
+        {
+            done();
+            juce::MessageManager::callAsync ([next] { *next = nullptr; });   // break the self-reference (not from inside it)
+            return;
+        }
+
+        const auto* element = (*elements)[index];
+        juce::PluginDescription description;
+        auto* pluginXml = element->getChildByName ("PLUGIN");
+
+        if (pluginXml == nullptr || ! description.loadFromXml (*pluginXml))
+        {
+            (*next) (index + 1);
+            return;
+        }
+
+        const auto slot = element->getIntAttribute ("slot");
+        addInsert (channelId, slot, description, [this, channelId, slot, element, next, index] (bool ok, const juce::String&)
+        {
+            if (ok)
+            {
+                if (auto* stateElement = element->getChildByName ("STATE"))
+                {
+                    juce::MemoryBlock block;
+
+                    if (block.fromBase64Encoding (stateElement->getAllSubText().trim()) && block.getSize() > 0)
+                        if (auto* plugin = getInsertPlugin (channelId, slot))
+                            plugin->setStateInformation (block.getData(), (int) block.getSize());
+                }
+
+                if (element->getBoolAttribute ("bypassed"))
+                    setInsertBypassed (channelId, slot, true);
+            }
+
+            (*next) (index + 1);
+        });
+    };
+
+    (*next) (0);
+}
+
 // The master bus to the device's first two outputs. The output node has no channels until the
 // graph is configured for a device - a connection asked for earlier is refused - so this is called
 // once the device runs, and again when instruments are added (it does nothing when connected)
@@ -2425,6 +2629,24 @@ bool AudioEngine::saveProject (const juce::File& file)
 
                 if (it->second.named)
                     a->setAttribute ("name", it->second.name);
+
+                for (auto& [slot, insert] : it->second.inserts)
+                {
+                    auto* i = a->createNewChildElement ("INSERT");
+                    i->setAttribute ("slot", slot);
+                    i->setAttribute ("name", insert.name);
+                    i->setAttribute ("bypassed", insert.bypassed);
+
+                    if (auto* plugin = getInsertPlugin (instrument.audioChannel, slot))
+                    {
+                        i->addChildElement (plugin->getPluginDescription().createXml().release());
+                        juce::MemoryBlock pluginState;
+                        plugin->getStateInformation (pluginState);
+
+                        if (pluginState.getSize() > 0)
+                            i->createNewChildElement ("STATE")->addTextElement (pluginState.toBase64Encoding());
+                    }
+                }
             }
         }
     }
@@ -2701,7 +2923,8 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
                             channelIt->second.position = a->getIntAttribute ("position");
                 }
 
-                (*step)();
+                // Its inserts (loaded one after another), then the next instrument
+                restoreInserts (getAudioChannelForInstrument (newId), element->getChildByName ("AUDIOCHANNEL"), [step] { (*step)(); });
             });
     };
 
