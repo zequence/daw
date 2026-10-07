@@ -350,11 +350,20 @@ juce::String PianoRollView::maximizedLaneId() const
     return ids.contains (maximizedLane) ? maximizedLane : ids[0];
 }
 
+// The open lane's height: its full height, or less when the panel is short (the lanes stay below the
+// toolbar instead of sliding under it; the notes' grid gives way first)
+int PianoRollView::openLaneHeight() const
+{
+    const auto count = shownLanes().size();
+    const auto room = getHeight() - toolbarHeight - juce::jmax (0, count - 1) * minimizedLaneHeight;
+    return juce::jlimit (minimizedLaneHeight, maximizedLaneHeight, room);
+}
+
 int PianoRollView::lanesHeight() const
 {
     const auto count = shownLanes().size();
     return count == 0 ? minimizedLaneHeight   // a strip to right-click to bring lanes back
-                      : maximizedLaneHeight + (count - 1) * minimizedLaneHeight;
+                      : openLaneHeight() + (count - 1) * minimizedLaneHeight;
 }
 
 juce::Rectangle<int> PianoRollView::laneRowArea (int index) const
@@ -364,9 +373,9 @@ juce::Rectangle<int> PianoRollView::laneRowArea (int index) const
     auto y = getHeight() - lanesHeight();
 
     for (int i = 0; i < index; ++i)
-        y += i == maximized ? maximizedLaneHeight : minimizedLaneHeight;
+        y += i == maximized ? openLaneHeight() : minimizedLaneHeight;
 
-    return { 0, y, getWidth(), index == maximized ? maximizedLaneHeight : minimizedLaneHeight };
+    return { 0, y, getWidth(), index == maximized ? openLaneHeight() : minimizedLaneHeight };
 }
 
 int PianoRollView::laneIndexAt (juce::Point<int> position) const

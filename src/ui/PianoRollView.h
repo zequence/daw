@@ -95,6 +95,7 @@ private:
     // The controller lanes (Settings > Controller lanes; the track's choice, saved per track): stacked
     // under the grid, one maximized, the others minimized strips (name + a coloured line of their values)
     static constexpr int maximizedLaneHeight = 120, minimizedLaneHeight = 18;
+    int openLaneHeight() const;   // maximizedLaneHeight, less when the editor is short
     juce::StringArray shownLanes() const;           // the track's lanes that are available, in order
     juce::String maximizedLaneId() const;
     int lanesHeight() const;
