@@ -76,9 +76,24 @@ public:
             highlighted = id;
 
             for (auto& strip : channelStrips)
+            {
                 strip->repaint();
+
+                if (strip->channelId == id)   // brought into view (selected in the sidebar's list)
+                {
+                    const auto x = strip->getX();
+                    const auto visible = channelsViewport.getViewArea();
+
+                    if (x < visible.getX() || strip->getRight() > visible.getRight())
+                        channelsViewport.setViewPosition (juce::jmax (0, x - 4), visible.getY());
+                }
+            }
         }
     }
+
+    // A click anywhere on a channel's strip (a knob too) selects that channel - here and in the
+    // sidebar's audio channel list
+    std::function<void (AudioEngine::AudioChannelId)> onChannelSelected;
 
     // The mixer keeps one size (the strips never stretch, so resizing the window only moves the view's
     // edge). Its zoom changes on command only: "Fit size" (the right-click menu) zooms it to the
@@ -212,6 +227,7 @@ private:
             // The strip (with its knobs) is kept as an image: scrolling only moves pictures, and a
             // turned knob or a moving meter redraws just its own patch of it
             setBufferedToImage (true);
+            addMouseListener (this, true);   // its controls' clicks select the channel too (mouseDown)
 
             const auto& style = owner.style();
             const auto placeholderTip = juce::String ("Placeholder - not working yet (MILESTONES.md \"Audio mixer\")");
@@ -580,6 +596,17 @@ private:
                 inserts.names = std::move (names);
                 inserts.bypassed = std::move (bypassed);
                 inserts.repaint();
+            }
+        }
+
+        void mouseDown (const juce::MouseEvent&) override
+        {
+            if (kind == Kind::channel)
+            {
+                owner.setHighlightedChannel (channelId);
+
+                if (owner.onChannelSelected)
+                    owner.onChannelSelected (channelId);
             }
         }
 

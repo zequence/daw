@@ -26,6 +26,17 @@ public:
         addAndMakeVisible (viewport);
     }
 
+    // The current channel: the one last clicked (the mixer highlights it, and clicking a strip there
+    // selects it here); 0 = none
+    AudioEngine::AudioChannelId getCurrentChannel() const   { return multiSelection.count (current) > 0 ? current : 0; }
+
+    void selectChannel (AudioEngine::AudioChannelId id)
+    {
+        multiSelection = { id };
+        current = shiftAnchor = id;
+        refresh();
+    }
+
     void refresh()
     {
         auto freshItems = engine.getSidebarItems (false, true);
@@ -369,6 +380,7 @@ private:
             return;
 
         const auto channelId = (AudioEngine::AudioChannelId) id;
+        current = channelId;
 
         if (event.mods.isCtrlDown())
         {
@@ -634,6 +646,7 @@ private:
     std::vector<std::unique_ptr<juce::Component>> rowComponents;
 
     std::set<AudioEngine::AudioChannelId> multiSelection;
+    AudioEngine::AudioChannelId current = 0;
     AudioEngine::AudioChannelId shiftAnchor = 0;
     bool clearSelectionOnMouseUp = false;
 

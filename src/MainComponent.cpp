@@ -341,6 +341,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
         mixerView.destroyRack();
     };
     mixerView.onOpenInsert = [this] (auto channel, int slot) { openInsertWindow (channel, slot); };
+    mixerView.onChannelSelected = [this] (auto channel) { channelList.selectChannel (channel); };
     mixerView.onBeforeInsertRemove = [this] (auto channel, int slot) { closeInsertWindows (channel, slot); };
 
     // MIDI controllers (Settings > Audio & MIDI): their assigned controls choose articulations
@@ -1469,12 +1470,14 @@ void MainComponent::timerCallback()
     engine.pollRecording();
 
 
-    // The mixer highlights the selected track's channel (its first output's instrument)
+    // The mixer highlights the selected audio channel (the sidebar's audio list and the mixer share
+    // it); while none is selected there, the selected track's channel (its first output's instrument)
     {
-        AudioEngine::AudioChannelId channel = 0;
+        auto channel = channelList.getCurrentChannel();
 
-        if (const auto outputs = engine.getTrackOutputs (selectedTrack); ! outputs.empty())
-            channel = engine.getAudioChannelForInstrument (outputs.front().instrument);
+        if (channel == 0)
+            if (const auto outputs = engine.getTrackOutputs (selectedTrack); ! outputs.empty())
+                channel = engine.getAudioChannelForInstrument (outputs.front().instrument);
 
         mixerView.setHighlightedChannel (channel);
     }
