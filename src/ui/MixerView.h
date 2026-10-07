@@ -168,7 +168,7 @@ private:   // where a channel strip's pan and fader begin (the other strips foll
 
 private:
     enum class Kind { channel, aux, master };
-    static constexpr int stripWidth = 118, stripHeight = 1300;
+    static constexpr int stripWidth = 118, stripHeight = 1310;
 
     const mixer::ConsoleStyle& style() const   { return mixer::ConsoleStyle::ssl(); }
 
@@ -753,7 +753,7 @@ private:
             if (kind != Kind::channel)   // Aux and master: a coloured band under the name
             {
                 g.setColour (kind == Kind::master ? juce::Colour (0xffc23b33) : owner.style().auxCap);
-                g.fillRect (getLocalBounds().reduced (4, 0).withTop (31).withHeight (2));
+                g.fillRect (getLocalBounds().reduced (4, 0).withTop (41).withHeight (2));
             }
 
             return image;
@@ -826,7 +826,7 @@ private:
         void resized() override
         {
             auto area = getLocalBounds().reduced (4);
-            name.setBounds (area.removeFromTop (26));   // the tape, room for its bigger writing
+            name.setBounds (area.removeFromTop (36));   // the tape: its writing as large as the track view's
             area.removeFromTop (4);
 
             if (kind == Kind::master)

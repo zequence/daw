@@ -392,7 +392,7 @@ namespace tape
 // folder in the track view - its colour, its ink
 struct TapeLabel final : juce::Label
 {
-    static juce::Font markerFont()   { return tape::markerFont (17.5f); }
+    static juce::Font markerFont()   { return tape::markerFont (24.0f); }
 
     void setTapeColour (juce::Colour newColour)
     {
@@ -406,7 +406,7 @@ struct TapeLabel final : juce::Label
     void paint (juce::Graphics& g) override
     {
         if (! isBeingEdited())
-            tape::draw (g, getLocalBounds().toFloat().reduced (3.0f, 2.5f), getText(), tapeColour, 17.5f);
+            tape::draw (g, getLocalBounds().toFloat().reduced (3.0f, 2.5f), getText(), tapeColour, (float) getHeight() * 0.8f);
     }
 
     juce::Colour tapeColour = tape::cream;
