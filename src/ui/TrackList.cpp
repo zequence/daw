@@ -452,7 +452,7 @@ public:
         // Its name on tape - the tape takes the instrument's colour (cream without one); drawn once, cached
         const auto colour = AudioEngine::colourFromHex (engine.getInstrumentColour (instrumentId), mixer::tape::cream);
         nameTape.draw (g, text.withTrimmedLeft (2), engine.getInstrumentName (instrumentId), colour,
-                       juce::jmin (64.0f, (float) getHeight() * 0.8f));   // the writing fills the tape (and grows with the zoom)
+                       18.0f);   // a little larger than its tracks' names (15)
     }
 
 private:

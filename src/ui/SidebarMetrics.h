@@ -101,9 +101,12 @@ namespace sidebar
         return juce::Font (juce::FontOptions ("Segoe UI", height, juce::Font::plain).withStyle (folder ? "Semibold" : "Regular"));
     }
 
-    inline int heightOf (const AudioEngine::SidebarItem&)   // every row alike (folders, instruments, MIDI, audio): the zoom
+    // Every row follows the zoom; an instrument folder's is taller (room for its name on tape)
+    constexpr int instrumentExtraHeight = 10;
+
+    inline int heightOf (const AudioEngine::SidebarItem& item)
     {
-        return trackRowHeight();
+        return trackRowHeight() + (item.instrument != 0 ? instrumentExtraHeight : 0);
     }
 
     // One shared scroll offset; views poll 'revision' from their timers.
