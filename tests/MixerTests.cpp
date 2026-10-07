@@ -67,6 +67,23 @@ public:
             expectEquals (left + right, 0.0f);
             expectEquals (strip.getLastPeak(), 0.0f);
         }
+
+        {
+            // The master bus to the device output: the graph's output node has no channels until
+            // the graph is configured, so the connection must be (re)made after that (AudioEngine
+            // ::connectMasterOutput) - made before, it's refused and nothing is heard
+            beginTest ("the master bus reaches the output once the graph has its channels");
+            using IO = juce::AudioProcessorGraph::AudioGraphIOProcessor;
+            juce::AudioProcessorGraph graph;
+            const auto out = graph.addNode (std::make_unique<IO> (IO::audioOutputNode))->nodeID;
+            const auto master = graph.addNode (std::make_unique<AudioChannelProcessor>())->nodeID;
+            expect (! graph.addConnection ({ { master, 0 }, { out, 0 } }), "refused before the graph has channels");
+
+            graph.setPlayConfigDetails (0, 2, 48000.0, 64);
+            graph.prepareToPlay (48000.0, 64);
+            expect (graph.addConnection ({ { master, 0 }, { out, 0 } }));
+            expect (graph.addConnection ({ { master, 1 }, { out, 1 } }));
+        }
     }
 };
 

@@ -395,6 +395,7 @@ public:
 
     void saveSettings();
     juce::PropertiesFile& getSettingsFile()   { return settings; }
+    void connectMasterOutput();   // the master bus to the device (once the graph has channels)
 
     // Where the library of expression maps lives (model/ExpressionMapLibrary.h): the user data folder'"'"'s Maps
     // unless a test points it elsewhere. Projects hold their own copies of maps.
@@ -533,6 +534,10 @@ private:
         {
             engine.transport.prepare (device->getCurrentSampleRate());
             engine.player.audioDeviceAboutToStart (device);
+
+            // A (new) device: the graph now has its channels - the master can reach the output
+            if (juce::MessageManager::existsAndIsCurrentThread())
+                engine.connectMasterOutput();
         }
 
         void audioDeviceStopped() override { engine.player.audioDeviceStopped(); }

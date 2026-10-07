@@ -59,11 +59,9 @@ AudioEngine::AudioEngine (juce::PropertiesFile& settingsToUse)
 
     audioOutNode = graph.addNode (std::make_unique<IOProcessor> (IOProcessor::audioOutputNode))->nodeID;
 
-    // The master bus: every channel feeds it, it feeds the device (the mixer's master strip)
+    // The master bus: every channel feeds it, it feeds the device (the mixer's master strip). Its
+    // connection to the output is made once the graph has its channels (connectMasterOutput)
     masterNode = graph.addNode (std::make_unique<AudioChannelProcessor>())->nodeID;
-
-    for (int ch = 0; ch < 2; ++ch)
-        graph.addConnection ({ { masterNode, ch }, { audioOutNode, ch } });
     midiInNode   = graph.addNode (std::make_unique<IOProcessor> (IOProcessor::midiInputNode))->nodeID;
 
     // Permanent tap on the live MIDI input for recording.
@@ -74,6 +72,7 @@ AudioEngine::AudioEngine (juce::PropertiesFile& settingsToUse)
 
     player.setProcessor (&graph);
     deviceManager.addAudioCallback (&ioCallback);
+    connectMasterOutput();
     controllerDevices = juce::StringArray::fromLines (settings.getValue ("midiControllers"));
     controllerDevices.removeEmptyStrings();
     deviceManager.addMidiInputDeviceCallback ({}, &inputRouter);
@@ -419,6 +418,8 @@ void AudioEngine::addInstrument (const juce::PluginDescription& description, Ins
 
             for (int ch = 0; ch < 2; ++ch)
                 graph.addConnection ({ { channel.node, ch }, { masterNode, ch } }, updateKind());
+
+            connectMasterOutput();   // in case the device started (or changed) after the engine
 
             // Only the first stereo pair for now; multi-output routing comes later.
             if (numOuts == 1)
@@ -940,6 +941,20 @@ int AudioEngine::getNumLoadedInstruments() const
 }
 
 //==============================================================================
+// The master bus to the device's first two outputs. The output node has no channels until the
+// graph is configured for a device - a connection asked for earlier is refused - so this is called
+// once the device runs, and again when instruments are added (it does nothing when connected)
+void AudioEngine::connectMasterOutput()
+{
+    for (int ch = 0; ch < 2; ++ch)
+    {
+        const juce::AudioProcessorGraph::Connection connection { { masterNode, ch }, { audioOutNode, ch } };
+
+        if (! graph.isConnected (connection) && graph.canConnect (connection))
+            graph.addConnection (connection);
+    }
+}
+
 AudioChannelProcessor* AudioEngine::getMasterChannel() const
 {
     if (auto* node = graph.getNodeForId (masterNode))
