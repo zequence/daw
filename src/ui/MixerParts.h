@@ -159,10 +159,19 @@ struct Knob : juce::Slider
 
         if (alwaysShowValue || isMouseButtonDown())
         {
-            const auto ink = cap.getPerceivedBrightness() > 0.6f ? juce::Colours::black : juce::Colours::white;   // dark on light caps (dynamics, aux)
-            g.setColour (ink.withAlpha (isMouseButtonDown() ? 0.95f : 0.4f));
-            g.setFont (juce::FontOptions (alwaysShowValue ? 10.5f : 10.0f, juce::Font::bold));
-            g.drawText (format (getValue()), skirt.expanded (6.0f).toNearestInt(), juce::Justification::centred, false);
+            const auto font = juce::Font (juce::FontOptions (alwaysShowValue ? 10.5f : 10.0f, juce::Font::bold));
+            const auto text = format (getValue());
+
+            if (isMouseButtonDown())   // while turning: on a black label, readable on any cap
+            {
+                const auto width = juce::GlyphArrangement::getStringWidth (font, text) + 6.0f;
+                g.setColour (juce::Colours::black.withAlpha (0.85f));
+                g.fillRoundedRectangle (juce::Rectangle<float> (width, font.getHeight() + 2.0f).withCentre (centre), 2.0f);
+            }
+
+            g.setColour (juce::Colours::white.withAlpha (isMouseButtonDown() ? 0.95f : 0.4f));
+            g.setFont (font);
+            g.drawText (text, skirt.expanded (6.0f).toNearestInt(), juce::Justification::centred, false);
         }
 
         if (! legendArea.isEmpty())
