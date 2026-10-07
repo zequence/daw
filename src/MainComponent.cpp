@@ -1710,6 +1710,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
             return true;
         }
 
+        if (contentView == ContentView::mixer)   // then the mixer itself
+        {
+            showContent (mainView);
+            return true;
+        }
+
         // The MIDI editor: Esc first deselects the notes, then closes
         if (isEditorShowing() && pianoRollView.deselectNotes())
             return true;

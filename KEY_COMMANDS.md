@@ -51,7 +51,8 @@ editor, the instrument editor to the instrument list, and other views to the
 arrangement. It also closes Settings. In the MIDI editor, Esc steps back one layer at a
 time: first it deselects the selected notes, then draw mode goes back to edit mode, and
 only then does the editor close. In the arrangement
-it clears the region selection.
+it clears the region selection. In the mixer, Esc first closes the rack (a channel's
+inserts), then the mixer.
 
 ## Mouse in the arrangement
 
