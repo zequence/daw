@@ -667,7 +667,7 @@ private:
             if (kind != Kind::channel)   // Aux and master: a coloured band under the name
             {
                 g.setColour (kind == Kind::master ? juce::Colour (0xffc23b33) : owner.style().auxCap);
-                g.fillRect (getLocalBounds().reduced (4, 0).withTop (27).withHeight (2));
+                g.fillRect (getLocalBounds().reduced (4, 0).withTop (31).withHeight (2));
             }
 
             return image;
@@ -740,7 +740,7 @@ private:
         void resized() override
         {
             auto area = getLocalBounds().reduced (4);
-            name.setBounds (area.removeFromTop (22));
+            name.setBounds (area.removeFromTop (26));   // the tape, room for its bigger writing
             area.removeFromTop (4);
 
             if (kind == Kind::master)

@@ -255,7 +255,7 @@ struct TapeLabel final : juce::Label
     static juce::Font markerFont()
     {
         static const auto hasPrint = juce::Font::findAllTypefaceNames().contains ("Segoe Print");
-        return juce::Font (juce::FontOptions (hasPrint ? juce::String ("Segoe Print") : juce::String(), 14.5f, juce::Font::bold));
+        return juce::Font (juce::FontOptions (hasPrint ? juce::String ("Segoe Print") : juce::String(), 17.5f, juce::Font::bold));
     }
 
     void paint (juce::Graphics& g) override
@@ -270,7 +270,7 @@ struct TapeLabel final : juce::Label
         // A longer name is written smaller (down to about 3/4); still too long: its first characters and a dot
         auto font = markerFont();
 
-        while (font.getHeight() > 11.0f && juce::GlyphArrangement::getStringWidth (font, text) > area.getWidth() - 18.0f)
+        while (font.getHeight() > 13.0f && juce::GlyphArrangement::getStringWidth (font, text) > area.getWidth() - 18.0f)
             font = font.withHeight (font.getHeight() - 0.5f);
 
         if (juce::GlyphArrangement::getStringWidth (font, text) > area.getWidth() - 18.0f)
