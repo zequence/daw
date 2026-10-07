@@ -1418,8 +1418,24 @@ void MainComponent::timerCallback()
     // plugin's own text field in the rack does not work because of this; its own window does.)
     if (contentView == ContentView::mixer && mixerView.isRackOpen()
         && ! juce::ModifierKeys::getCurrentModifiersRealtime().isAnyMouseButtonDown())
+    {
         // Our window is the active one, but the keyboard is not ours: a plugin inside it has it (some
         // plugins run their windows on their own thread, so asking "who has the focus" can't see them)
+        // TEMPORARY diagnostics (rack keys): who has the keyboard, logged when it changes
+        if (auto* peer = getPeer())
+        {
+            auto* focused = juce::Component::getCurrentlyFocusedComponent();
+            const auto state = juce::String ("rack keys: foreground ours ") + (GetForegroundWindow() == peer->getNativeHandle() ? "yes" : "no")
+                                 + ", native focus ours " + (peer->isFocused() ? "yes" : "no")
+                                 + ", focused component " + (focused == nullptr ? juce::String ("none")
+                                                                                : typeid (*focused).name() + juce::String (" '") + focused->getName() + "'"
+                                                                                    + (focused == this || isParentOf (focused) ? " (inside)" : " (outside)"));
+            static juce::String lastState;
+
+            if (state != lastState)
+                juce::Logger::writeToLog (lastState = state);
+        }
+
         // Also when nothing of ours has the keys: opening the rack hides the strips that had them
         if (auto* peer = getPeer())
             if (auto* focused = juce::Component::getCurrentlyFocusedComponent();
@@ -1429,6 +1445,7 @@ void MainComponent::timerCallback()
                 peer->grabFocus();      // the native focus (JUCE may still think it has it)
                 grabKeyboardFocus();
             }
+    }
 #endif
 
     engine.pollRecording();
@@ -1675,6 +1692,9 @@ void MainComponent::openEditorOn (std::vector<AudioEngine::TrackId> tracks)
 
 bool MainComponent::keyPressed (const juce::KeyPress& key)
 {
+    if (mixerView.isRackOpen())   // TEMPORARY diagnostics (rack keys)
+        juce::Logger::writeToLog ("rack keys: keyPressed " + key.getTextDescription());
+
     if (keys::matches ("view.back", key))
     {
         if (settingsOpen)
@@ -1692,6 +1712,12 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
         if (contentView == ContentView::expressionMaps)
         {
             showContent (ContentView::instrumentEditor);
+            return true;
+        }
+
+        if (contentView == ContentView::mixer && mixerView.isRackOpen())   // the rack first, then the mixer
+        {
+            mixerView.closeRack();
             return true;
         }
 
