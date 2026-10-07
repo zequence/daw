@@ -439,6 +439,15 @@ public:
     std::vector<AudioChannelId> getBusIds() const;   // in the order they were made
     bool isBus (AudioChannelId) const;
 
+    // Folder groups: a grouped folder sums the audio inside it on a bus of its own (named as the folder,
+    // following its renames). The engine keeps that routing as things move: every audio channel inside
+    // goes to its innermost grouped folder's bus (channels routed elsewhere by hand are left alone).
+    void setFolderGrouped (FolderId, bool);
+    bool isFolderGrouped (FolderId) const;
+    AudioChannelId getFolderGroupBus (FolderId) const;   // 0: not grouped
+    bool isGroupBus (AudioChannelId) const;
+    FolderId getGroupBusFolder (AudioChannelId) const;   // the folder a group bus sums (0: none)
+
     // Where a channel's strip goes: the master (0) or a bus
     bool setAudioChannelOutput (AudioChannelId, AudioChannelId target);
     AudioChannelId getAudioChannelOutput (AudioChannelId) const;
@@ -577,6 +586,7 @@ private:
         bool collapsed = false;
         int position = 0;                           // order among siblings
         juce::String colour;                        // "#rrggbb"; empty = none
+        AudioChannelId groupBus = 0;                // grouped: the bus its audio goes to
     };
 
     struct Output
@@ -699,6 +709,8 @@ private:
     void rewireChannelInputs (AudioChannelId);   // source -> inserts (slot order) -> strip
     std::map<AudioChannelId, AudioChannel> buses;   // (their own map: they aren't sidebar channels)
     void routeStrip (NodeID node, AudioChannelId target);   // a strip's output to the master or a bus
+    void syncFolderGroups();                                 // see setFolderGrouped (after each change)
+    bool syncingGroups = false;
     void applyInsertBypass (AudioChannelId);     // each insert's node: bypassed if it is, or the section is off
     void restoreInserts (AudioChannelId, const juce::XmlElement* audioChannelXml, std::function<void()> done);
     std::unique_ptr<MidiRecorder> recorder;

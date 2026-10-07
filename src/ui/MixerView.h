@@ -1725,8 +1725,12 @@ private:
         std::vector<AudioEngine::AudioChannelId> ids;
 
         for (auto& item : engine.getSidebarItems (true, false))
-            if (item.channel != 0)
-                ids.push_back (item.channel);
+        {
+            if (item.folder != 0 && engine.isFolderGrouped (item.folder))   // a group: its bus where the folder is
+                ids.push_back (engine.getFolderGroupBus (item.folder));
+            else if (item.channel != 0 && ! engine.isGroupBus (engine.getAudioChannelOutput (item.channel)))
+                ids.push_back (item.channel);   // (the channels a group sums don't show: the group does)
+        }
 
         if (ids != shownIds)
         {

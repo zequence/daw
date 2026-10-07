@@ -262,6 +262,8 @@ void AudioEngine::emitEvent (const juce::String& type, juce::DynamicObject::Ptr 
     projectDirty = true;   // every emitted mutation dirties the project
     ++stateRevision;       // ...and tells every polling view to repaint (see getStateRevision)
 
+    syncFolderGroups();    // things moved: the folder groups' routing follows
+
     if (eventSink == nullptr || historySuppress)
         return;
 
@@ -1208,6 +1210,10 @@ void AudioEngine::removeBus (AudioChannelId id)
         if (bus.output == id)
             setAudioChannelOutput (busId, 0);
 
+    for (auto& [folderId, folder] : folders)
+        if (folder.groupBus == id)
+            folder.groupBus = 0;
+
     graph.removeNode (it->second.node, updateKind());
     buses.erase (it);
 
@@ -1233,6 +1239,92 @@ std::vector<AudioEngine::AudioChannelId> AudioEngine::getBusIds() const
 }
 
 bool AudioEngine::isBus (AudioChannelId id) const   { return buses.count (id) > 0; }
+
+//==============================================================================
+void AudioEngine::setFolderGrouped (FolderId id, bool grouped)
+{
+    auto it = folders.find (id);
+
+    if (it == folders.end() || (it->second.groupBus != 0) == grouped)
+        return;
+
+    if (grouped)
+    {
+        const auto bus = addBus (it->second.name);
+        buses[bus].folder = id;   // (a bus's folder: the folder it sums)
+        folders[id].groupBus = bus;
+    }
+    else
+    {
+        const auto bus = it->second.groupBus;
+        it->second.groupBus = 0;
+
+        for (auto& [channelId, channel] : audioChannels)   // its audio back to the master
+            if (channel.output == bus)
+                setAudioChannelOutput (channelId, 0);
+
+        removeBus (bus);
+    }
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("folderId", id);
+    data->setProperty ("grouped", grouped);
+    emitEvent ("folderChanged", data);
+}
+
+bool AudioEngine::isFolderGrouped (FolderId id) const   { return getFolderGroupBus (id) != 0; }
+
+AudioEngine::AudioChannelId AudioEngine::getFolderGroupBus (FolderId id) const
+{
+    const auto it = folders.find (id);
+    return it != folders.end() ? it->second.groupBus : 0;
+}
+
+bool AudioEngine::isGroupBus (AudioChannelId id) const   { return getGroupBusFolder (id) != 0; }
+
+AudioEngine::FolderId AudioEngine::getGroupBusFolder (AudioChannelId id) const
+{
+    const auto it = buses.find (id);
+    return it != buses.end() ? it->second.folder : 0;
+}
+
+// Every audio channel to its innermost grouped folder's bus (or back to the master when it left the
+// group); channels routed to another bus by hand stay where they are. Group buses take their folder's name.
+void AudioEngine::syncFolderGroups()
+{
+    if (syncingGroups || std::none_of (folders.begin(), folders.end(), [] (const auto& f) { return f.second.groupBus != 0; }))
+        return;
+
+    const juce::ScopedValueSetter<bool> guard (syncingGroups, true);
+
+    for (auto& [id, folder] : folders)
+        if (auto bus = buses.find (folder.groupBus); bus != buses.end())
+            bus->second.name = folder.name;
+
+    std::vector<std::pair<int, FolderId>> enclosing;   // (depth, folder) of the folders around an item
+
+    for (auto& item : getSidebarItems (true, false))
+    {
+        while (! enclosing.empty() && enclosing.back().first >= item.depth)
+            enclosing.pop_back();
+
+        if (item.folder != 0)
+            enclosing.push_back ({ item.depth, item.folder });
+
+        if (item.channel == 0 || isBus (item.channel))
+            continue;
+
+        AudioChannelId wanted = 0;
+
+        for (auto around = enclosing.rbegin(); around != enclosing.rend() && wanted == 0; ++around)
+            wanted = getFolderGroupBus (around->second);
+
+        const auto current = getAudioChannelOutput (item.channel);
+
+        if (current != wanted && (current == 0 || isGroupBus (current)))
+            setAudioChannelOutput (item.channel, wanted);
+    }
+}
 
 // A strip's audio out: its connections to the master and the buses go, one to the target is made
 void AudioEngine::routeStrip (NodeID node, AudioChannelId target)
@@ -2120,6 +2212,9 @@ void AudioEngine::removeFolder (FolderId id)
     if (it == folders.end())
         return;
 
+    if (it->second.groupBus != 0)
+        setFolderGrouped (id, false);
+
     const auto parent = it->second.parent;
 
     // Children and members move up to the removed folder's parent
@@ -2486,7 +2581,8 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
 
     if (midiDomain)   // the buses, last (audio rows of their own)
         for (auto id : getBusIds())
-            items.push_back ({ 0, 0, 0, 0, 0, id });
+            if (! isGroupBus (id))
+                items.push_back ({ 0, 0, 0, 0, 0, id });
 
     return items;
 }
@@ -2854,6 +2950,9 @@ bool AudioEngine::saveProject (const juce::File& file)
         b->setAttribute ("id", id);
         b->setAttribute ("name", bus.name);
 
+        if (bus.folder != 0)
+            b->setAttribute ("groupOf", bus.folder);   // a folder's group bus
+
         if (auto* processor = getAudioChannel (id))
         {
             b->setAttribute ("gain", processor->getGain());
@@ -3108,6 +3207,12 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
     {
         const auto id = addBus (b->getStringAttribute ("name"));
         busIdMap[b->getIntAttribute ("id")] = id;
+
+        if (auto folder = folderIdMap.find (b->getIntAttribute ("groupOf")); folder != folderIdMap.end())
+        {
+            buses[id].folder = folder->second;
+            folders[folder->second].groupBus = id;
+        }
 
         if (auto* processor = getAudioChannel (id))
         {

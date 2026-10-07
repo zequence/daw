@@ -115,6 +115,32 @@ public:
             expect (engine.getBusIds().empty());
         }
 
+                beginTest ("a grouped folder sums the audio inside it on its own bus, named as the folder");
+        {
+            const auto folder = engine.addFolder (true, "Winds");
+            engine.setTrackFolder (first, folder);
+            engine.setTrackFolder (second, folder);
+            engine.setFolderGrouped (folder, true);
+            const auto bus = engine.getFolderGroupBus (folder);
+
+            expect (engine.isGroupBus (bus));
+            expectEquals (engine.getAudioChannelOutput (channel), bus);
+            expectEquals (engine.getAudioChannelName (bus), juce::String ("Winds"));
+
+            engine.setFolderName (folder, "Woodwinds");
+            expectEquals (engine.getAudioChannelName (bus), juce::String ("Woodwinds"));
+
+            engine.setTrackFolder (first, 0);   // the instrument's folder leaves the group: back to the master
+            engine.setTrackFolder (second, 0);
+            expectEquals (engine.getAudioChannelOutput (channel), 0);
+
+            engine.setTrackFolder (first, folder);
+            engine.setTrackFolder (second, folder);
+            engine.setFolderGrouped (folder, false);
+            expectEquals (engine.getAudioChannelOutput (channel), 0);
+            expect (engine.getBusIds().empty(), "its bus goes with the group");
+        }
+
                 beginTest ("membership follows routing");
         {
             engine.clearTrackOutputs (second);

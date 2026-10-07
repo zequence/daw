@@ -798,7 +798,8 @@ named automatically) and a name. Steps, each usable on its own:
    channel's output (the mixer strip's output button) goes to the master or a bus ("New bus" too); a
    bus goes to the master (DONE 2026-10-07; bus to bus later).
 3. Folder groups: a folder's group button routes the audio inside it to a bus of its own (named as the
-   folder); the mixer then shows that one strip, the folder row gets level, solo and mute.
+   folder); the mixer then shows that one strip, the folder row gets level, solo and mute (DONE 2026-10-07:
+   the routing kept by the engine as things move; saved).
 4. Audio tracks: mono or stereo, a device input, an output (bus / master); rows in the tree, strips.
 5. Audio regions: wave files imported, played from disk, drawn in the arrangement.
 6. Audio recording onto armed audio tracks (wave files in the project's folder).
