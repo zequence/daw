@@ -62,7 +62,7 @@ public:
     std::vector<std::pair<InstrumentId, juce::String>> getInstruments() const;
     juce::AudioPluginInstance* getInstrumentPlugin (InstrumentId) const;
     juce::String getInstrumentName (InstrumentId) const;
-    void setInstrumentName (InstrumentId, const juce::String&);   // renames its audio channel too (if unchanged)
+    void setInstrumentName (InstrumentId, const juce::String&);   // (its audio outputs keep their own names)
     int getNumLoadedInstruments() const;
 
     // An instrument's MIDI channels live on (port, channel). Ports are the

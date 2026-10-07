@@ -281,12 +281,21 @@ private:
             name.setFont (mixer::TapeLabel::markerFont());   // (for its rename editor; the tape draws its own)
             name.setEditable (false, kind == Kind::channel);   // double-click renames a channel
             name.setTooltip (kind == Kind::channel ? "Double-click to rename" : kind == Kind::master ? "The master bus" : placeholderTip);
-            name.onTextChange = [this]   // an instrument's channel: renames the instrument (the channel follows)
+            name.onTextChange = [this]   // a group's strip renames its folder or instrument; any other, itself
             {
-                if (const auto instrument = owner.engine.getAudioChannelInput (channelId); instrument != 0)
-                    owner.engine.setInstrumentName (instrument, name.getText());
+                auto& engine = owner.engine;
 
-                owner.engine.setAudioChannelName (channelId, name.getText());
+                if (const auto folder = engine.getGroupBusFolder (channelId); folder != 0)
+                    engine.setFolderName (folder, name.getText());
+                else if (engine.isGroupBus (channelId))
+                {
+                    for (auto& [instrument, instrumentName] : engine.getInstruments())
+                        if (engine.getInstrumentGroupBus (instrument) == channelId)
+                            engine.setInstrumentName (instrument, name.getText());
+                }
+                else
+                    engine.setAudioChannelName (channelId, name.getText());
+
                 refreshName();
             };
             addAndMakeVisible (name);

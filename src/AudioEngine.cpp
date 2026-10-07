@@ -539,11 +539,8 @@ void AudioEngine::setInstrumentName (InstrumentId id, const juce::String& name)
     if (instrument == nullptr || name.isEmpty() || instrument->name == name)
         return;
 
-    // An audio channel that still carries the instrument's default name follows it
-    if (auto it = audioChannels.find (instrument->audioChannel); it != audioChannels.end())
-        if (it->second.name == instrument->name)
-            it->second.name = name;
-
+    // (Its audio outputs keep their own names: they may be different things - and its group's bus
+    // follows the instrument, in syncFolderGroups)
     instrument->name = name;
 
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
