@@ -1204,6 +1204,7 @@ private:
     };
 
     std::unique_ptr<Rack> rack;
+    std::map<AudioEngine::AudioChannelId, std::pair<juce::Point<int>, juce::Point<int>>> rackScroll;   // each channel's rack and strip scroll (this session)
 
 public:
     // The rack for a channel (its strip's INSERTS button): the other strips step aside
@@ -1216,10 +1217,19 @@ public:
         addAndMakeVisible (*rack);
         outer.setVisible (false);
         resized();
+
+        if (auto it = rackScroll.find (id); it != rackScroll.end())   // where it was left
+        {
+            rack->view.setViewPosition (it->second.first);
+            rack->stripView.setViewPosition (it->second.second);
+        }
     }
 
     void closeRack()
     {
+        if (rack != nullptr)
+            rackScroll[rack->channelId] = { rack->view.getViewPosition(), rack->stripView.getViewPosition() };
+
         rack.reset();
         outer.setVisible (true);
         resized();
