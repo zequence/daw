@@ -20,6 +20,7 @@ public:
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
         nameLabel.setFont (sidebar::rowFont (14.5f, false));
+        nameLabel.setColour (juce::Label::textColourId, sidebar::rowTextColour);
         nameLabel.onTextChange = [this]
         {
             engine.setTrackName (trackId, nameLabel.getText());
@@ -174,6 +175,7 @@ public:
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
         // Same text color as the tracks; the bold smaller font sets folders apart (ISSUES.md)
         nameLabel.setFont (sidebar::rowFont (14.0f, true));
+        nameLabel.setColour (juce::Label::textColourId, sidebar::rowTextColour);
         nameLabel.onTextChange = [this]
         {
             engine.setFolderName (folderId, nameLabel.getText());
@@ -460,7 +462,7 @@ public:
         g.setColour (AudioEngine::colourFromHex (AudioEngine::instrumentAudioColour, juce::Colours::grey));
         g.fillRoundedRectangle (bounds, theme::corner);
 
-        g.setColour (juce::Colours::white.withAlpha (0.85f));
+        g.setColour (sidebar::rowTextColour);
         g.setFont (sidebar::rowFont (14.0f, false));
         g.drawText (juce::String::fromUTF8 ("\xe2\x99\xab ") + engine.getAudioChannelName (channelId), nameArea, juce::Justification::centredLeft, true);
 
@@ -484,15 +486,17 @@ public:
 
     void resized() override
     {
-        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 6).reduced (8, 0);
-        area = area.withSizeKeepingCentre (area.getWidth(), 20).translated (0, -2);
-        muteButton.setBounds (area.removeFromLeft (20));
-        area.removeFromLeft (6);
+        // Two lines: mute and the name, then the meter and its readout under the name
+        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 6).reduced (8, 4);
+        auto first = area.removeFromTop (area.getHeight() / 2);
+        muteButton.setBounds (first.removeFromLeft (20).withSizeKeepingCentre (20, 20));
+        first.removeFromLeft (6);
+        nameArea = first;
+
+        area.removeFromLeft (26);
         readoutArea = area.removeFromRight (52);
-        area.removeFromRight (4);
-        meterArea = area.removeFromRight (juce::jmin (110, area.getWidth() / 2)).withSizeKeepingCentre (juce::jmin (110, area.getWidth() / 2), 6);
         area.removeFromRight (6);
-        nameArea = area;
+        meterArea = area.withSizeKeepingCentre (area.getWidth(), 6);
     }
 
 private:

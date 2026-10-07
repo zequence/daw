@@ -20,6 +20,8 @@ namespace sidebar
 
     // The rows' names (folders, MIDI tracks, audio): Segoe UI - lighter and narrower than the default
     // sans, orderly - regular for tracks and audio, semibold for folders (instruments are on tape)
+    inline const juce::Colour rowTextColour { 0xffd4d6da };   // the rows' names: a very light grey, not white
+
     inline juce::Font rowFont (float height, bool folder)
     {
         static const auto hasSegoe = juce::Font::findAllTypefaceNames().contains ("Segoe UI");
@@ -32,7 +34,10 @@ namespace sidebar
 
     inline int heightOf (const AudioEngine::SidebarItem& item)
     {
-        return item.instrument != 0 ? trackRowHeight() : (item.folder != 0 ? folderRowHeight : midiRowHeight);
+        return item.instrument != 0 ? trackRowHeight()
+             : item.folder != 0     ? folderRowHeight
+             : item.channel != 0    ? 2 * midiRowHeight   // audio: its name, and its meter under it
+                                    : midiRowHeight;
     }
 
     // One shared scroll offset; views poll 'revision' from their timers.
