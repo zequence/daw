@@ -14,7 +14,7 @@ namespace sidebar
     inline int trackRowHeight()           { return trackRowHeightSetting(); }
 
     constexpr int folderRowHeight = 28;
-    constexpr int instrumentRowHeight = 32;   // room for its name on tape      // about half a channel row
+    constexpr int instrumentRowHeight = 36;   // room for its name on tape      // about half a channel row
     constexpr int indentPerLevel = 10;
 
     inline int heightOf (const AudioEngine::SidebarItem& item)

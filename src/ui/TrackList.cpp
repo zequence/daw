@@ -396,7 +396,7 @@ public:
 
         // Its name on tape - the tape takes the instrument's colour (cream without one); drawn once, cached
         const auto colour = AudioEngine::colourFromHex (engine.getInstrumentColour (instrumentId), mixer::tape::cream);
-        nameTape.draw (g, text.withTrimmedLeft (2), engine.getInstrumentName (instrumentId), colour, 19.0f);
+        nameTape.draw (g, text.withTrimmedLeft (2), engine.getInstrumentName (instrumentId), colour, 23.0f);
     }
 
 private:

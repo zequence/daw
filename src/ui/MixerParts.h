@@ -379,6 +379,7 @@ namespace tape
                 tape::draw (ig, area.withZeroOrigin().toFloat().reduced (2.0f, 2.5f), name, colour, fontHeight, false);
             }
 
+            g.setOpacity (1.0f);   // (drawImage takes the current colour's alpha: drawn at full strength)
             g.drawImage (image, area.toFloat());
         }
 
