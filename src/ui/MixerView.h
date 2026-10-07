@@ -90,7 +90,7 @@ public:
 
     void fitSize()
     {
-        scale = juce::jlimit (0.4f, 2.0f, (float) getHeight() / (float) fitHeight);
+        scale = juce::jlimit (0.4f, 2.0f, (float) getHeight() / (float) juce::jmax (1, body.getHeight()));
         engine.getSettingsFile().setValue ("mixerZoom", (double) scale);
         engine.getSettingsFile().saveIfNeeded();
         applyScale();
@@ -104,7 +104,6 @@ public:
     }
 
     int levelTop = 0;   // where a channel strip's pan and fader begin (the other strips follow it)
-    static constexpr int fitHeight = 1300 + 20;   // a strip, its margins and the channels' scrollbar
     float scale = 0.0f;   // 0 = not yet read from the settings
 
     void paint (juce::Graphics& g) override
@@ -713,10 +712,6 @@ private:
 
             output.setBounds (area.removeFromBottom (20));
             area.removeFromBottom (4);
-            auto buttons = area.removeFromBottom (22);
-            solo.setBounds (buttons.removeFromLeft (buttons.getWidth() / 2).reduced (1, 0));
-            mute.setBounds (buttons.reduced (1, 0));
-            area.removeFromBottom (4);
             level.setBounds (area.removeFromBottom (16));
 
             // The faders are one height on every strip: the Aux buses and the master (no aux sends,
@@ -740,6 +735,13 @@ private:
             auto faderArea = area.reduced (0, 2);   // the level runs to the bottom
             meter.setBounds (faderArea.removeFromRight (12));
             faderArea.removeFromRight (4);
+
+            // Solo and mute beside the fader, at its foot, one above the other
+            auto buttons = faderArea.removeFromLeft (24);
+            mute.setBounds (buttons.removeFromBottom (22));
+            buttons.removeFromBottom (4);
+            solo.setBounds (buttons.removeFromBottom (22));
+            faderArea.removeFromLeft (2);
             fader.setBounds (faderArea);
         }
 
@@ -821,17 +823,21 @@ private:
     // whole row scrolls up and down when the view is shorter than a strip
     void layoutBody()
     {
-        const auto height = fitHeight;   // fixed: the strips never change size (the zoom fits them to the window)
+        // The strips never change size (the zoom fits them to the window); room is kept under them
+        // for the channels' scrollbar only when it shows
         const auto width = outer.getMaximumVisibleWidth();
-        body.setSize (width, height);
-
-        const auto stripsHeight = height - 12;   // room for the channels' scrollbar, shown or not: every strip one height
-        master->setBounds (width - stripWidth - 8, 4, stripWidth, stripsHeight - 8);
-        channelsViewport.setBounds (4, 0, width - stripWidth - 20, height);
-
         const auto gap = 14;   // between the channels and the Aux buses
         const auto count = (int) channelStrips.size();
-        strips.setSize (count * (stripWidth + 4) + gap + 6 * (stripWidth + 4) + 4, stripsHeight);
+        const auto stripsWidth = count * (stripWidth + 4) + gap + 6 * (stripWidth + 4) + 4;
+        const auto viewWidth = width - stripWidth - 20;
+        const auto scrollbar = stripsWidth > viewWidth ? channelsViewport.getScrollBarThickness() : 0;
+        const auto stripsHeight = stripHeight + 8;
+        const auto height = stripsHeight + scrollbar;
+        body.setSize (width, height);
+
+        master->setBounds (width - stripWidth - 8, 4, stripWidth, stripHeight);
+        channelsViewport.setBounds (4, 0, viewWidth, height);
+        strips.setSize (stripsWidth, stripsHeight);
 
         for (int i = 0; i < count; ++i)
             channelStrips[(size_t) i]->setBounds (4 + i * (stripWidth + 4), 4, stripWidth, stripsHeight - 8);
