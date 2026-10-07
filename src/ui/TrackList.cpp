@@ -350,10 +350,10 @@ public:
         g.fillPath (triangle);
         sidebar::drawTrackIcon (g, iconBox.toFloat(), sidebar::TrackKind::folder, sidebar::rowTextColour.withAlpha (0.8f));
 
-        if (wasGrouped && ! nameLabel.isBeingEdited())   // a group: its name on tape (as an instrument's)
+        if (wasGrouped && ! nameLabel.isBeingEdited())   // a group: a dark tape written in its colour (as in the mixer)
             nameTape.draw (g, nameLabel.getBounds().withHeight (getHeight()).withY (0), engine.getFolderName (folderId),
-                           AudioEngine::colourFromHex (engine.getFolderColour (folderId), mixer::tape::cream),
-                           juce::jmin (48.0f, (float) getHeight() * 0.8f));
+                           theme::colour (theme::Token::buttonBg), juce::jmin (48.0f, (float) getHeight() * 0.8f),
+                           AudioEngine::colourFromHex (engine.getFolderColour (folderId), mixer::tape::cream));
     }
 
     void resized() override
@@ -638,9 +638,12 @@ public:
 
         if (wasGrouped)   // a group: its name on tape, in the instrument's colour (cream without one); cached
         {
+            // (a group - several outputs - dark, written in its colour; one output: its channel's tape)
             const auto colour = AudioEngine::colourFromHex (engine.getInstrumentColour (instrumentId), mixer::tape::cream);
-            nameTape.draw (g, text.withTrimmedLeft (2), engine.getInstrumentName (instrumentId), colour,
-                           juce::jmin (64.0f, (float) getHeight() * 0.8f));
+            const auto group = ! engine.isSingleOutputInstrument (instrumentId);
+            nameTape.draw (g, text.withTrimmedLeft (2), engine.getInstrumentName (instrumentId),
+                           group ? theme::colour (theme::Token::buttonBg) : colour,
+                           juce::jmin (64.0f, (float) getHeight() * 0.8f), group ? colour : juce::Colours::transparentBlack);
         }
         else   // as a folder's name
         {

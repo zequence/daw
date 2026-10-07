@@ -364,10 +364,11 @@ namespace tape
     // colour or size changes - for rows that repaint often
     struct Cached
     {
-        void draw (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& name, juce::Colour colour, float fontHeight)
+        void draw (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& name, juce::Colour colour, float fontHeight,
+                   juce::Colour ink = juce::Colours::transparentBlack)
         {
             const auto scale = g.getInternalContext().getPhysicalPixelScaleFactor();
-            const auto key = name + "|" + colour.toString() + "|" + juce::String (area.getWidth()) + "x" + juce::String (area.getHeight())
+            const auto key = name + "|" + colour.toString() + "|" + ink.toString() + "|" + juce::String (area.getWidth()) + "x" + juce::String (area.getHeight())
                                + "|" + juce::String (scale) + "|" + juce::String (fontHeight);
 
             if (key != lastKey)
@@ -377,7 +378,7 @@ namespace tape
                                      juce::jmax (1, juce::roundToInt ((float) area.getHeight() * scale)), true);
                 juce::Graphics ig (image);
                 ig.addTransform (juce::AffineTransform::scale (scale));
-                tape::draw (ig, area.withZeroOrigin().toFloat().reduced (2.0f, 2.5f), name, colour, fontHeight, false);
+                tape::draw (ig, area.withZeroOrigin().toFloat().reduced (2.0f, 2.5f), name, colour, fontHeight, false, ink);
             }
 
             g.setOpacity (1.0f);   // (drawImage takes the current colour's alpha: drawn at full strength)
