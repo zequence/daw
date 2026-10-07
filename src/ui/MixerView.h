@@ -104,7 +104,7 @@ public:
     }
 
     int levelTop = 0;   // where a channel strip's pan and fader begin (the other strips follow it)
-    static constexpr int fitHeight = 1270 + 20;   // a strip, its margins and the channels' scrollbar
+    static constexpr int fitHeight = 1290 + 20;   // a strip, its margins and the channels' scrollbar
     float scale = 0.0f;   // 0 = not yet read from the settings
 
     void paint (juce::Graphics& g) override
@@ -138,7 +138,7 @@ public:
 
 private:
     enum class Kind { channel, aux, master };
-    static constexpr int stripWidth = 118, stripHeight = 1270;
+    static constexpr int stripWidth = 118, stripHeight = 1290;
 
     const mixer::ConsoleStyle& style() const   { return mixer::ConsoleStyle::ssl(); }
 
@@ -735,15 +735,15 @@ private:
             if (kind == Kind::channel)
                 owner.levelTop = area.getY();
             else if (owner.levelTop > 0)
-                area.setTop (owner.levelTop + (kind == Kind::master ? 64 + 4 : 0));
+                area.setTop (owner.levelTop + (kind == Kind::master ? 58 + 4 : 0));
 
             if (kind != Kind::master)   // drive and pan, side by side, by the level
             {
-                auto knobs = area.removeFromTop (64);   // pan as big as the EQ's knobs, drive 46 px
+                auto knobs = area.removeFromTop (58);   // pan as big as the EQ's knobs, drive 46 px
                 // Centred on the knob columns above (the EQ's, the sends'), so their middles line up
                 const auto leftMiddle = knobs.getX() + 2 + 58 / 2, rightMiddle = knobs.getRight() - 2 - 58 / 2;
                 drive.setBounds (juce::Rectangle<int> (48, 55).withCentre ({ leftMiddle, 0 }).withY (knobs.getY()));
-                pan.setBounds (juce::Rectangle<int> (58, 64).withCentre ({ rightMiddle, 0 }).withY (knobs.getY()));
+                pan.setBounds (juce::Rectangle<int> (58, 58).withCentre ({ rightMiddle, 0 }).withY (knobs.getY()));   // no legend: its top level with drive's
                 area.removeFromTop (4);
             }
 
