@@ -1651,8 +1651,8 @@ void TrackList::showFolderMenu (AudioEngine::FolderId folderId)
 
     menu.addSubMenu ("Move to folder", moveTo);
 
-    if (engine.isFolderGrouped (folderId))   // a group's tag colour (its own, copied when it was made)
-        menu.addSubMenu ("Color", colours::buildMenu (engine.getFolderColour (folderId), [safe, folderId] (juce::String hex)
+    // Its colour: its regions', and a group's tag (copied from its first instrument when it was grouped)
+    menu.addSubMenu ("Color", colours::buildMenu (engine.getFolderColour (folderId), [safe, folderId] (juce::String hex)
         {
             if (safe != nullptr)
             {
