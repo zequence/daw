@@ -156,10 +156,10 @@ private:
         else if (choice.kind == Kind::bus)
             text << (text.isEmpty() ? "" : "\n") << "Tracks reach a bus through their outputs; it goes to the master (or another bus).";
         else if (choice.kind == Kind::audio)
-            text << (text.isEmpty() ? "" : "\n") << "Audio tracks are coming next (recording, wave files).";
+            text << (text.isEmpty() ? "" : "\n") << "Its input is heard and recorded once recording comes; wave files soon too.";
 
         note.setText (text, juce::dontSendNotification);
-        addButton.setEnabled (choice.kind != Kind::audio && (choice.kind != Kind::instrument || choice.plugin.name.isNotEmpty()));
+        addButton.setEnabled (choice.kind != Kind::instrument || choice.plugin.name.isNotEmpty());
     }
 
     void choosePlugin()

@@ -195,6 +195,25 @@ public:
             engine.setTrackFolder (second, 0);
         }
 
+                beginTest ("audio tracks: rows in the tree where they're put, tagged; mono or stereo; removed");
+        {
+            const auto folder = engine.addFolder (true, "Takes");
+            const auto vocal = engine.addAudioTrack ("Vocal", false, folder);
+            expect (engine.isAudioTrack (vocal) && ! engine.isAudioTrackStereo (vocal));
+            expectEquals (engine.getAudioChannelName (vocal), juce::String ("Vocal"));
+
+            bool found = false;
+
+            for (auto& item : engine.getSidebarItems (true, false))
+                if (item.channel == vocal)
+                    found = item.parent == folder && item.tagged;
+
+            expect (found, "in its folder, with a tag");
+
+            engine.removeAudioTrack (vocal);
+            expect (! engine.isAudioTrack (vocal));
+        }
+
                 beginTest ("membership follows routing");
         {
             engine.clearTrackOutputs (second);

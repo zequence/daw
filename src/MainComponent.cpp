@@ -767,7 +767,8 @@ void MainComponent::addTracks (const AddTrackDialog::Choice& choice)
                     });
                 break;
 
-            case Kind::audio:   // (coming: audio tracks)
+            case Kind::audio:
+                engine.addAudioTrack (nameOf (i), choice.stereo);
                 break;
         }
     }

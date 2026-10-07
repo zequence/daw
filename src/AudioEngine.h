@@ -442,6 +442,15 @@ public:
     std::vector<AudioChannelId> getBusIds() const;   // in the order they were made
     bool isBus (AudioChannelId) const;
 
+    // Audio tracks: a channel of its own (no instrument): mono or stereo, an input from the audio device
+    // (its first input channel; stereo: that and the next), an output to the master or a bus. A row in the
+    // tree like a track (in a folder, moved with it), a strip in the mixer. (Its input is heard - and
+    // recorded - once recording comes: MILESTONES.md "Track types and routing".)
+    AudioChannelId addAudioTrack (const juce::String& name = {}, bool stereo = true, FolderId folder = 0);
+    void removeAudioTrack (AudioChannelId);
+    bool isAudioTrack (AudioChannelId) const;
+    bool isAudioTrackStereo (AudioChannelId) const;
+
     // Folder groups: a grouped folder sums the audio inside it on a bus of its own (named as the folder,
     // following its renames). The engine keeps that routing as things move: every audio channel inside
     // goes to its innermost grouped folder's bus (channels routed elsewhere by hand are left alone).
@@ -580,6 +589,9 @@ private:
         NodeID node;
         std::map<int, Insert> inserts;              // slot -> effect, in series before the strip
         AudioChannelId output = 0;                  // 0 = the master, else a bus
+        bool audioTrack = false;                    // an audio track's (no instrument): its own row in the tree
+        bool stereo = true;
+        int firstInput = 0;                         // its device input channel (stereo: and the next)
         bool insertsOn = false;                     // the section's IN: off bypasses every insert (on with the first one added)
         InstrumentId input = 0;                     // 0 = none (device inputs later)
         juce::String name;
@@ -660,6 +672,7 @@ private:
         bool isFolder = false;
         int id = 0;
         int position = 0;
+        bool audioTrack = false;   // (a member: an audio track's channel, not a track)
     };
 
     std::vector<ChildRef> getChildrenOf (bool midiDomain, FolderId parent) const;   // sorted

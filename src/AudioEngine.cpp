@@ -1242,6 +1242,66 @@ std::vector<AudioEngine::AudioChannelId> AudioEngine::getBusIds() const
 bool AudioEngine::isBus (AudioChannelId id) const   { return buses.count (id) > 0; }
 
 //==============================================================================
+AudioEngine::AudioChannelId AudioEngine::addAudioTrack (const juce::String& name, bool stereo, FolderId folder)
+{
+    AudioChannel channel;
+    channel.node = graph.addNode (std::make_unique<AudioChannelProcessor>(), std::nullopt, updateKind())->nodeID;
+    channel.audioTrack = true;
+    channel.stereo = stereo;
+    channel.folder = folderExists (folder) ? folder : 0;
+    channel.position = nextChildPosition (true, channel.folder);
+
+    int count = 1;
+
+    for (auto& [id, other] : audioChannels)
+        count += other.audioTrack ? 1 : 0;
+
+    channel.name = name.trim().isNotEmpty() ? name.trim() : "Audio " + juce::String (count);
+    channel.named = true;
+    routeStrip (channel.node, 0);
+
+    const auto id = nextAudioChannelId++;
+    audioChannels[id] = channel;
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    data->setProperty ("name", channel.name);
+    data->setProperty ("stereo", stereo);
+    emitEvent ("audioTrackAdded", data);
+    return id;
+}
+
+void AudioEngine::removeAudioTrack (AudioChannelId id)
+{
+    auto it = audioChannels.find (id);
+
+    if (it == audioChannels.end() || ! it->second.audioTrack)
+        return;
+
+    for (auto& [slot, insert] : it->second.inserts)
+        graph.removeNode (insert.node, updateKind());
+
+    graph.removeNode (it->second.node, updateKind());
+    audioChannels.erase (it);
+
+    auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
+    data->setProperty ("id", id);
+    emitEvent ("audioTrackRemoved", data);
+}
+
+bool AudioEngine::isAudioTrack (AudioChannelId id) const
+{
+    const auto it = audioChannels.find (id);
+    return it != audioChannels.end() && it->second.audioTrack;
+}
+
+bool AudioEngine::isAudioTrackStereo (AudioChannelId id) const
+{
+    const auto it = audioChannels.find (id);
+    return it != audioChannels.end() && it->second.stereo;
+}
+
+//==============================================================================
 void AudioEngine::setFolderGrouped (FolderId id, bool grouped)
 {
     auto it = folders.find (id);
@@ -2556,6 +2616,10 @@ int AudioEngine::nextChildPosition (bool midiDomain, FolderId parent) const
         for (auto& [id, track] : tracks)
             if (effectiveFolder (track.folder) == parent)
                 maxPosition = juce::jmax (maxPosition, track.position);
+
+        for (auto& [id, channel] : audioChannels)
+            if (channel.audioTrack && effectiveFolder (channel.folder) == parent)
+                maxPosition = juce::jmax (maxPosition, channel.position);
     }
     else
     {
@@ -2603,6 +2667,10 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
     {
         for (auto& [id, track] : tracks)
             childrenByParent[effectiveFolder (track.folder)].push_back ({ false, id, track.position });
+
+        for (auto& [id, channel] : audioChannels)   // the audio tracks, where they stand
+            if (channel.audioTrack)
+                childrenByParent[effectiveFolder (channel.folder)].push_back ({ false, id, channel.position, true });
     }
     else
     {
@@ -2630,6 +2698,8 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
                 {
                     if (child.isFolder)
                         collect (child.id);
+                    else if (child.audioTrack)
+                        continue;
                     else if (const auto instrument = getTrackInstrument (child.id); instrument != 0)
                         tracksOfInstrument[instrument].push_back (child.id);
                 }
@@ -2672,6 +2742,10 @@ std::vector<AudioEngine::SidebarItem> AudioEngine::getSidebarItems (bool midiDom
 
                 if (! (skipCollapsed && isFolderCollapsed (child.id)))
                     visit (child.id, depth + 1);
+            }
+            else if (child.audioTrack)   // an audio track's row (tagged unless a group sums it)
+            {
+                items.push_back ({ 0, 0, depth, parent, 0, child.id, ! isGroupBus (getAudioChannelOutput (child.id)) });
             }
             else if (const auto instrument = midiDomain ? getTrackInstrument (child.id) : 0; instrument != 0)
             {
@@ -3078,6 +3152,33 @@ bool AudioEngine::saveProject (const juce::File& file)
         }
     }
 
+    for (auto& [id, channel] : audioChannels)
+    {
+        if (! channel.audioTrack)
+            continue;
+
+        auto* a = root.createNewChildElement ("AUDIOTRACK");
+        a->setAttribute ("id", id);
+        a->setAttribute ("name", channel.name);
+        a->setAttribute ("stereo", channel.stereo);
+        a->setAttribute ("firstInput", channel.firstInput);
+        a->setAttribute ("folder", channel.folder);
+        a->setAttribute ("position", channel.position);
+        a->setAttribute ("output", channel.output);
+        a->setAttribute ("soloed", channel.soloed);
+
+        if (auto* processor = getAudioChannel (id))
+        {
+            a->setAttribute ("gain", processor->getGain());
+            a->setAttribute ("muted", processor->isMuted());
+            a->setAttribute ("pan", processor->getPan());
+
+            for (int param = 0; param < AnalogStrip::numParams; ++param)
+                if (const auto value = processor->getStrip().get (param); value != AnalogStrip::info (param).initial)
+                    a->setAttribute (AnalogStrip::info (param).name, value);
+        }
+    }
+
     for (auto& [id, instrument] : instruments)
     {
         auto* e = root.createNewChildElement ("INSTRUMENT");
@@ -3339,6 +3440,33 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
             for (int param = 0; param < AnalogStrip::numParams; ++param)
                 if (b->hasAttribute (AnalogStrip::info (param).name))
                     processor->getStrip().set (param, (float) b->getDoubleAttribute (AnalogStrip::info (param).name));
+        }
+    }
+
+    for (auto* a : xml->getChildWithTagNameIterator ("AUDIOTRACK"))   // the audio tracks (no plugins: now)
+    {
+        const auto folder = folderIdMap.count (a->getIntAttribute ("folder")) > 0 ? folderIdMap[a->getIntAttribute ("folder")] : 0;
+        const auto id = addAudioTrack (a->getStringAttribute ("name"), a->getBoolAttribute ("stereo", true), folder);
+        audioChannels[id].firstInput = a->getIntAttribute ("firstInput");
+
+        if (a->hasAttribute ("position"))
+            audioChannels[id].position = a->getIntAttribute ("position");
+
+        if (auto bus = busIdMap.find (a->getIntAttribute ("output")); bus != busIdMap.end())
+            setAudioChannelOutput (id, bus->second);
+
+        if (a->getBoolAttribute ("soloed"))
+            setAudioChannelSoloed (id, true);
+
+        if (auto* processor = getAudioChannel (id))
+        {
+            processor->setGain ((float) a->getDoubleAttribute ("gain", 1.0));
+            processor->setMuted (a->getBoolAttribute ("muted"));
+            processor->setPan ((float) a->getDoubleAttribute ("pan", 0.0));
+
+            for (int param = 0; param < AnalogStrip::numParams; ++param)
+                if (a->hasAttribute (AnalogStrip::info (param).name))
+                    processor->getStrip().set (param, (float) a->getDoubleAttribute (AnalogStrip::info (param).name));
         }
     }
 

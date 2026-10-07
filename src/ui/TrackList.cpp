@@ -713,6 +713,16 @@ public:
             return;
         }
 
+        if (engine.isAudioTrack (channelId))   // an audio track: its own menu
+        {
+            const auto id = channelId;
+            auto& eng = engine;
+            juce::PopupMenu menu;
+            menu.addItem ("Remove audio track", [&eng, id] { eng.removeAudioTrack (id); });
+            menu.showMenuAsync (juce::PopupMenu::Options());
+            return;
+        }
+
         if (owner.onInstrumentMenu)
             if (const auto instrument = engine.getAudioChannelInput (channelId); instrument != 0)
                 owner.onInstrumentMenu (instrument);
