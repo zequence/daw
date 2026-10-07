@@ -263,12 +263,16 @@ struct TapeLabel final : juce::Label
         if (isBeingEdited())
             return;
 
-        const auto font = markerFont();
         const auto area = getLocalBounds().toFloat().reduced (3.0f, 2.5f);
         auto text = getText();
         juce::Random random (text.hashCode());   // (from the whole name, before shortening)
 
-        // Too long: its first characters and a dot
+        // A longer name is written smaller (down to about 3/4); still too long: its first characters and a dot
+        auto font = markerFont();
+
+        while (font.getHeight() > 11.0f && juce::GlyphArrangement::getStringWidth (font, text) > area.getWidth() - 18.0f)
+            font = font.withHeight (font.getHeight() - 0.5f);
+
         if (juce::GlyphArrangement::getStringWidth (font, text) > area.getWidth() - 18.0f)
         {
             auto n = text.length();
