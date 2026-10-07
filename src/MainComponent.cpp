@@ -64,7 +64,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     dockHeight = engine.getSettingsFile().getIntValue ("dockHeight", 0);
     transportPlace = (TransportPlace) juce::jlimit (0, 2, engine.getSettingsFile().getIntValue ("transportBar", 2));   // 0 top, 1 bottom, 2 right                    // the docked editor's height
     sidebar::trackRowHeightSetting() = juce::jlimit (sidebar::minTrackRowHeight, sidebar::maxTrackRowHeight,
-                                                     engine.getSettingsFile().getIntValue ("trackHeight", sidebar::minTrackRowHeight));
+                                                     engine.getSettingsFile().getIntValue ("instrumentRowHeight", sidebar::minTrackRowHeight));
     lanes::Settings::get().load (engine.getSettingsFile());                                  // Settings > Controller lanes
 
     // Keep the window state sane when projects change through the API.
@@ -1662,7 +1662,7 @@ void MainComponent::zoomTrackHeight (int direction)
     height = limited;
     trackList.rowHeightsChanged();
     arrangementView.repaint();
-    engine.getSettingsFile().setValue ("trackHeight", height);
+    engine.getSettingsFile().setValue ("instrumentRowHeight", height);
     engine.getSettingsFile().saveIfNeeded();
 }
 
