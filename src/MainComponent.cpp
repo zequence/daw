@@ -295,7 +295,51 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     // Double-click on a folder's region: the editor on the folder's tracks
     arrangementView.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
     trackList.onOpenEditorOnTracks = [this] (std::vector<AudioEngine::TrackId> tracks) { openEditorOn (std::move (tracks)); };
-    trackList.onGroupSelected = [this] { arrangementView.clearSelection(); };
+    trackList.onGroupSelected = [this]   // a folder, an instrument or an audio row chosen
+    {
+        arrangementView.clearSelection();
+
+        // Recording stays armed only on MIDI tracks inside what was chosen (their folder or instrument);
+        // anything else chosen (an audio row, another folder) turns it off
+        std::set<AudioEngine::TrackId> inside;
+
+        if (const auto instrument = trackList.getSelectedInstrument(); instrument != 0)
+        {
+            for (auto track : engine.getInstrumentTracks (instrument))
+                inside.insert (track);
+        }
+        else if (const auto folder = trackList.getSelectedFolder(); folder != 0)
+        {
+            int folderDepth = -1;
+
+            for (auto& item : engine.getSidebarItems (true, false))
+            {
+                if (folderDepth < 0)
+                {
+                    if (item.folder == folder)
+                        folderDepth = item.depth;
+
+                    continue;
+                }
+
+                if (item.depth <= folderDepth)
+                    break;
+
+                if (item.member != 0)
+                    inside.insert ((AudioEngine::TrackId) item.member);
+            }
+        }
+
+        std::set<AudioEngine::TrackId> keep;
+
+        for (auto track : engine.getTrackIds())
+            if (engine.isTrackArmed (track) && inside.count (track) > 0)
+                keep.insert (track);
+
+        const auto primary = keep.count (engine.getArmedTrack()) > 0 ? engine.getArmedTrack() : (keep.empty() ? 0 : *keep.begin());
+        engine.setArmedTracks (keep, primary);
+        trackList.refresh();
+    };
     trackList.onInstrumentMenu = [this] (AudioEngine::InstrumentId instrument)   // an instrument folder or its audio row
     {
         const auto safe = juce::Component::SafePointer<MainComponent> (this);
