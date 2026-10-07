@@ -306,7 +306,7 @@ public:
         soloButton.setTooltip ("Solo the instrument");
         soloButton.setClickingTogglesState (true);
         theme::setButtonRole (soloButton, "solo");
-        soloButton.setConnectedEdges (juce::Button::ConnectedOnRight);
+        soloButton.setConnectedEdges (juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);   // meter|S|M: one unit
         soloButton.onClick = [this]
         {
             if (const auto channel = engine.getAudioChannelForInstrument (instrumentId); channel != 0)
@@ -345,10 +345,10 @@ public:
 
     void resized() override
     {
-        // After the arrow: its level (a vertical meter), S|M, then the tape
+        // After the arrow, one unit: its level (a vertical meter as tall as the buttons), S, M; then the tape
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 17).reduced (0, 4);
-        meter.setBounds (area.removeFromLeft (7));
-        area.removeFromLeft (8);
+        meter.setBounds (area.removeFromLeft (7).withSizeKeepingCentre (7, 20));
+        area.removeFromLeft (1);
         soloButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20));
         muteButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20).expanded (1, 0).withTrimmedRight (1));
         tapeLeft = area.getX() + 8;
@@ -483,7 +483,7 @@ public:
         soloButton.setClickingTogglesState (true);
         theme::setButtonRole (soloButton, "solo");
         soloButton.setWantsKeyboardFocus (false);
-        soloButton.setConnectedEdges (juce::Button::ConnectedOnRight);   // S|M share one border
+        soloButton.setConnectedEdges (juce::Button::ConnectedOnLeft | juce::Button::ConnectedOnRight);   // meter|S|M: one unit
         muteButton.setConnectedEdges (juce::Button::ConnectedOnLeft);
         soloButton.onClick = [this] { engine.setAudioChannelSoloed (channelId, soloButton.getToggleState()); };
         addAndMakeVisible (soloButton);
@@ -523,10 +523,10 @@ public:
 
     void resized() override
     {
-        // From the left: its level (a vertical meter), S|M, the name
+        // One unit: its level (a vertical meter as tall as the buttons), S, M; then the name
         auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 6).reduced (8, 4);
-        meter.setBounds (area.removeFromLeft (7));
-        area.removeFromLeft (8);
+        meter.setBounds (area.removeFromLeft (7).withSizeKeepingCentre (7, 20));
+        area.removeFromLeft (1);
         soloButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20));
         muteButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20).expanded (1, 0).withTrimmedRight (1));
         area.removeFromLeft (8);
