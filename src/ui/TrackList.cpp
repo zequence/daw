@@ -346,7 +346,7 @@ public:
     void resized() override
     {
         // After the arrow: its level (a vertical meter), S|M, then the tape
-        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 29).reduced (0, 4);
+        auto area = getLocalBounds().withTrimmedLeft (depth * indentPerLevel + 17).reduced (0, 4);
         meter.setBounds (area.removeFromLeft (7));
         area.removeFromLeft (8);
         soloButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20));
@@ -406,7 +406,7 @@ public:
 
         if (! owner.finishRowDrag (0))
         {
-            if (event.x < depth * indentPerLevel + 26)
+            if (event.x < depth * indentPerLevel + 18)
                 engine.setInstrumentExpanded (instrumentId, ! engine.isInstrumentExpanded (instrumentId));
             else
                 owner.selectInstrument (instrumentId);
@@ -415,7 +415,7 @@ public:
 
     void mouseDoubleClick (const juce::MouseEvent& event) override   // the editor on all its tracks
     {
-        if (event.x >= depth * indentPerLevel + 26 && owner.onOpenEditorOnTracks)
+        if (event.x >= depth * indentPerLevel + 18 && owner.onOpenEditorOnTracks)
             if (const auto tracks = engine.getInstrumentTracks (instrumentId); ! tracks.empty())
                 owner.onOpenEditorOnTracks (tracks);
     }
@@ -428,7 +428,7 @@ public:
         const auto tracks = engine.getInstrumentTracks (instrumentId);
 
         juce::Path triangle;
-        const auto cx = bounds.getX() + 18.0f, cy = bounds.getCentreY();
+        const auto cx = bounds.getX() + 9.0f, cy = bounds.getCentreY();   // (as on a folder)
 
         if (! engine.isInstrumentExpanded (instrumentId))
             triangle.addTriangle (cx - 1.5f, cy - 3.0f, cx - 1.5f, cy + 3.0f, cx + 3.0f, cy);
