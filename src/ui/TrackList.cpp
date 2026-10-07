@@ -342,10 +342,18 @@ public:
             addAndMakeVisible (c);
         }
 
-        addChildComponent (nameEditor);
-        nameEditor.onReturnKey = [this] { finishRenaming (true); };
-        nameEditor.onFocusLost = [this] { finishRenaming (true); };
-        nameEditor.onEscapeKey = [this] { finishRenaming (false); };
+        nameLabel.setFont (sidebar::trackNameFont().withHeight (15.0f));
+        nameLabel.setColour (juce::Label::textColourId, juce::Colours::transparentBlack);
+        nameLabel.setColour (juce::Label::textWhenEditingColourId, sidebar::rowTextColour);
+        nameLabel.setInterceptsMouseClicks (false, true);   // the row gets the clicks; the editor its own
+        nameLabel.onTextChange = [this]
+        {
+            if (nameLabel.getText().trim().isNotEmpty())
+                engine.setInstrumentName (instrumentId, nameLabel.getText().trim());
+
+            repaint();
+        };
+        addAndMakeVisible (nameLabel);
     }
 
     void refresh()
@@ -441,28 +449,13 @@ public:
             startRenaming();
     }
 
-    // The name, edited in place over the tape (Return or clicking away renames; Esc cancels)
+    // The name, edited in place over the tape - a label's editor, as a track's name (Return or
+    // clicking anywhere else renames, Esc cancels)
     void startRenaming()
     {
-        nameEditor.setFont (sidebar::trackNameFont().withHeight (15.0f));
-        nameEditor.setText (engine.getInstrumentName (instrumentId), false);
-        nameEditor.setBounds (getLocalBounds().withLeft (tapeLeft).withRight (getWidth() - 8).withSizeKeepingCentre (getWidth() - 8 - tapeLeft, 22));
-        nameEditor.setVisible (true);
-        nameEditor.grabKeyboardFocus();
-        nameEditor.selectAll();
-    }
-
-    void finishRenaming (bool apply)
-    {
-        if (! nameEditor.isVisible())
-            return;
-
-        nameEditor.setVisible (false);
-
-        if (apply && nameEditor.getText().trim().isNotEmpty())
-            engine.setInstrumentName (instrumentId, nameEditor.getText().trim());
-
-        repaint();
+        nameLabel.setText (engine.getInstrumentName (instrumentId), juce::dontSendNotification);
+        nameLabel.setBounds (getLocalBounds().withLeft (tapeLeft).withRight (getWidth() - 8).withSizeKeepingCentre (getWidth() - 8 - tapeLeft, 22));
+        nameLabel.showEditor();
     }
 
     void paint (juce::Graphics& g) override
@@ -501,7 +494,7 @@ private:
     mixer::tape::Cached nameTape;
     juce::TextButton soloButton { "S" }, muteButton { "M" };
     mixer::LevelMeter meter { false };
-    juce::TextEditor nameEditor;
+    juce::Label nameLabel;   // only its editor shows (renaming); the tape draws the name
     int tapeLeft = 0;
     juce::Rectangle<int> iconBox;
 
@@ -536,6 +529,29 @@ public:
         soloButton.onClick = [this] { engine.setAudioChannelSoloed (channelId, soloButton.getToggleState()); };
         addAndMakeVisible (soloButton);
         addAndMakeVisible (meter);
+
+        // Renaming (double-click the name): a label's editor, as a track's; the row draws the name
+        nameLabel.setFont (sidebar::trackNameFont());
+        nameLabel.setColour (juce::Label::textColourId, juce::Colours::transparentBlack);
+        nameLabel.setColour (juce::Label::textWhenEditingColourId, sidebar::rowTextColour);
+        nameLabel.setInterceptsMouseClicks (false, true);
+        nameLabel.onTextChange = [this]
+        {
+            if (nameLabel.getText().trim().isNotEmpty())
+                engine.setAudioChannelName (channelId, nameLabel.getText().trim());
+
+            repaint();
+        };
+        addAndMakeVisible (nameLabel);
+    }
+
+    void mouseDoubleClick (const juce::MouseEvent& event) override
+    {
+        if (nameArea.contains (event.getPosition()))
+        {
+            nameLabel.setText (engine.getAudioChannelName (channelId), juce::dontSendNotification);
+            nameLabel.showEditor();
+        }
     }
 
     void mouseDown (const juce::MouseEvent& event) override
@@ -593,6 +609,7 @@ public:
         muteButton.setBounds (area.removeFromLeft (20).withSizeKeepingCentre (20, 20).expanded (1, 0).withTrimmedRight (1));
         area.removeFromLeft (8);
         nameArea = area;
+        nameLabel.setBounds (nameArea.withSizeKeepingCentre (nameArea.getWidth(), 22));
     }
 
 private:
@@ -603,6 +620,7 @@ private:
     juce::TextButton soloButton { "S" }, muteButton { "M" };
     mixer::LevelMeter meter { false };
     juce::Rectangle<int> nameArea, iconBox;
+    juce::Label nameLabel;   // only its editor shows (renaming)
     bool subselected = false, selected = false;
 
 public:

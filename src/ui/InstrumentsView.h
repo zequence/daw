@@ -160,10 +160,11 @@ private:
 
     std::vector<AudioEngine::InstrumentId> sortedIds() const
     {
-        std::vector<AudioEngine::InstrumentId> ids;
+        std::vector<AudioEngine::InstrumentId> ids;   // in the track list's order (its instrument folders)
 
-        for (auto& [id, name] : engine.getInstruments())
-            ids.push_back (id);
+        for (auto& item : engine.getSidebarItems (true, false))
+            if (item.instrument != 0)
+                ids.push_back (item.instrument);
 
         std::stable_partition (ids.begin(), ids.end(), [this] (auto id)
         {

@@ -1667,12 +1667,13 @@ private:
     //==========================================================================
     void timerCallback() override
     {
-        // The channels in the sidebar's (folder) order; strips rebuild when that changes
+        // The channels in the track list's order (each instrument's audio where its folder stands);
+        // strips rebuild when that changes
         std::vector<AudioEngine::AudioChannelId> ids;
 
-        for (auto& item : engine.getSidebarItems (false, false))
-            if (item.member != 0)
-                ids.push_back ((AudioEngine::AudioChannelId) item.member);
+        for (auto& item : engine.getSidebarItems (true, false))
+            if (item.channel != 0)
+                ids.push_back (item.channel);
 
         if (ids != shownIds)
         {
