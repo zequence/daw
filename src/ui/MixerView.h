@@ -777,14 +777,20 @@ private:
             // The background is drawn once into an image, again only when the size or highlight changes
             const auto isHighlighted = kind == Kind::channel && owner.highlighted.count (channelId) > 0;
 
-            if (background.getWidth() != getWidth() || background.getHeight() != getHeight() || isHighlighted != backgroundHighlighted)
+            const auto summed = owner.engine.isGroupBus (owner.engine.getAudioChannelOutput (channelId));
+
+            if (background.getWidth() != getWidth() || background.getHeight() != getHeight() || isHighlighted != backgroundHighlighted
+                || summed != backgroundSummed)
             {
                 backgroundHighlighted = isHighlighted;
+                backgroundSummed = summed;
                 background = makeBackground (isHighlighted);
             }
 
             g.drawImageAt (background, 0, 0);
         }
+
+        bool backgroundSummed = false;
 
         juce::Image makeBackground (bool isHighlighted) const
         {
@@ -793,16 +799,26 @@ private:
             juce::Graphics g (image);
             juce::Path panel;
             panel.addRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
-            // A group's strip: tinted (it stands for the channels it sums)
-            const auto base = owner.engine.isGroupBus (channelId) ? owner.style().panel.interpolatedWith (juce::Colour (0xff4f6d8f), 0.28f)
-                                                                  : owner.style().panel;
+            // The channels a group sums (shown expanded): tinted; the group's own strip plain
+            const auto base = backgroundSummed ? owner.style().panel.interpolatedWith (juce::Colour (0xff4f6d8f), 0.28f)
+                                               : owner.style().panel;
             g.setColour (isHighlighted ? base.brighter (0.25f) : base);
             g.fillPath (panel);
 
-            if (owner.engine.isGroupBus (channelId))   // its tape and expand button on a plate of the button's colour
+            if (owner.engine.isGroupBus (channelId))   // a plastic cover over the top (its tape, the expand button): not the strip's
             {
-                g.setColour (theme::colour (theme::Token::buttonBg).brighter (0.08f));
-                g.fillRoundedRectangle (juce::Rectangle<float> (3.0f, 3.0f, (float) w - 6.0f, 38.0f), 3.0f);
+                const juce::Rectangle<float> cover (1.0f, 1.0f, (float) w - 2.0f, 40.0f);
+                const auto plastic = theme::colour (theme::Token::buttonBg).brighter (0.15f);
+
+                g.setColour (juce::Colours::black.withAlpha (0.45f));   // its shadow on the strip below
+                g.fillRoundedRectangle (cover.translated (0.0f, 3.0f), 4.0f);
+                g.setGradientFill (juce::ColourGradient (plastic.brighter (0.25f), 0.0f, cover.getY(),
+                                                         plastic.darker (0.2f), 0.0f, cover.getBottom(), false));
+                g.fillRoundedRectangle (cover, 4.0f);
+                g.setColour (juce::Colours::white.withAlpha (0.3f));   // the sheen along its top edge
+                g.drawHorizontalLine (2, cover.getX() + 4.0f, cover.getRight() - 4.0f);
+                g.setColour (juce::Colours::black.withAlpha (0.6f));
+                g.drawRoundedRectangle (cover.reduced (0.5f), 4.0f, 1.0f);
             }
 
             {
