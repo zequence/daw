@@ -10,6 +10,27 @@
 #if JUCE_WINDOWS
 // For the rack: which native window has the keys (a plugin editor embedded in ours can take them)
 extern "C" __declspec (dllimport) void* __stdcall GetForegroundWindow();
+extern "C" __declspec (dllimport) unsigned long __stdcall GetWindowThreadProcessId (void* window, unsigned long* processId);
+extern "C" __declspec (dllimport) unsigned long __stdcall GetCurrentProcessId();
+
+namespace
+{
+    // A window of this process that isn't one of JUCE's (ours, our plugin windows, menus): a plugin made it
+    bool isForeignPluginWindow (void* window)
+    {
+        unsigned long process = 0;
+        GetWindowThreadProcessId (window, &process);
+
+        if (process != GetCurrentProcessId())
+            return false;
+
+        for (int i = 0; i < juce::ComponentPeer::getNumPeers(); ++i)
+            if (juce::ComponentPeer::getPeer (i)->getNativeHandle() == window)
+                return false;
+
+        return true;
+    }
+}
 #endif
 
 namespace
@@ -1421,20 +1442,17 @@ void MainComponent::timerCallback()
     {
         // Our window is the active one, but the keyboard is not ours: a plugin inside it has it (some
         // plugins run their windows on their own thread, so asking "who has the focus" can't see them)
-        // TEMPORARY diagnostics (rack keys): who has the keyboard, logged when it changes
+        // A plugin editor the rack just created may make a window of its own the active one (seen:
+        // Softube's), and then no key reaches us: for a moment after, we take the activation back
         if (auto* peer = getPeer())
-        {
-            auto* focused = juce::Component::getCurrentlyFocusedComponent();
-            const auto state = juce::String ("rack keys: foreground ours ") + (GetForegroundWindow() == peer->getNativeHandle() ? "yes" : "no")
-                                 + ", native focus ours " + (peer->isFocused() ? "yes" : "no")
-                                 + ", focused component " + (focused == nullptr ? juce::String ("none")
-                                                                                : typeid (*focused).name() + juce::String (" '") + focused->getName() + "'"
-                                                                                    + (focused == this || isParentOf (focused) ? " (inside)" : " (outside)"));
-            static juce::String lastState;
-
-            if (state != lastState)
-                juce::Logger::writeToLog (lastState = state);
-        }
+            if (auto* fg = GetForegroundWindow(); fg != nullptr && fg != peer->getNativeHandle()
+                  && isForeignPluginWindow (fg)
+                  && juce::Time::getMillisecondCounter() - mixerView.rackEditorsOpenedAt < 2000)
+            {
+                getTopLevelComponent()->toFront (true);
+                peer->grabFocus();
+                grabKeyboardFocus();
+            }
 
         // Also when nothing of ours has the keys: opening the rack hides the strips that had them
         if (auto* peer = getPeer())
@@ -1692,9 +1710,6 @@ void MainComponent::openEditorOn (std::vector<AudioEngine::TrackId> tracks)
 
 bool MainComponent::keyPressed (const juce::KeyPress& key)
 {
-    if (mixerView.isRackOpen())   // TEMPORARY diagnostics (rack keys)
-        juce::Logger::writeToLog ("rack keys: keyPressed " + key.getTextDescription());
-
     if (keys::matches ("view.back", key))
     {
         if (settingsOpen)
@@ -1887,6 +1902,7 @@ bool MainComponent::keyPressed (const juce::KeyPress& key)
 
     if (keys::matches ("transport.playStop", key))
     {
+
         engine.getTransport().togglePlayStop();
         return true;
     }

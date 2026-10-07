@@ -91,7 +91,7 @@ public:
         applyScale();
 
         if (rack != nullptr)
-            rack->setBounds (getLocalBounds());
+            rack->setBounds (rackPending ? getLocalBounds().translated (getWidth() + 64, 0) : getLocalBounds());
     }
 
     void fitSize()
@@ -1130,6 +1130,7 @@ private:
 
                         unit.editor.reset (editor);
                         column.addAndMakeVisible (editor);
+                        owner.rackEditorsOpenedAt = juce::Time::getMillisecondCounter();   // see MainComponent's timer
                         editor->addComponentListener (this);
                     }
 
@@ -1178,6 +1179,7 @@ private:
 
             rackWidth = width;   // the column fills the view, so the wheel scrolls beside the rack too
             column.setSize (juce::jmax (width, view.getMaximumVisibleWidth()), juce::jmax (y + gap, view.getMaximumVisibleHeight()));
+            lastChange = juce::Time::getMillisecondCounter();   // the rack shows once this settles (see revealRackWhenSettled)
             column.repaint();
         }
 
@@ -1212,6 +1214,7 @@ private:
         Column column;
         std::vector<Unit> units;
         int rackWidth = 0;
+        juce::uint32 lastChange = 0;
     };
 
     std::unique_ptr<Rack> rack;
@@ -1224,9 +1227,14 @@ public:
         if (onBeforeInsertRemove)
             onBeforeInsertRemove (id, -1);   // its inserts' windows close: the rack shows their editors
 
+        // The rack is built out of sight (beside the view - its plugin editors are native windows, so
+        // nothing can be drawn over them while they load); the mixer stays until it has settled
+        rackPending = true;
+        rackOpenedAt = juce::Time::getMillisecondCounter();
+        engine.getBusyStatus().begin ("Opening the rack");   // the busy box, until it shows
+        engine.getBusyStatus().update ("Loading the inserts' editors");
         rack = std::make_unique<Rack> (*this, id);
         addAndMakeVisible (*rack);
-        outer.setVisible (false);
         resized();
 
         if (auto it = rackScroll.find (id); it != rackScroll.end())   // where it was left
@@ -1236,8 +1244,29 @@ public:
         }
     }
 
+    // Called by the timer: the rack shows once its editors have stopped loading and resizing
+    void revealRackWhenSettled()
+    {
+        if (rack == nullptr || ! rackPending)
+            return;
+
+        const auto now = juce::Time::getMillisecondCounter();
+
+        if (now - rack->lastChange > 500 || now - rackOpenedAt > 5000)
+        {
+            rackPending = false;
+            engine.getBusyStatus().end();
+            outer.setVisible (false);
+            resized();
+        }
+    }
+
     void closeRack()
     {
+        if (rackPending)   // closed while still loading
+            engine.getBusyStatus().end();
+
+        rackPending = false;
         if (rack != nullptr)
             rackScroll[rack->channelId] = { rack->view.getViewPosition(), rack->stripView.getViewPosition() };
 
@@ -1247,6 +1276,9 @@ public:
     }
 
     bool isRackOpen() const   { return rack != nullptr; }
+    juce::uint32 rackEditorsOpenedAt = 0;
+    bool rackPending = false;               // built, loading out of sight
+    juce::uint32 rackOpenedAt = 0;   // when the rack last created plugin editors (they may take the window's activation)
 
     // Before an insert goes (removed or replaced): its editor in the rack and its window close first
     void beforeInsertRemove (AudioEngine::AudioChannelId id, int slot)
@@ -1304,7 +1336,10 @@ private:
         master->tick();
 
         if (rack != nullptr)
+        {
             rack->tick();
+            revealRackWhenSettled();
+        }
         master->syncControls();
     }
 
