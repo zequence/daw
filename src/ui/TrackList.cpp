@@ -852,7 +852,16 @@ public:
         }
 
         soloButton.setToggleState (engine.isAudioChannelSoloed (channelId), juce::dontSendNotification);
+
+        // Its tag: drawn again when its colour or name changes (a colour picked, a rename elsewhere)
+        if (const auto tag = engine.getChannelTagColour (channelId) + "|" + engine.getAudioChannelName (channelId); tag != lastTag)
+        {
+            lastTag = tag;
+            repaint();
+        }
     }
+
+    juce::String lastTag;
 
     void paint (juce::Graphics& g) override
     {
