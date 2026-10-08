@@ -1062,15 +1062,39 @@ private:
             // A group's colour behind the tags, across the whole unit (the group's strip and those it sums, expanded):
             // inside the edge, rounded only at the unit's outer top corners, square below the tags
             // (no colour chosen: the default tag colour, as in the track view)
-            if (owner.engine.isGroupBus (channelId) || joinedLeft)
+            const auto groupColour = AudioEngine::colourFromHex (backgroundStripe, mixer::tape::cream);
+            const auto tagBottom = (float) name.getBottom() + 3.0f;
+
+            if (owner.engine.isGroupBus (channelId) && ! joinedLeft)   // the group's own strip: the area behind its tag
             {
-                const auto left = joinedLeft ? 0.0f : 1.0f, right = joinedRight ? bounds.getWidth() : bounds.getWidth() - 1.0f;
-                const auto tag = juce::Rectangle<float> (left, 1.0f, right - left, (float) name.getBottom() + 3.0f);
+                const auto right = joinedRight ? bounds.getWidth() : bounds.getWidth() - 1.0f;
                 juce::Path band;
-                band.addRoundedRectangle (tag.getX(), tag.getY(), tag.getWidth(), tag.getHeight(), 3.0f, 3.0f,
-                                          ! joinedLeft, ! joinedRight, false, false);
-                g.setColour (AudioEngine::colourFromHex (backgroundStripe, mixer::tape::cream));
+                band.addRoundedRectangle (1.0f, 1.0f, right - 1.0f, tagBottom, 3.0f, 3.0f, true, ! joinedRight, false, false);
+                g.setColour (groupColour);
                 g.fillPath (band);
+            }
+            else if (joinedLeft)   // the channels it sums: a stripe along the top, on from the group's band; on the
+            {                      // unit's last strip it bends round the corner and runs down its edge to the band's foot
+                constexpr float thickness = 3.0f, corner = 4.0f;
+                const auto inset = 1.0f + thickness * 0.5f;   // (the stroke's centre line, inside the edge)
+                const auto right = bounds.getWidth() - inset;
+                juce::Path stripe;
+                stripe.startNewSubPath (0.0f, inset);
+
+                if (joinedRight)
+                {
+                    stripe.lineTo (bounds.getWidth(), inset);
+                }
+                else
+                {
+                    const auto r = corner - inset * 0.5f;
+                    stripe.lineTo (right - r, inset);
+                    stripe.quadraticTo (right, inset, right, inset + r);
+                    stripe.lineTo (right, tagBottom);
+                }
+
+                g.setColour (groupColour);
+                g.strokePath (stripe, juce::PathStrokeType (thickness, juce::PathStrokeType::mitered, juce::PathStrokeType::butt));
             }
 
             if (! emptyArea.isEmpty())

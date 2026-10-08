@@ -1019,6 +1019,22 @@ void AudioEngine::addInsert (AudioChannelId channelId, int slot, const juce::Plu
             if (it->second.inserts.empty())   // the first effect switches the section on
                 it->second.insertsOn = true;
 
+            // An effect in a channel: stereo in, stereo out, nothing else (a compressor's side-chain input, extra
+            // outputs) - the channel feeds it two channels only; a layout it wasn't set up for crashed in
+            // yabridge's audio copy (FETish)
+            instance->disableNonMainBuses();
+
+            auto stereo = instance->getBusesLayout();   // (its other buses stay in the layout, switched off)
+
+            if (! stereo.inputBuses.isEmpty())  stereo.inputBuses.getReference (0) = juce::AudioChannelSet::stereo();
+            if (! stereo.outputBuses.isEmpty()) stereo.outputBuses.getReference (0) = juce::AudioChannelSet::stereo();
+
+            if (instance->checkBusesLayoutSupported (stereo))
+                instance->setBusesLayout (stereo);
+
+            juce::Logger::writeToLog ("Insert " + name + ": " + juce::String (instance->getTotalNumInputChannels()) + " in, "
+                                      + juce::String (instance->getTotalNumOutputChannels()) + " out");
+
             Insert insert;
             insert.name = name;
             insert.description = description;
