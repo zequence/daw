@@ -1012,7 +1012,7 @@ private:
         {
             const auto bounds = getLocalBounds().toFloat();
             // The channels a group sums: a shade darker than the others
-            const auto base = juce::Colour (backgroundSummed ? 0xff1b1e23 : 0xff23272d);
+            auto base = juce::Colour (backgroundSummed ? 0xff1b1e23 : 0xff23272d);
 
             if (isHighlighted)
                 base = base.brighter (0.35f);
