@@ -11,11 +11,23 @@
 // make-up, in), six aux sends (one per Aux bus), pan, fader with meter, solo / mute, output.
 // Working now: name, pan, fader, meter, solo, mute (and the master). The inserts, EQ, dynamics,
 // aux knobs, the Aux buses and the output are placeholders: they show and turn, nothing more.
+//
+// Two styles (Settings > Tracks, or the mixer's right-click menu): the default mixer - dark, plain
+// strips in sections stacked top to bottom: the inserts (16 slots), an empty section, then pan,
+// fader, solo / mute, output; the edges between the sections drag (every strip together); no
+// built-in processing - and the analog console above (its EQ and dynamics run only with it).
 class MixerView final : public juce::Component, private juce::Timer
 {
 public:
+    static constexpr auto styleKey = "mixerStyle";   // 1: the default mixer, 2: the analog console
+
     explicit MixerView (AudioEngine& e) : engine (e)
     {
+        modern = engine.getSettingsFile().getIntValue (styleKey, 1) != 2;
+        AudioChannelProcessor::consoleProcessing = ! modern;
+        insertsHeight = juce::jlimit (0, insertsFullHeight, engine.getSettingsFile().getIntValue ("mixerInsertsHeight", insertsFullHeight));
+        emptyHeight = juce::jlimit (0, maxEmptyHeight, engine.getSettingsFile().getIntValue ("mixerEmptyHeight", 140));
+
         addMouseListener (this, true);   // a right-click anywhere: the mixer's menu (the console style)
 
         // Strips scroll sideways; the whole row scrolls up and down when the window is short
@@ -27,18 +39,32 @@ public:
         channelsViewport.setScrollBarsShown (false, true);
         body.addAndMakeVisible (channelsViewport);
 
-        for (int aux = 1; aux <= 6; ++aux)
-        {
-            auto strip = std::make_unique<Strip> (*this, Kind::aux, 0, aux);
-            strips.addAndMakeVisible (*strip);
-            auxStrips.push_back (std::move (strip));
-        }
-
-        master = std::make_unique<Strip> (*this, Kind::master, 0, 0);
-        body.addAndMakeVisible (*master);
-
+        buildFixedStrips();
         startTimerHz (30);
     }
+
+    // The default mixer (false) or the analog console (true): the strips are made again in that style
+    void setConsoleStyle (bool console)
+    {
+        if (modern == ! console)
+            return;
+
+        endGesture();
+        destroyRack();
+        modern = ! console;
+        AudioChannelProcessor::consoleProcessing = console;
+        engine.getSettingsFile().setValue (styleKey, console ? 2 : 1);
+        engine.getSettingsFile().saveIfNeeded();
+
+        channelStrips.clear();
+        shownIds.clear();   // the channels' strips are made on the next tick
+        buildFixedStrips();
+        sheenImage = {};
+        resized();
+        repaint();
+    }
+
+    bool isConsoleStyle() const   { return ! modern; }
 
     // The right-click menu: the console style (SSL for now; more styles to come)
     void mouseDown (const juce::MouseEvent& event) override
@@ -49,10 +75,20 @@ public:
         if (auto* slots = dynamic_cast<mixer::Placeholder*> (event.eventComponent); slots != nullptr && slots->onSlotClicked != nullptr)
             return;   // the inserts have their own menu
 
-        juce::PopupMenu styles;
-        styles.addItem (mixer::ConsoleStyle::ssl().name, true, true, [] {});
         juce::PopupMenu menu;
         const auto safe = juce::Component::SafePointer<MixerView> (this);
+        menu.addItem ("Default mixer", true, modern, [safe] { if (safe != nullptr) safe->setConsoleStyle (false); });
+        menu.addItem ("Analog console", true, ! modern, [safe] { if (safe != nullptr) safe->setConsoleStyle (true); });
+
+        if (modern)   // (it fills the window's height: no zoom)
+        {
+            menu.showMenuAsync (juce::PopupMenu::Options());
+            return;
+        }
+
+        juce::PopupMenu styles;
+        styles.addItem (mixer::ConsoleStyle::ssl().name, true, true, [] {});
+        menu.addSeparator();
         menu.addItem ("Fit size (to the window's height)", [safe] { if (safe != nullptr) safe->fitSize(); });
         menu.addItem ("Actual size (100%)", [safe]
         {
@@ -164,8 +200,9 @@ public:
 
     void applyScale()
     {
-        outer.setTransform (juce::AffineTransform::scale (scale));
-        outer.setBounds (0, 0, juce::roundToInt (std::ceil ((float) getWidth() / scale)), juce::roundToInt (std::ceil ((float) getHeight() / scale)));
+        const auto s = modern ? 1.0f : scale;   // the default mixer fills the window's height instead
+        outer.setTransform (juce::AffineTransform::scale (s));
+        outer.setBounds (0, 0, juce::roundToInt (std::ceil ((float) getWidth() / s)), juce::roundToInt (std::ceil ((float) getHeight() / s)));
         layoutBody();
     }
 
@@ -181,14 +218,14 @@ private:   // where a channel strip's pan and fader begin (the other strips foll
 
     void paint (juce::Graphics& g) override
     {
-        g.fillAll (theme::colour (theme::Token::surfaceContent));
+        g.fillAll (modern ? juce::Colour (0xff101216) : theme::colour (theme::Token::surfaceContent));
     }
 
     // Studio lights: a soft, wide sheen falling diagonally over the whole console
     // (drawn once per size into an image - the meters repaint often, and the image is cheaper to lay on)
     void paintOverChildren (juce::Graphics& g) override
     {
-        if (rack != nullptr && rackShown)   // the rack is not under the console's lights
+        if (modern || (rack != nullptr && rackShown))   // the rack (and the default mixer) is not under the console's lights
             return;
 
         if (sheenImage.getWidth() != getWidth() || sheenImage.getHeight() != getHeight())
@@ -214,6 +251,61 @@ private:   // where a channel strip's pan and fader begin (the other strips foll
 private:
     enum class Kind { channel, aux, master };
     static constexpr int stripWidth = 118, stripHeight = 1310;
+
+    // The default mixer's sections: the inserts at most their 16 slots' height (smaller hides the
+    // last ones), the empty section; the edges between them (and the faders') drag
+    static constexpr int insertsFullHeight = 330, maxEmptyHeight = 1000, dividerGap = 8, minFaderHeight = 140;
+    bool modern = true;
+    int insertsHeight = insertsFullHeight, emptyHeight = 140;
+
+    void setSectionHeight (int divider, int height)
+    {
+        auto& h = divider == 0 ? insertsHeight : emptyHeight;
+        const auto limited = juce::jlimit (0, divider == 0 ? insertsFullHeight : maxEmptyHeight, height);
+
+        if (limited == h)
+            return;
+
+        h = limited;
+        layoutBody();
+
+        for (auto& strip : channelStrips)
+            strip->resized();
+
+        if (rack != nullptr)
+            rack->strip->resized();
+    }
+
+    void saveSectionHeights()
+    {
+        engine.getSettingsFile().setValue ("mixerInsertsHeight", insertsHeight);
+        engine.getSettingsFile().setValue ("mixerEmptyHeight", emptyHeight);
+        engine.getSettingsFile().saveIfNeeded();
+    }
+
+    // The tallest a default mixer's strip must be: the sections, then the faders at their smallest
+    int minimumModernHeight() const
+    {
+        return 4 + 16 + 4 + insertsHeight + dividerGap + emptyHeight + dividerGap + 62 + minFaderHeight + 16 + 4 + 20 + 4 + 36 + 4;
+    }
+
+    // The Aux buses (the console only) and the master
+    void buildFixedStrips()
+    {
+        auxStrips.clear();
+        master.reset();
+
+        if (! modern)
+            for (int aux = 1; aux <= 6; ++aux)
+            {
+                auto strip = std::make_unique<Strip> (*this, Kind::aux, 0, aux);
+                strips.addAndMakeVisible (*strip);
+                auxStrips.push_back (std::move (strip));
+            }
+
+        master = std::make_unique<Strip> (*this, Kind::master, 0, 0);
+        body.addAndMakeVisible (*master);
+    }
 
     const mixer::ConsoleStyle& style() const   { return mixer::ConsoleStyle::ssl(); }
 
@@ -300,6 +392,13 @@ private:
             };
             addAndMakeVisible (name);
 
+            topName.setJustificationType (juce::Justification::centred);
+            topName.setFont (juce::FontOptions (11.0f));
+            topName.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.5f));
+            topName.setMinimumHorizontalScale (0.7f);
+            topName.setInterceptsMouseClicks (false, false);
+            addChildComponent (topName);
+
             inserts.setTooltip (placeholderTip);
             inserts.slots = kind == Kind::aux ? 8 : 16;
             if (kind == Kind::channel)
@@ -319,12 +418,22 @@ private:
             {
                 insertsIn.setTooltip ("All the inserts on / off - " + placeholderTip);
             }
-            // In the INSERTS flip button, beside its text (the master, with no flip: in the inserts' box)
-            if (kind == Kind::master)
+            // In the INSERTS flip button, beside its text (the master and the default mixer, with no flip: in the inserts' box)
+            if (kind == Kind::master || owner.modern)
                 inserts.addAndMakeVisible (insertsIn);
             else
                 flip.addAndMakeVisible (insertsIn);   // channels and the master 16 inserts, Aux buses 8
-            addChildComponent (inserts);
+
+            if (owner.modern)   // the slots at their full size, in a box that hides those it has no room for
+            {
+                insertsClip.setInterceptsMouseClicks (false, true);
+                insertsClip.addAndMakeVisible (inserts);
+                addAndMakeVisible (insertsClip);
+            }
+            else
+            {
+                addChildComponent (inserts);
+            }
 
             // The inserts sit behind the EQ and dynamics: this flips between them
             flip.setTooltip ("Show the inserts (in place of the EQ and dynamics) - click again for the EQ");
@@ -345,13 +454,13 @@ private:
                 });
             };
 
-            if (kind != Kind::master)
+            if (kind != Kind::master && ! owner.modern)
                 addAndMakeVisible (flip);
             else
-                inserts.setVisible (true);   // the master has no EQ or dynamics: its inserts always show
+                inserts.setVisible (true);   // the master (and the default mixer) has no EQ or dynamics: its inserts always show
 
             // --- EQ (SSL 4000 E) and dynamics: placeholders (channels and Aux buses) ---
-            if (kind != Kind::master)
+            if (kind != Kind::master && ! owner.modern)
             {
                 const auto add = [this, &placeholderTip] (mixer::Knob& knob, Section& section, double min, double max,
                                                           double initial, std::function<juce::String (double)> format)
@@ -402,7 +511,7 @@ private:
             }
 
             // --- Six aux sends, one per Aux bus (channels only): placeholders ---
-            if (kind == Kind::channel)
+            if (kind == Kind::channel && ! owner.modern)
             {
                 for (int i = 0; i < 6; ++i)
                 {
@@ -425,7 +534,7 @@ private:
             drive.format = [] (double v) { return juce::String (v, 1); };
             drive.setTooltip ("Drive - " + placeholderTip);
 
-            if (kind != Kind::master)
+            if (kind != Kind::master && ! owner.modern)
                 addAndMakeVisible (drive);
 
             // --- The console processing (channels): each knob and switch drives its parameter ---
@@ -488,7 +597,7 @@ private:
             addAndMakeVisible (fader);
             addAndMakeVisible (meter);
 
-            if (kind != Kind::master)   // the compressor's gain reduction, on the fader's other side
+            if (kind != Kind::master && ! owner.modern)   // the compressor's gain reduction, on the fader's other side
             {
                 reductionMeter.setTooltip ("Gain reduction (the dynamics), 0 to -20 dB");
                 addAndMakeVisible (reductionMeter);
@@ -569,6 +678,10 @@ private:
             if (name.isBeingEdited())
                 return;
 
+            topName.setText (kind == Kind::master ? juce::String ("Master")
+                               : kind == Kind::aux ? "Aux " + juce::String (auxNumber)
+                                                   : owner.engine.getAudioChannelName (channelId),
+                             juce::dontSendNotification);
             name.setText (kind == Kind::master ? juce::String ("Master")
                             : kind == Kind::aux ? "Aux " + juce::String (auxNumber)
                                                 : owner.engine.getAudioChannelName (channelId),
@@ -663,6 +776,17 @@ private:
 
             juce::PopupMenu menu;
 
+            if (owner.modern && ! inRack)   // (no INSERTS button here)
+            {
+                menu.addItem ("Show the inserts in the rack", [safe, id]
+                {
+                    if (safe != nullptr)
+                        juce::MessageManager::callAsync ([owner = juce::Component::SafePointer<MixerView> (&safe->owner), id]
+                                                         { if (owner != nullptr) owner->openRack (id); });
+                });
+                menu.addSeparator();
+            }
+
             if (it != inserts.end())
             {
                 menu.addItem ("Open " + it->name, [safe, id, slot] { if (safe != nullptr && safe->owner.onOpenInsert) safe->owner.onOpenInsert (id, slot); });
@@ -749,8 +873,43 @@ private:
         // A gesture on the strip (for the mixer's undo): from the press to the release
         AudioEngine::AudioChannelId undoId() const   { return kind == Kind::master ? 0 : channelId; }
 
+        // The default mixer: the edges under the inserts and under the empty section drag their heights
+        int dividerAt (const juce::MouseEvent& event) const
+        {
+            if (! owner.modern || event.eventComponent != this)
+                return -1;
+
+            for (int i = 0; i < 2; ++i)
+                if (event.y >= dividerY[i] && event.y < dividerY[i] + dividerGap)
+                    return i;
+
+            return -1;
+        }
+
+        void mouseMove (const juce::MouseEvent& event) override
+        {
+            if (event.eventComponent == this)
+                setMouseCursor (dividerAt (event) >= 0 ? juce::MouseCursor::UpDownResizeCursor : juce::MouseCursor::NormalCursor);
+        }
+
+        void mouseDrag (const juce::MouseEvent& event) override
+        {
+            if (draggedDivider >= 0)
+                owner.setSectionHeight (draggedDivider, dragStartHeight + event.getDistanceFromDragStartY());
+        }
+
+        int dividerY[2] {}, draggedDivider = -1, dragStartHeight = 0;
+        juce::Rectangle<int> emptyArea;
+
         void mouseUp (const juce::MouseEvent&) override
         {
+            if (draggedDivider >= 0)
+            {
+                draggedDivider = -1;
+                owner.saveSectionHeights();
+                return;
+            }
+
             if (kind != Kind::aux)
                 owner.endGesture();
         }
@@ -763,6 +922,13 @@ private:
 
         void mouseDown (const juce::MouseEvent& event) override
         {
+            if (const auto divider = dividerAt (event); divider >= 0)
+            {
+                draggedDivider = divider;
+                dragStartHeight = divider == 0 ? owner.insertsHeight : owner.emptyHeight;
+                return;
+            }
+
             if (kind != Kind::aux)
                 owner.beginGesture (undoId());
 
@@ -793,9 +959,12 @@ private:
             const auto stripe = summed ? owner.engine.getChannelTagColour (group)   // the group's colour: its cover, its channels' stripes
                                        : owner.engine.isGroupBus (channelId) ? owner.engine.getChannelTagColour (channelId) : juce::String();
 
+            const auto layout = juce::Point<int> (dividerY[0], dividerY[1]);
+
             if (background.getWidth() != getWidth() || background.getHeight() != getHeight() || isHighlighted != backgroundHighlighted
-                || summed != backgroundSummed || stripe != backgroundStripe)
+                || summed != backgroundSummed || stripe != backgroundStripe || layout != backgroundLayout)
             {
+                backgroundLayout = layout;
                 backgroundStripe = stripe;
                 backgroundHighlighted = isHighlighted;
                 backgroundSummed = summed;
@@ -807,12 +976,62 @@ private:
 
         bool backgroundSummed = false;
         juce::String backgroundStripe;   // a summed channel's: its group's colour
+        juce::Point<int> backgroundLayout;
+
+        // The default mixer's strip: dark, plain, a faint edge; the empty section recessed; grips on the edges
+        void paintModernBackground (juce::Graphics& g, bool isHighlighted) const
+        {
+            const auto bounds = getLocalBounds().toFloat();
+            auto base = juce::Colour (0xff1b1e23);
+
+            if (backgroundSummed)
+                base = base.interpolatedWith (juce::Colour (0xff3d5470), 0.25f);
+
+            if (isHighlighted)
+                base = base.brighter (0.35f);
+
+            g.setGradientFill (juce::ColourGradient (base.brighter (0.06f), 0.0f, 0.0f, base.darker (0.25f), 0.0f, bounds.getBottom(), false));
+            g.fillRoundedRectangle (bounds, 4.0f);
+            g.setColour (juce::Colours::white.withAlpha (isHighlighted ? 0.16f : 0.06f));
+            g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
+
+            if (backgroundStripe.isNotEmpty())   // a group's own strip and the channels it sums: its colour along the top
+            {
+                g.setColour (AudioEngine::colourFromHex (backgroundStripe, juce::Colour (0xff7d9cc0)));
+                g.fillRoundedRectangle (juce::Rectangle<float> (1.0f, 0.0f, bounds.getWidth() - 2.0f, 3.0f), 1.5f);
+            }
+            else if (kind == Kind::master)
+            {
+                g.setColour (juce::Colour (0xffc23b33));
+                g.fillRoundedRectangle (juce::Rectangle<float> (1.0f, 0.0f, bounds.getWidth() - 2.0f, 3.0f), 1.5f);
+            }
+
+            if (! emptyArea.isEmpty())
+            {
+                g.setColour (juce::Colours::black.withAlpha (0.22f));
+                g.fillRoundedRectangle (emptyArea.toFloat(), 3.0f);
+                g.setColour (juce::Colours::white.withAlpha (0.04f));
+                g.drawRoundedRectangle (emptyArea.toFloat().reduced (0.5f), 3.0f, 1.0f);
+            }
+
+            g.setColour (juce::Colours::white.withAlpha (0.14f));
+
+            for (auto y : dividerY)
+                g.fillRoundedRectangle (juce::Rectangle<float> (18.0f, 2.0f).withCentre ({ bounds.getCentreX(), (float) y + dividerGap * 0.5f }), 1.0f);
+        }
 
         juce::Image makeBackground (bool isHighlighted) const
         {
             const auto w = juce::jmax (1, getWidth()), h = juce::jmax (1, getHeight());
             juce::Image image (juce::Image::ARGB, w, h, true);
             juce::Graphics g (image);
+
+            if (owner.modern)
+            {
+                paintModernBackground (g, isHighlighted);
+                return image;
+            }
+
             juce::Path panel;
             panel.addRoundedRectangle (getLocalBounds().toFloat(), 3.0f);
             // The channels a group sums (shown expanded): tinted; the group's own strip plain
@@ -940,6 +1159,22 @@ private:
         void resized() override
         {
             auto area = getLocalBounds().reduced (4);
+            topName.setVisible (owner.modern);
+
+            if (owner.modern)   // the default mixer: a small name at the top, the tape at the foot (layoutModern)
+            {
+                auto top = area.removeFromTop (topNameHeight);
+                expandButton.setVisible (owner.engine.isGroupBus (channelId));
+
+                if (expandButton.isVisible())
+                    expandButton.setBounds (top.removeFromRight (18).withSizeKeepingCentre (16, 16));
+
+                topName.setBounds (top);
+                area.removeFromTop (4);
+                layoutModern (area);
+                return;
+            }
+
             {
                 auto top = area.removeFromTop (36);   // the tape: its writing as large as the track view's
 
@@ -1149,6 +1384,54 @@ private:
             fader.setBounds (faderArea);
         }
 
+        // The default mixer: the inserts (as tall as they're given, at most 16 slots), the empty section,
+        // then pan above the fader (every strip's fader starts at the same height), the output at the foot
+        void layoutModern (juce::Rectangle<int> area)
+        {
+            if (inRack)   // its INSERTS button closes the rack
+            {
+                flip.setBounds (area.removeFromTop (16).withSizeKeepingCentre (80, 15));
+                area.removeFromTop (4);
+            }
+
+            insertsClip.setBounds (area.removeFromTop (owner.insertsHeight));
+            inserts.setBounds (0, 0, insertsClip.getWidth(), insertsFullHeight);
+            insertsIn.setBounds (42, 0, 16, 13);   // beside the inserts' caption
+
+            dividerY[0] = area.getY();
+            area.removeFromTop (dividerGap);
+            emptyArea = area.removeFromTop (owner.emptyHeight);
+            dividerY[1] = area.getY();
+            area.removeFromTop (dividerGap);
+
+            name.setBounds (area.removeFromBottom (36));   // the tape, at the foot
+            area.removeFromBottom (4);
+            output.setBounds (area.removeFromBottom (20));
+            area.removeFromBottom (4);
+            level.setBounds (area.removeFromBottom (16));
+
+            auto knobs = area.removeFromTop (62);   // (the master has no pan: its fader still starts here)
+
+            if (kind != Kind::master)
+                pan.setBounds (juce::Rectangle<int> (58, 58).withCentre ({ knobs.getCentreX(), 0 }).withY (knobs.getY()));
+
+            auto faderArea = area.reduced (0, 2);
+            meter.setBounds (faderArea.removeFromRight (12));
+            faderArea.removeFromRight (4);
+
+            auto buttons = faderArea.removeFromLeft (24);
+            mute.setBounds (buttons.removeFromBottom (22));
+            buttons.removeFromBottom (4);
+            solo.setBounds (buttons.removeFromBottom (22));
+            faderArea.removeFromLeft (2);
+            fader.setBounds (faderArea);
+            repaint();   // (the background follows the sections)
+        }
+
+        juce::Component insertsClip;   // the default mixer: the inserts' box
+        juce::Label topName;           // the default mixer: the name, small, at the top (the tape is at the foot)
+        static constexpr int topNameHeight = 16;
+
         bool inRack = false;   // the strip beside the rack
 
         // A group's: shows (or hides again) the channels it sums, beside it
@@ -1248,6 +1531,9 @@ private:
             strip = std::make_unique<Strip> (o, Kind::channel, id, 0);
             strip->inRack = true;
             strip->flip.setToggleState (true, juce::dontSendNotification);
+
+            if (o.modern)   // (the default mixer's strips have no INSERTS button: this one closes the rack)
+                strip->addAndMakeVisible (strip->flip);
             strip->setSize (stripWidth, stripHeight);
             stripView.setViewedComponent (strip.get(), false);
             stripView.setScrollBarsShown (true, false);
@@ -1889,14 +2175,16 @@ private:
         const auto width = outer.getMaximumVisibleWidth();
         const auto gap = 14;   // between the channels and the Aux buses
         const auto count = (int) channelStrips.size();
-        const auto stripsWidth = count * (stripWidth + 4) + gap + 6 * (stripWidth + 4) + 4;
+        const auto stripsWidth = count * (stripWidth + 4) + (auxStrips.empty() ? 0 : gap + (int) auxStrips.size() * (stripWidth + 4)) + 4;
         const auto viewWidth = width - stripWidth - 20;
         const auto scrollbar = stripsWidth > viewWidth ? channelsViewport.getScrollBarThickness() : 0;
-        const auto stripsHeight = stripHeight + 8;
+        // The default mixer's strips reach the window's foot (scrolling only when it's shorter than the sections)
+        const auto oneHeight = modern ? juce::jmax (minimumModernHeight(), outer.getHeight() - 8 - scrollbar) : stripHeight;
+        const auto stripsHeight = oneHeight + 8;
         const auto height = stripsHeight + scrollbar;
         body.setSize (width, height);
 
-        master->setBounds (width - stripWidth - 8, 4, stripWidth, stripHeight);
+        master->setBounds (width - stripWidth - 8, 4, stripWidth, oneHeight);
         channelsViewport.setBounds (4, 0, viewWidth, height);
         strips.setSize (stripsWidth, stripsHeight);
 

@@ -34,7 +34,9 @@ public:
     float getLastPeak() const noexcept       { return peak.load(); }
     float getLastRms() const noexcept        { return rms.load(); }
 
-    // The filters, EQ, dynamics and drive (before the fader)
+    // The filters, EQ, dynamics and drive (before the fader). They run only with the analog console
+    // mixer (Settings); the default mixer has no built-in processing, so every channel skips them
+    static inline std::atomic<bool> consoleProcessing { false };
     AnalogStrip& getStrip() noexcept               { return strip; }
     const AnalogStrip& getStrip() const noexcept   { return strip; }
 
@@ -52,7 +54,9 @@ public:
     void processBlock (juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midi) override
     {
         midi.clear();
-        strip.process (buffer);
+
+        if (consoleProcessing.load())
+            strip.process (buffer);
         const auto [left, right] = targetGains();
         const auto samples = buffer.getNumSamples();
 

@@ -78,6 +78,12 @@ target_link_libraries(OrchestralDAW
         juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
 
+# The busy card's own X11 window on Linux (NativeBusyWindow.cpp; JUCE loads X11 at run time itself)
+if(UNIX AND NOT APPLE)
+    find_package(X11 REQUIRED)
+    target_link_libraries(OrchestralDAW PRIVATE X11::X11 X11::Xext)
+endif()
+
 #==============================================================================
 # Out-of-process plugin scanner. Writes the shared plugin cache in the user data dir.
 juce_add_console_app(OrchestralDAWScanner

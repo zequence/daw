@@ -3,7 +3,7 @@
 #include <juce_graphics/juce_graphics.h>
 #include <memory>
 
-// The animated busy card, drawn by a native window on its OWN thread (Windows).
+// The animated busy card, drawn by a native window on its OWN thread (Windows, Linux/X11).
 //
 // JUCE draws only on the message thread, and long operations keep that thread
 // busy (a VE Pro plugin load alone blocks it ~110 ms; the graph rebuild ~1.8 s),

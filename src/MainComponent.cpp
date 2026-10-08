@@ -436,6 +436,7 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
 
     settingsView.onClose = [this] { closeSettings(); };
     settingsView.onStartScan = [this] (auto args) { startPluginScan (std::move (args)); };
+    settingsView.onMixerStyleChanged = [this] (bool console) { mixerView.setConsoleStyle (console); };
     settingsView.onPluginOnTopChanged = [this] (bool onTop)
     {
         for (auto& [id, window] : pluginWindows)
@@ -511,7 +512,7 @@ void MainComponent::createDefaultTrack()
                 return;
 
             safe->applyLoadedProject (startup, ok, warnings);
-            safe->currentProjectFile = {};   // a starting point: saving asks for a name
+            safe->currentProjectFile = juce::File();   // a starting point: saving asks for a name
             safe->updateWindowTitle();
             safe->engine.markProjectClean();
 

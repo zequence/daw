@@ -22,6 +22,7 @@ public:
     static constexpr auto mcpEnabledKey = "mcpEnabled";
     static constexpr auto mcpPortKey = "mcpPort";
     static constexpr auto categoryKey = "settingsCategory";
+    static constexpr auto mixerStyleKey = "mixerStyle";   // (MixerView::styleKey) 1: the default mixer, 2: the analog console
 
     explicit SettingsView (AudioEngine& e) : engine (e)
     {
@@ -93,6 +94,25 @@ public:
         };
 
         // --- Editor > Midi ---
+        mixerStyleLabel.setText ("Mixer", juce::dontSendNotification);
+        mixerStyleLabel.setColour (juce::Label::textColourId, juce::Colours::white.withAlpha (0.85f));
+        page.addAndMakeVisible (mixerStyleLabel);
+
+        mixerStyleBox.addItem ("Default", 1);
+        mixerStyleBox.addItem ("Analog console", 2);
+        mixerStyleBox.setTooltip ("Default: plain strips - inserts, an empty section, the faders - with no built-in processing. "
+                                  "Analog console: the console with its EQ, dynamics and drive on every channel.");
+        mixerStyleBox.setWantsKeyboardFocus (false);
+        mixerStyleBox.onChange = [this]
+        {
+            engine.getSettingsFile().setValue (mixerStyleKey, mixerStyleBox.getSelectedId());
+            engine.getSettingsFile().saveIfNeeded();
+
+            if (onMixerStyleChanged)
+                onMixerStyleChanged (mixerStyleBox.getSelectedId() == 2);
+        };
+        page.addAndMakeVisible (mixerStyleBox);
+
         editorMidiHeading.setText ("Midi", juce::dontSendNotification);
         editorMidiHeading.setFont (juce::FontOptions (15.0f, juce::Font::bold));
         editorMidiHeading.setColour (juce::Label::textColourId, juce::Colours::white);
@@ -277,6 +297,7 @@ public:
     std::function<void (juce::StringArray)> onStartScan;
     std::function<void (bool)> onPluginOnTopChanged;
     std::function<void (bool)> onMcpToggled;
+    std::function<void (bool console)> onMixerStyleChanged;
 
     void setMcpStatus (const juce::String& status)
     {
@@ -335,6 +356,10 @@ private:
             c->setVisible (category == plugins);
 
         autoRecordToggle.setVisible (category == tracks);
+        mixerStyleLabel.setVisible (category == tracks);
+        mixerStyleBox.setVisible (category == tracks);
+        // (the mixer's right-click menu changes it too)
+        mixerStyleBox.setSelectedId (engine.getSettingsFile().getIntValue (mixerStyleKey, 1) == 2 ? 2 : 1, juce::dontSendNotification);
 
         for (auto* c : std::initializer_list<juce::Component*> { &editorMidiHeading, &dropLabel, &dropBox, &defaultRootToggle,
                                                                  &cutOverlapsToggle, &middleCLabel, &middleCBox,
@@ -385,6 +410,9 @@ private:
 
             case tracks:
                 autoRecordToggle.setBounds (4, y, 360, 24);
+                y += 32;
+                mixerStyleLabel.setBounds (4, y, 230, 24);
+                mixerStyleBox.setBounds (238, y, 170, 24);
                 y += 32;
                 break;
 
@@ -552,6 +580,8 @@ private:
                      rescanButton { "Rescan everything" };
     juce::ToggleButton onTopToggle { "Plugin windows stay on top" };
     juce::ToggleButton autoRecordToggle { "Arm track on select (auto-record)" };
+    juce::Label mixerStyleLabel;
+    juce::ComboBox mixerStyleBox;
     juce::Label editorMidiHeading, dropLabel;
     juce::ComboBox dropBox, middleCBox;
     juce::Label middleCLabel, moveModeLabel;

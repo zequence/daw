@@ -199,6 +199,27 @@ public:
             nameLabel.setText (engine.getFolderName (folderId).toUpperCase(), juce::dontSendNotification);
 
         refreshGroup();
+
+        // An ungrouped folder labels what it holds: midi, instrument, audio, bus (all of them: mixed)
+        const auto contents = engine.getFolderContents (folderId);
+        juce::StringArray labels;
+
+        if (contents.midi && contents.instrument && contents.audio && contents.bus)
+            labels.add ("mixed");
+        else
+        {
+            if (contents.midi)       labels.add ("midi");
+            if (contents.instrument) labels.add ("instrument");
+            if (contents.audio)      labels.add ("audio");
+            if (contents.bus)        labels.add ("bus");
+        }
+
+        if (labels != kindLabels)
+        {
+            kindLabels = labels;
+            resized();
+        }
+
         repaint();
     }
 
@@ -278,6 +299,24 @@ public:
     mixer::LevelMeter meter { false };
     mixer::tape::Cached nameTape;
     bool wasGrouped = false;
+    juce::StringArray kindLabels;
+    juce::Rectangle<int> kindLabelArea;
+
+    static juce::Font kindLabelFont()   { return juce::Font (juce::FontOptions (12.0f, juce::Font::bold)); }
+
+    static int kindLabelWidth (const juce::String& text)
+    {
+        return (int) std::ceil (juce::GlyphArrangement::getStringWidth (kindLabelFont(), text)) + 12;
+    }
+
+    static juce::Colour kindLabelColour (const juce::String& text)
+    {
+        if (text == "midi")       return juce::Colour (0xff5b9bf0);   // blueish
+        if (text == "instrument") return juce::Colour (0xff5cc47a);   // greenish
+        if (text == "audio")      return juce::Colour (0xffe8655f);   // reddish
+        if (text == "bus")        return juce::Colour (0xffc864d8);   // purple / magenta
+        return sidebar::rowTextColour;                                 // mixed
+    }
 
 
     void mouseDown (const juce::MouseEvent& event) override
@@ -362,6 +401,29 @@ public:
         if (wasGrouped && ! nameLabel.isBeingEdited())   // a group: a dark tape written in its colour (as in the mixer)
             nameTape.draw (g, nameLabel.getBounds().withHeight (getHeight()).withY (0), engine.getFolderName (folderId),
                            theme::colour (theme::Token::buttonBg), juce::jmin (48.0f, (float) getHeight() * 0.8f), groupColour);
+
+        if (! wasGrouped)   // the kinds it holds, as small labels
+        {
+            g.setFont (kindLabelFont());
+            auto area = kindLabelArea;
+
+            for (auto& text : kindLabels)
+            {
+                const auto pill = area.removeFromLeft (kindLabelWidth (text)).withSizeKeepingCentre (kindLabelWidth (text), 17).toFloat();
+                area.removeFromLeft (4);
+
+                if (pill.getRight() > (float) kindLabelArea.getRight())
+                    break;
+
+                const auto colour = kindLabelColour (text);
+                g.setColour (colour.withAlpha (0.22f));
+                g.fillRoundedRectangle (pill, 8.5f);
+                g.setColour (colour.withAlpha (0.8f));
+                g.drawRoundedRectangle (pill.reduced (0.5f), 8.5f, 1.0f);
+                g.setColour (colour.brighter (0.6f));
+                g.drawText (text, pill, juce::Justification::centred, false);
+            }
+        }
     }
 
     void resized() override
@@ -379,6 +441,17 @@ public:
             soloButton.setBounds (unit.removeFromLeft (20));
             muteButton.setBounds (unit.removeFromLeft (20).expanded (1, 0).withTrimmedRight (1));
             rest.removeFromLeft (6);
+            kindLabelArea = {};
+        }
+        else   // the kind labels at the right, before the group button; the name keeps at least half
+        {
+            int width = 0;
+
+            for (auto& text : kindLabels)
+                width += kindLabelWidth (text) + 4;
+
+            width = juce::jmin (width, rest.getWidth() / 2);
+            kindLabelArea = rest.removeFromRight (width);
         }
 
         nameLabel.setBounds (rest.reduced (0, 2)

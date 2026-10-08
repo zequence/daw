@@ -486,6 +486,10 @@ public:
     bool isInstrumentGrouped (InstrumentId) const;
     AudioChannelId getInstrumentGroupBus (InstrumentId) const;
     bool isFolderGrouped (FolderId) const;
+    // What a folder holds directly (an ungrouped folder's row labels it): MIDI tracks of their own
+    // (not an instrument's), instruments, audio tracks, buses. Sub-folders and groups don't count
+    struct FolderContents { bool midi = false, instrument = false, audio = false, bus = false; };
+    FolderContents getFolderContents (FolderId) const;
     AudioChannelId getFolderGroupBus (FolderId) const;   // 0: not grouped
     bool isGroupBus (AudioChannelId) const;
 
@@ -734,6 +738,9 @@ private:
     juce::AudioDeviceManager deviceManager;
     juce::AudioPluginFormatManager formatManager;
     juce::KnownPluginList knownPlugins;
+    // A saved plugin as the scan knows it: plugins may report another path than the scan stored
+    // (a VST3 on Linux: the .so inside its bundle, which can't be loaded) - the scanned one wins
+    juce::PluginDescription resolveKnownPlugin (const juce::PluginDescription&) const;
     MidiMonitor midiMonitor;                  // outlives the graph: its routes point at it
     juce::AudioProcessorGraph graph;
     juce::AudioProcessorPlayer player;

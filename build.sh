@@ -43,6 +43,12 @@ fi
 for p in patches/*.patch; do
   [[ -e "$p" ]] || continue
   if ! git -C external/JUCE apply --reverse --check "$PWD/$p" 2>/dev/null; then
+    # An older version of the patch may be applied: restore the files it touches first
+    if ! git -C external/JUCE apply --check "$PWD/$p" 2>/dev/null; then
+      mapfile -t touched < <(git -C external/JUCE apply --numstat "$PWD/$p" | cut -f3)
+      git -C external/JUCE checkout -- "${touched[@]}"
+      echo "Restored JUCE files for re-patching: ${touched[*]}"
+    fi
     git -C external/JUCE apply "$PWD/$p"
     echo "Applied JUCE patch $(basename "$p")"
   fi
@@ -52,4 +58,4 @@ cmake -S . -B "build/$config" -G Ninja -DCMAKE_BUILD_TYPE="$config"
 cmake --build "build/$config"
 
 echo
-echo "Built: $PWD/build/$config/OrchestralDAW_artefacts/$config/Orchestral DAW"
+echo "Built: $PWD/build/$config/OrchestralDAW_artefacts/$config/Daw+"

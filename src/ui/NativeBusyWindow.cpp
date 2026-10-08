@@ -435,6 +435,365 @@ void NativeBusyWindow::hide()
         PostMessageW (impl->hwnd.load(), msgHide, 0, 0);
 }
 
+#elif JUCE_LINUX
+
+// Linux: an X11 window on its own connection to the X server and its own thread (the app's
+// connection is JUCE's, used on the message thread only). The card is drawn with JUCE's software
+// renderer into an image (no message thread needed) and put on the window ~60 times a second.
+// Override-redirect (not managed by the window manager): it follows the app window itself, each
+// frame, and hides while the app is minimised.
+#include <X11/Xlib.h>
+#include <X11/Xutil.h>
+#include <X11/extensions/shape.h>
+
+#include <atomic>
+#include <chrono>
+#include <cmath>
+#include <mutex>
+#include <thread>
+
+struct NativeBusyWindow::Impl
+{
+    std::thread thread;
+    std::atomic<bool> ready { false }, failed { false }, quit { false }, wantShown { false };
+    std::atomic<unsigned long> appWindow { 0 };
+
+    // Shared state (written by the message thread, read by the card thread)
+    std::mutex lock;
+    juce::String title, detail;
+    double progress = -1.0;
+    juce::Rectangle<int> cardRect;
+    float scale = 1.0f;
+
+    // Card thread only
+    Display* display = nullptr;
+    Window window = 0;
+    bool shown = false;
+    juce::Rectangle<int> placed, shaped;
+    int frames = 0;
+    double shownAt = 0.0, lastFrame = 0.0, longestGap = 0.0;
+
+    Impl()
+    {
+        thread = std::thread ([this] { run(); });
+
+        for (int i = 0; i < 400 && ! ready.load() && ! failed.load(); ++i)
+            std::this_thread::sleep_for (std::chrono::milliseconds (5));
+    }
+
+    ~Impl()
+    {
+        quit = true;
+
+        if (thread.joinable())
+            thread.join();
+    }
+
+    static double now()   { return juce::Time::getMillisecondCounterHiRes(); }
+
+    void run()
+    {
+        display = XOpenDisplay (nullptr);
+
+        if (display == nullptr)
+        {
+            failed = true;
+            return;
+        }
+
+        const auto screen = DefaultScreen (display);
+        XSetWindowAttributes attributes {};
+        attributes.override_redirect = True;
+        attributes.background_pixel = 0x23262b;
+        attributes.border_pixel = 0;
+        window = XCreateWindow (display, RootWindow (display, screen), 0, 0, 10, 10, 0, CopyFromParent, InputOutput,
+                                CopyFromParent, CWOverrideRedirect | CWBackPixel | CWBorderPixel, &attributes);
+        XStoreName (display, window, "Busy");
+        XFlush (display);
+        ready = true;
+
+        while (! quit.load())
+        {
+            while (XPending (display) > 0)   // (nothing asked for; keep the queue empty)
+            {
+                XEvent event;
+                XNextEvent (display, &event);
+            }
+
+            if (wantShown.load() != shown)
+                wantShown.load() ? begin() : end();
+
+            if (shown)
+            {
+                place();
+                paint();
+            }
+
+            std::this_thread::sleep_for (std::chrono::milliseconds (16));
+        }
+
+        if (shown)
+            end();
+
+        XDestroyWindow (display, window);
+        XCloseDisplay (display);
+        display = nullptr;
+    }
+
+    void begin()
+    {
+        shown = true;
+        placed = shaped = {};
+        frames = 0;
+        longestGap = 0.0;
+        shownAt = lastFrame = now();
+        place();
+    }
+
+    void end()
+    {
+        shown = false;
+        XUnmapWindow (display, window);
+        XFlush (display);
+
+        if (frames > 0)
+        {
+            const auto seconds = (now() - shownAt) * 0.001;
+            juce::Logger::writeToLog ("Native busy card: " + juce::String (frames) + " frames in " + juce::String (seconds, 1)
+                                      + " s (" + juce::String (frames / juce::jmax (0.001, seconds), 0)
+                                      + " fps), longest gap " + juce::String (juce::roundToInt (longestGap)) + " ms");
+        }
+    }
+
+    // Centred on the app window (where it is now), else on the area given to show(); hidden while
+    // the app window isn't viewable (minimised)
+    void place()
+    {
+        juce::Rectangle<int> area;
+        float s;
+        {
+            std::lock_guard<std::mutex> guard (lock);
+            area = cardRect;
+            s = scale;
+        }
+
+        if (const auto app = (Window) appWindow.load(); app != 0)
+        {
+            XWindowAttributes attributes {};
+
+            if (XGetWindowAttributes (display, app, &attributes) != 0)
+            {
+                if (attributes.map_state != IsViewable)
+                {
+                    if (! placed.isEmpty())
+                        XUnmapWindow (display, window);
+
+                    placed = {};
+                    return;
+                }
+
+                int x = 0, y = 0;
+                Window child;
+                XTranslateCoordinates (display, app, RootWindow (display, DefaultScreen (display)), 0, 0, &x, &y, &child);
+                area = { x, y, attributes.width, attributes.height };
+            }
+        }
+
+        const auto width = (int) std::lround (juce::jmin (480.0f * s, (float) area.getWidth() - 32.0f * s));
+        const auto height = (int) std::lround (130.0f * s);
+        const auto card = area.withSizeKeepingCentre (juce::jmax (40, width), juce::jmax (20, height));
+
+        if (card != placed)
+        {
+            XMoveResizeWindow (display, window, card.getX(), card.getY(), (unsigned) card.getWidth(), (unsigned) card.getHeight());
+
+            if (placed.isEmpty())
+                XMapRaised (display, window);
+            else
+                XRaiseWindow (display, window);
+
+            placed = card;
+        }
+        else
+        {
+            XRaiseWindow (display, window);   // over the app, which may have risen
+        }
+
+        if (card.getWidth() != shaped.getWidth() || card.getHeight() != shaped.getHeight())   // the rounded corners
+        {
+            const auto w = card.getWidth(), h = card.getHeight(), corner = juce::jmax (2, (int) std::lround (16.0f * s));
+            auto mask = XCreatePixmap (display, window, (unsigned) w, (unsigned) h, 1);
+            auto gc = XCreateGC (display, mask, 0, nullptr);
+            XSetForeground (display, gc, 0);
+            XFillRectangle (display, mask, gc, 0, 0, (unsigned) w, (unsigned) h);
+            XSetForeground (display, gc, 1);
+            XFillRectangle (display, mask, gc, corner / 2, 0, (unsigned) (w - corner), (unsigned) h);
+            XFillRectangle (display, mask, gc, 0, corner / 2, (unsigned) w, (unsigned) (h - corner));
+
+            for (auto [x, y] : { std::pair (0, 0), std::pair (w - corner, 0), std::pair (0, h - corner), std::pair (w - corner, h - corner) })
+                XFillArc (display, mask, gc, x, y, (unsigned) corner, (unsigned) corner, 0, 360 * 64);
+
+            XShapeCombineMask (display, window, ShapeBounding, 0, 0, mask, ShapeSet);
+            XFreeGC (display, gc);
+            XFreePixmap (display, mask);
+            shaped = card;
+        }
+    }
+
+    void paint()
+    {
+        if (placed.isEmpty())
+            return;
+
+        const auto t = now();
+        longestGap = juce::jmax (longestGap, t - lastFrame);
+        lastFrame = t;
+        ++frames;
+
+        juce::String titleText, detailText;
+        double progressValue;
+        float s;
+        {
+            std::lock_guard<std::mutex> guard (lock);
+            titleText = title;
+            detailText = detail;
+            progressValue = progress;
+            s = scale;
+        }
+
+        const auto w = placed.getWidth(), h = placed.getHeight();
+        juce::Image image (juce::Image::ARGB, w, h, false, juce::SoftwareImageType());
+        {
+            juce::Graphics g (image);
+            drawCard (g, (float) w, (float) h, s, titleText, detailText, progressValue, t * 0.001);
+        }
+
+        // To the window: 32-bit pixels (B, G, R, A in memory: the usual 24-bit TrueColor layout)
+        const auto screen = DefaultScreen (display);
+
+        if (DefaultDepth (display, screen) < 24)
+            return;
+
+        juce::Image::BitmapData pixels (image, juce::Image::BitmapData::readOnly);
+        std::vector<char> data ((size_t) (w * h * 4));
+
+        for (int y = 0; y < h; ++y)
+            std::memcpy (data.data() + (size_t) (y * w * 4), pixels.getLinePointer (y), (size_t) (w * 4));
+
+        auto* ximage = XCreateImage (display, DefaultVisual (display, screen), (unsigned) DefaultDepth (display, screen), ZPixmap,
+                                     0, data.data(), (unsigned) w, (unsigned) h, 32, w * 4);
+
+        if (ximage == nullptr)
+            return;
+
+        auto gc = DefaultGC (display, screen);
+        XPutImage (display, window, gc, ximage, 0, 0, 0, 0, (unsigned) w, (unsigned) h);
+        ximage->data = nullptr;   // (ours: the vector frees it)
+        XDestroyImage (ximage);
+        XFlush (display);
+    }
+
+    // The card as the Windows one draws it: title, detail, spinner, progress bar (or a sweeping segment)
+    static void drawCard (juce::Graphics& g, float w, float h, float s, const juce::String& titleText,
+                          const juce::String& detailText, double progressValue, double seconds)
+    {
+        const auto bounds = juce::Rectangle<float> (w, h);
+        g.setColour (juce::Colour (0xff23262b));
+        g.fillRect (bounds);
+        g.setColour (juce::Colour (0xff43464d));
+        g.drawRoundedRectangle (bounds.reduced (0.5f), 8.0f * s, 1.0f);
+
+        const auto pad = 22.0f * s;
+        g.setColour (juce::Colours::white);
+        g.setFont (juce::FontOptions (17.0f * s, juce::Font::bold));
+        g.drawText (titleText, juce::Rectangle<float> (pad, pad, w - 2.0f * pad - 30.0f * s, 26.0f * s), juce::Justification::centredLeft, true);
+        g.setColour (juce::Colour (0xffcdcdd2));
+        g.setFont (juce::FontOptions (13.0f * s));
+        g.drawText (detailText, juce::Rectangle<float> (pad, pad + 26.0f * s, w - 2.0f * pad, 24.0f * s), juce::Justification::centredLeft, true);
+
+        {   // Spinner: 10 dots around a circle, the brightness going round
+            const auto cx = w - pad - 10.0f * s, cy = pad + 13.0f * s, radius = 8.0f * s, dot = 1.9f * s;
+            const auto head = std::fmod (seconds * 1.4, 1.0) * 10.0;
+
+            for (int i = 0; i < 10; ++i)
+            {
+                const auto age = std::fmod (head - i + 10.0, 10.0) / 10.0;
+                const auto level = (float) (70.0 + (1.0 - age) * 150.0) / 220.0f;
+                g.setColour (juce::Colour::fromFloatRGBA (level * 70.0f / 255.0f, level * 130.0f / 255.0f, level * 180.0f / 255.0f, 1.0f));
+                const auto angle = (float) i * juce::MathConstants<float>::twoPi / 10.0f;
+                g.fillEllipse (juce::Rectangle<float> (2.0f * dot, 2.0f * dot).withCentre ({ cx + radius * std::sin (angle), cy - radius * std::cos (angle) }));
+            }
+        }
+
+        const auto bar = juce::Rectangle<float> (pad, pad + 62.0f * s, w - 2.0f * pad, 8.0f * s);
+        const auto corner = bar.getHeight() * 0.5f;
+        g.setColour (juce::Colour (0xff15171a));
+        g.fillRoundedRectangle (bar, corner);
+        g.setColour (juce::Colour (0xff4682b4));
+
+        if (progressValue >= 0.0)
+        {
+            const auto filled = bar.withWidth (bar.getWidth() * (float) juce::jlimit (0.0, 1.0, progressValue));
+            g.fillRoundedRectangle (filled, corner);
+            const auto shimmerX = filled.getX() + filled.getWidth() * (float) std::fmod (seconds * 0.8, 1.0);
+            const auto shimmer = filled.getIntersection (juce::Rectangle<float> (20.0f * s, bar.getHeight()).withCentre ({ shimmerX, bar.getCentreY() }));
+
+            if (! shimmer.isEmpty())
+            {
+                g.setColour (juce::Colour (0xff82afd7));
+                g.fillRoundedRectangle (shimmer, corner);
+            }
+        }
+        else
+        {
+            const auto phase = 0.5 - 0.5 * std::cos (seconds * juce::MathConstants<double>::pi);
+            const auto segment = bar.getWidth() / 4.0f;
+            g.fillRoundedRectangle (bar.withWidth (segment).withX (bar.getX() + (bar.getWidth() - segment) * (float) phase), corner);
+        }
+    }
+};
+
+//==============================================================================
+NativeBusyWindow::NativeBusyWindow() : impl (std::make_unique<Impl>()) {}
+NativeBusyWindow::~NativeBusyWindow() = default;
+
+bool NativeBusyWindow::isAvailable() const noexcept
+{
+    return impl != nullptr && impl->ready.load() && ! impl->failed.load();
+}
+
+void NativeBusyWindow::show (juce::Rectangle<int> screenArea, float scale, void* appWindow)
+{
+    if (! isAvailable())
+        return;
+
+    {
+        std::lock_guard<std::mutex> guard (impl->lock);
+        impl->scale = scale;
+        impl->cardRect = screenArea;
+    }
+
+    impl->appWindow = (unsigned long) (juce::pointer_sized_uint) appWindow;   // (JUCE's peer handle on Linux: the X Window id)
+    impl->wantShown = true;
+}
+
+void NativeBusyWindow::update (const juce::String& title, const juce::String& detail, double progress)
+{
+    if (impl == nullptr)
+        return;
+
+    std::lock_guard<std::mutex> guard (impl->lock);
+    impl->title = title;
+    impl->detail = detail;
+    impl->progress = progress;
+}
+
+void NativeBusyWindow::hide()
+{
+    if (impl != nullptr)
+        impl->wantShown = false;
+}
+
 #else   // other platforms: not available; BusyOverlay draws the card itself
 
 struct NativeBusyWindow::Impl {};

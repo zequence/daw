@@ -237,6 +237,16 @@ juce::File AudioEngine::getScannerExecutable()
               #endif
 }
 
+juce::PluginDescription AudioEngine::resolveKnownPlugin (const juce::PluginDescription& saved) const
+{
+    for (const auto& type : knownPlugins.getTypes())
+        if (type.pluginFormatName == saved.pluginFormatName && type.name == saved.name
+            && (type.uniqueId == saved.uniqueId || type.deprecatedUid == saved.deprecatedUid))
+            return type;
+
+    return saved;
+}
+
 juce::Array<juce::PluginDescription> AudioEngine::getInstrumentTypes() const
 {
     juce::Array<juce::PluginDescription> result;
@@ -1147,6 +1157,8 @@ void AudioEngine::restoreInserts (AudioChannelId channelId, const juce::XmlEleme
             return;
         }
 
+        description = resolveKnownPlugin (description);
+
         const auto slot = element->getIntAttribute ("slot");
         addInsert (channelId, slot, description, [this, channelId, slot, element, next, index] (bool ok, const juce::String&)
         {
@@ -1358,6 +1370,37 @@ void AudioEngine::setFolderGrouped (FolderId id, bool grouped)
 }
 
 bool AudioEngine::isFolderGrouped (FolderId id) const   { return getFolderGroupBus (id) != 0; }
+
+AudioEngine::FolderContents AudioEngine::getFolderContents (FolderId id) const
+{
+    FolderContents contents;
+
+    if (! folderExists (id))
+        return contents;
+
+    const auto midiDomain = isFolderMidiDomain (id);
+
+    for (auto& child : getChildrenOf (midiDomain, id))
+    {
+        if (child.isFolder)
+            continue;
+
+        if (child.audioTrack || ! midiDomain)   // an audio channel: a bus (not a group's), else audio
+        {
+            if (isGroupBus (child.id))
+                continue;
+
+            if (isBus (child.id)) contents.bus = true;
+            else                  contents.audio = true;
+        }
+        else if (getTrackInstrument (child.id) != 0)   // an instrument's tracks are the instrument
+            contents.instrument = true;
+        else
+            contents.midi = true;
+    }
+
+    return contents;
+}
 
 int AudioEngine::getInstrumentOutputCount (InstrumentId id) const
 {
@@ -3729,6 +3772,8 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
             return;
         }
 
+        description = resolveKnownPlugin (description);
+
         addInstrument (description,
             [this, state, step, element, savedName] (InstrumentId newId, const juce::String& error)
             {
@@ -3740,6 +3785,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
                 }
 
                 state->idMap[element->getIntAttribute ("id")] = newId;
+                setInstrumentName (newId, element->getStringAttribute ("name"));   // the user's name, not the plugin's
                 setInstrumentExpanded (newId, element->getBoolAttribute ("expanded", false));
 
                 if (auto bus = state->busIdMap.find (element->getIntAttribute ("groupBus")); bus != state->busIdMap.end())
