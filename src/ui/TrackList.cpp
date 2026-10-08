@@ -836,6 +836,14 @@ public:
             auto& eng = engine;
             const auto safe = juce::Component::SafePointer<AudioRow> (this);
             juce::PopupMenu menu;
+            menu.addSubMenu ("Color", colours::buildMenu (eng.getBusColour (id),
+                                                          [&eng, id, list = juce::Component::SafePointer<TrackList> (&owner)] (juce::String hex)
+            {
+                eng.setBusColour (id, hex);
+
+                if (list != nullptr)
+                    list->refreshSoon();
+            }));
             menu.addItem ("Rename", [safe]
             {
                 if (safe != nullptr)

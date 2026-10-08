@@ -1491,7 +1491,10 @@ juce::String AudioEngine::getChannelTagColour (AudioChannelId id) const
         if (bus->second.folder != 0)
             return getFolderColour (bus->second.folder);
 
-        return getInstrumentColour (bus->second.input);   // an instrument's group (or "" for a plain bus)
+        if (bus->second.input != 0)
+            return getInstrumentColour (bus->second.input);   // an instrument's group
+
+        return bus->second.colour;   // a plain bus: its own
     }
 
     if (isAudioTrack (id))
@@ -1519,6 +1522,23 @@ juce::String AudioEngine::getAudioTrackColour (AudioChannelId id) const
 {
     const auto it = audioChannels.find (id);
     return it != audioChannels.end() && it->second.audioTrack ? it->second.colour : juce::String();
+}
+
+void AudioEngine::setBusColour (AudioChannelId id, const juce::String& hex)
+{
+    const auto it = buses.find (id);
+
+    if (it == buses.end() || it->second.colour == hex)
+        return;
+
+    it->second.colour = hex;
+    emitChannelChanged (id, "colour");
+}
+
+juce::String AudioEngine::getBusColour (AudioChannelId id) const
+{
+    const auto it = buses.find (id);
+    return it != buses.end() ? it->second.colour : juce::String();
 }
 
 bool AudioEngine::isGroupBus (AudioChannelId id) const
@@ -3426,6 +3446,7 @@ bool AudioEngine::saveProject (const juce::File& file)
         auto* b = root.createNewChildElement ("BUS");
         b->setAttribute ("id", id);
         b->setAttribute ("name", bus.name);
+        b->setAttribute ("colour", bus.colour);
 
         if (bus.folder != 0)
             b->setAttribute ("groupOf", bus.folder);   // a folder's group bus
@@ -3705,6 +3726,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
     {
         const auto id = addBus (b->getStringAttribute ("name"));
         busIdMap[b->getIntAttribute ("id")] = id;
+        buses[id].colour = b->getStringAttribute ("colour");
 
         if (b->getChildByName ("INSERT") != nullptr)
             pendingInserts.push_back ({ id, b });

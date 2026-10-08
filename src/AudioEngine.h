@@ -475,6 +475,8 @@ public:
     bool isAudioTrackStereo (AudioChannelId) const;
     void setAudioTrackColour (AudioChannelId, const juce::String& hex);   // its tag's colour ("" = none)
     juce::String getAudioTrackColour (AudioChannelId) const;
+    void setBusColour (AudioChannelId, const juce::String& hex);   // a plain bus's tag colour ("" = none; a group's is its folder's or instrument's)
+    juce::String getBusColour (AudioChannelId) const;
 
     // Folder groups: a grouped folder sums the audio inside it on a bus of its own (named as the folder,
     // following its renames). The engine keeps that routing as things move: every audio channel inside
