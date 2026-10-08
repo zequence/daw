@@ -592,7 +592,18 @@ public:
             resized();
             repaint();
         }
+
+        // Its tag: drawn again as soon as its colour or name changes (wherever it was changed)
+        if (const auto tag = engine.getInstrumentColour (instrumentId) + "|" + engine.getInstrumentName (instrumentId)
+                               + "|" + engine.getChannelTagColour (bus);
+            tag != lastTag)
+        {
+            lastTag = tag;
+            repaint();
+        }
     }
+
+    juce::String lastTag;
 
     void resized() override
     {
