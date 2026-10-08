@@ -2049,7 +2049,7 @@ void CommandDispatcher::registerCommands()
              if (plugin == nullptr)
                  return respond (fail ("no instrument with id " + juce::String (id) + " (see instrument.list)"));
 
-             const auto description = plugin->getPluginDescription();
+             const auto description = engine.getInstrumentDescription (id);
 
              auto o = object();
              o->setProperty ("name", description.name);
@@ -2423,9 +2423,9 @@ void CommandDispatcher::registerCommands()
              if (plugin == nullptr)
                  return respond (fail ("no instrument with id " + juce::String (id) + " (see instrument.list)"));
 
-             if (! plugin->getPluginDescription().name.containsIgnoreCase ("Vienna Ensemble"))
+             if (! engine.getInstrumentDescription (id).name.containsIgnoreCase ("Vienna Ensemble"))
                  return respond (fail ("instrument " + juce::String (id) + " is '"
-                                       + plugin->getPluginDescription().name
+                                       + engine.getInstrumentDescription (id).name
                                        + "', not a Vienna Ensemble Pro plugin"));
 
              const auto instance = params.getProperty ("instance", {}).toString();
@@ -3337,9 +3337,9 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
         {
             if (name == instance.name)
             {
-                if (auto* plugin = engine.getInstrumentPlugin (instrumentId))
+                if (engine.getInstrumentPlugin (instrumentId) != nullptr)
                 {
-                    if (plugin->getPluginDescription().name.containsIgnoreCase ("Vienna Ensemble"))
+                    if (engine.getInstrumentDescription (instrumentId).name.containsIgnoreCase ("Vienna Ensemble"))
                     {
                         finishInstance (index, instrumentId);
                         return;

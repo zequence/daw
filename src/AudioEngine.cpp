@@ -237,6 +237,12 @@ juce::File AudioEngine::getScannerExecutable()
               #endif
 }
 
+juce::PluginDescription AudioEngine::getInstrumentDescription (InstrumentId id) const
+{
+    const auto* instrument = findInstrument (id);
+    return instrument != nullptr ? instrument->description : juce::PluginDescription();
+}
+
 juce::PluginDescription AudioEngine::resolveKnownPlugin (const juce::PluginDescription& saved) const
 {
     for (const auto& type : knownPlugins.getTypes())
@@ -388,7 +394,7 @@ void AudioEngine::addInstrument (const juce::PluginDescription& description, Ins
     busyStatus.begin ("Loading " + description.name);
 
     formatManager.createPluginInstanceAsync (description, sampleRate, blockSize,
-        [this, alive, callback, startMs, name = description.name]
+        [this, alive, callback, startMs, name = description.name, description]
         (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error)
         {
             if (alive.expired())
@@ -416,6 +422,7 @@ void AudioEngine::addInstrument (const juce::PluginDescription& description, Ins
 
             Instrument instrument;
             instrument.name = name;
+            instrument.description = description;
             // Outside a batch the plugin is added SYNC: it gets prepared right away,
             // before callers apply saved state - a plugin prepared after its state
             // was restored can lose it (seen: a reloaded parameter reading 0)
@@ -981,7 +988,7 @@ void AudioEngine::addInsert (AudioChannelId channelId, int slot, const juce::Plu
     juce::Logger::writeToLog ("Loading insert: " + description.name + " (" + description.fileOrIdentifier + ")");
 
     formatManager.createPluginInstanceAsync (description, sampleRate, blockSize,
-        [this, alive, channelId, slot, callback, name = description.name]
+        [this, alive, channelId, slot, callback, name = description.name, description]
         (std::unique_ptr<juce::AudioPluginInstance> instance, const juce::String& error)
         {
             if (alive.expired())
@@ -1004,6 +1011,7 @@ void AudioEngine::addInsert (AudioChannelId channelId, int slot, const juce::Plu
 
             Insert insert;
             insert.name = name;
+            insert.description = description;
             insert.node = graph.addNode (std::move (instance), std::nullopt, updateKind())->nodeID;
             it->second.inserts[slot] = insert;
             rewireChannelInputs (channelId);
@@ -3423,7 +3431,7 @@ bool AudioEngine::saveProject (const juce::File& file)
 
         if (auto* plugin = getInstrumentPlugin (id))
         {
-            e->addChildElement (plugin->getPluginDescription().createXml().release());
+            e->addChildElement (instrument.description.createXml().release());
 
             juce::MemoryBlock state;
             juce::Logger::writeToLog ("Saving the state of " + instrument.name);   // (a plugin that crashes here shows in the log)
@@ -3491,7 +3499,7 @@ bool AudioEngine::saveProject (const juce::File& file)
 
                     if (auto* plugin = getInsertPlugin (instrument.audioChannel, slot))
                     {
-                        i->addChildElement (plugin->getPluginDescription().createXml().release());
+                        i->addChildElement (insert.description.createXml().release());
                         juce::MemoryBlock pluginState;
                         juce::Logger::writeToLog ("Saving the state of insert " + insert.name);
                         plugin->getStateInformation (pluginState);

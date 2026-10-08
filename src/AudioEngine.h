@@ -62,6 +62,7 @@ public:
     std::vector<std::pair<InstrumentId, juce::String>> getInstruments() const;
     juce::AudioPluginInstance* getInstrumentPlugin (InstrumentId) const;
     juce::String getInstrumentName (InstrumentId) const;
+    juce::PluginDescription getInstrumentDescription (InstrumentId) const;   // as it was loaded (not asked of the plugin)
     void setInstrumentName (InstrumentId, const juce::String&);   // (its audio outputs keep their own names)
     int getNumLoadedInstruments() const;
 
@@ -606,6 +607,9 @@ private:
         bool expanded = false;                      // its folder in the MIDI tree (collapsed by default)
         AudioChannelId groupBus = 0;                // grouped: the bus its audio goes to
         juce::String colour;                        // its folder's ("#rrggbb", "" = none)
+        // The plugin as it was loaded (what a project saves): never asked of the plugin again - a
+        // bridged plugin (yabridge) may throw there, and a VST3 on Linux reports its .so, not its bundle
+        juce::PluginDescription description;
     };
 
     struct Insert
@@ -613,6 +617,7 @@ private:
         NodeID node;
         juce::String name;
         bool bypassed = false;
+        juce::PluginDescription description;        // (as the instrument's)
     };
 
     struct AudioChannel

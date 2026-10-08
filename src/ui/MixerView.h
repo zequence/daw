@@ -286,7 +286,7 @@ private:
     // The tallest a default mixer's strip must be: the sections, then the faders at their smallest
     int minimumModernHeight() const
     {
-        return 4 + 16 + 4 + insertsHeight + dividerGap + emptyHeight + dividerGap + 62 + minFaderHeight + 16 + 4 + 20 + 4 + 36 + 4;
+        return 4 + 36 + 4 + insertsHeight + dividerGap + emptyHeight + dividerGap + 62 + minFaderHeight + 16 + 4 + 20 + 2 + 16 + 4;
     }
 
     // The Aux buses (the console only) and the master
@@ -1024,7 +1024,7 @@ private:
             g.setColour (juce::Colours::white.withAlpha (isHighlighted ? 0.16f : 0.06f));
             g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
 
-            if (backgroundStripe.isNotEmpty())   // a group's own strip and the channels it sums: its colour along the top
+            if (backgroundStripe.isNotEmpty() && ! owner.engine.isGroupBus (channelId))   // the channels a group sums: its colour along the top
             {
                 g.setColour (AudioEngine::colourFromHex (backgroundStripe, juce::Colour (0xff7d9cc0)));
                 g.fillRoundedRectangle (juce::Rectangle<float> (1.0f, 0.0f, bounds.getWidth() - 2.0f, 3.0f), 1.5f);
@@ -1038,10 +1038,12 @@ private:
             // A group's own strip: the area behind its tag (at the foot) in the group's colour, as its row in the track view
             if (owner.engine.isGroupBus (channelId) && backgroundStripe.isNotEmpty())
             {
-                const auto tag = juce::Rectangle<float> (1.0f, (float) name.getY() - 6.0f, bounds.getWidth() - 2.0f,
-                                                         bounds.getBottom() - 1.0f - ((float) name.getY() - 6.0f));
+                // Inside the strip's edge, its top corners following the strip's; square where it ends below the tag
+                const auto tag = juce::Rectangle<float> (1.0f, 1.0f, bounds.getWidth() - 2.0f, (float) name.getBottom() + 3.0f);
+                juce::Path band;
+                band.addRoundedRectangle (tag.getX(), tag.getY(), tag.getWidth(), tag.getHeight(), 3.0f, 3.0f, true, true, false, false);
                 g.setColour (AudioEngine::colourFromHex (backgroundStripe, juce::Colour (0xff7d9cc0)));
-                g.fillRoundedRectangle (tag, 3.0f);
+                g.fillPath (band);
             }
 
             if (! emptyArea.isEmpty())
@@ -1199,20 +1201,6 @@ private:
             auto area = getLocalBounds().reduced (4);
             topName.setVisible (owner.modern);
 
-            if (owner.modern)   // the default mixer: a small name at the top, the tape at the foot (layoutModern)
-            {
-                auto top = area.removeFromTop (topNameHeight);
-                expandButton.setVisible (owner.engine.isGroupBus (channelId));
-
-                if (expandButton.isVisible())
-                    expandButton.setBounds (top.removeFromRight (18).withSizeKeepingCentre (16, 16));
-
-                topName.setBounds (top);
-                area.removeFromTop (4);
-                layoutModern (area);
-                return;
-            }
-
             {
                 auto top = area.removeFromTop (36);   // the tape: its writing as large as the track view's
 
@@ -1229,6 +1217,12 @@ private:
                 name.setBounds (top);
             }
             area.removeFromTop (4);
+
+            if (owner.modern)   // the default mixer: the tape at the top (as above), its name small at the foot
+            {
+                layoutModern (area);
+                return;
+            }
 
             if (kind == Kind::master)
             {
@@ -1442,8 +1436,8 @@ private:
             dividerY[1] = area.getY();
             area.removeFromTop (dividerGap);
 
-            name.setBounds (area.removeFromBottom (36));   // the tape, at the foot
-            area.removeFromBottom (4);
+            topName.setBounds (area.removeFromBottom (topNameHeight));   // the name again, small, at the foot
+            area.removeFromBottom (2);
             output.setBounds (area.removeFromBottom (20));
             area.removeFromBottom (4);
             level.setBounds (area.removeFromBottom (16));
@@ -1467,7 +1461,7 @@ private:
         }
 
         juce::Component insertsClip;   // the default mixer: the inserts' box
-        juce::Label topName;           // the default mixer: the name, small, at the top (the tape is at the foot)
+        juce::Label topName;           // the default mixer: the name again, small, at the foot (the tape is at the top)
         static constexpr int topNameHeight = 16;
 
         bool inRack = false;   // the strip beside the rack
