@@ -459,6 +459,8 @@ public:
     // names with get/setAudioChannelName) summing what is routed to it, out to the master. Ids share
     // the audio channels' numbering, so an output target is one id: 0 = the master, else a bus.
     AudioChannelId addBus (const juce::String& name = {});
+    // Before a channel with effects goes (a bus, an audio track): the UI closes the effects' windows
+    std::function<void (AudioChannelId)> onBeforeChannelGoes;
     void removeBus (AudioChannelId);                 // what was routed to it goes to the master
     std::vector<AudioChannelId> getBusIds() const;   // in the order they were made
     bool isBus (AudioChannelId) const;
@@ -623,6 +625,7 @@ private:
     struct AudioChannel
     {
         NodeID node;
+        NodeID inputNode;                           // a bus: what is routed to it arrives here, then its inserts
         std::map<int, Insert> inserts;              // slot -> effect, in series before the strip
         AudioChannelId output = 0;                  // 0 = the master, else a bus
         bool audioTrack = false;                    // an audio track's (no instrument): its own row in the tree
@@ -772,6 +775,8 @@ private:
     void emitChannelChanged (AudioChannelId, const juce::String& change);
     void rewireChannelInputs (AudioChannelId);   // source -> inserts (slot order) -> strip
     std::map<AudioChannelId, AudioChannel> buses;   // (their own map: they aren't sidebar channels)
+    std::map<AudioChannelId, AudioChannel>& channelMapFor (AudioChannelId);   // a bus's map, else the channels'
+    const std::map<AudioChannelId, AudioChannel>& channelMapFor (AudioChannelId) const;
     void routeStrip (NodeID node, AudioChannelId target);   // a strip's output to the master or a bus
     void syncFolderGroups();                                 // see setFolderGrouped (after each change)
     bool syncingGroups = false;

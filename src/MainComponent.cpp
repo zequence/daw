@@ -398,6 +398,11 @@ MainComponent::MainComponent (AudioEngine& e, CommandDispatcher& dispatcher, Mcp
     };
 
     instrumentsView.onOpenPluginGui = [this] (auto id) { openPluginWindow (id); };
+    engine.onBeforeChannelGoes = [this] (auto channel)
+    {
+        closeInsertWindows (channel, -1);
+        mixerView.destroyRack();   // (its editors go before their plugins)
+    };
     commandDispatcher.onBeforeInstrumentRemove = [this] (int id)
     {
         pluginWindows.erase (id);

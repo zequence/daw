@@ -26,8 +26,9 @@ if [[ -z "${YABRIDGE_DEBUG_FILE:-}" ]]; then
   mkdir -p "$logs"
   export YABRIDGE_DEBUG_FILE="$logs/yabridge.log"
 fi
-# (for now: every call between the app and a bridged plugin, but not audio - tracking down the crash
-# in yabridge on saving; YABRIDGE_DEBUG_LEVEL=0 for the short log)
-export YABRIDGE_DEBUG_LEVEL="${YABRIDGE_DEBUG_LEVEL:-1}"
+# yabridge's watchdog (the Wine side checks that the app is still running) decides here, minutes in,
+# that the app has died - it then shuts the bridge down, and the app's next call to the plugin (saving
+# its state) ends in a crash inside yabridge. Off (the Wine side then may outlive a real crash)
+export YABRIDGE_NO_WATCHDOG="${YABRIDGE_NO_WATCHDOG:-1}"
 
 exec "build/$config/OrchestralDAW_artefacts/$config/Daw+"

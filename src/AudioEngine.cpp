@@ -973,9 +973,19 @@ juce::Array<juce::PluginDescription> AudioEngine::getEffectTypes() const
     return effects;
 }
 
+std::map<AudioEngine::AudioChannelId, AudioEngine::AudioChannel>& AudioEngine::channelMapFor (AudioChannelId id)
+{
+    return buses.count (id) > 0 ? buses : audioChannels;
+}
+
+const std::map<AudioEngine::AudioChannelId, AudioEngine::AudioChannel>& AudioEngine::channelMapFor (AudioChannelId id) const
+{
+    return buses.count (id) > 0 ? buses : audioChannels;
+}
+
 void AudioEngine::addInsert (AudioChannelId channelId, int slot, const juce::PluginDescription& description, InsertCallback callback)
 {
-    if (audioChannels.find (channelId) == audioChannels.end() || slot < 0 || slot >= insertSlots)
+    if (channelMapFor (channelId).find (channelId) == channelMapFor (channelId).end() || slot < 0 || slot >= insertSlots)
     {
         if (callback) callback (false, "No such channel or slot");
         return;
@@ -994,9 +1004,9 @@ void AudioEngine::addInsert (AudioChannelId channelId, int slot, const juce::Plu
             if (alive.expired())
                 return;
 
-            auto it = audioChannels.find (channelId);
+            auto it = channelMapFor (channelId).find (channelId);
 
-            if (instance == nullptr || it == audioChannels.end())
+            if (instance == nullptr || it == channelMapFor (channelId).end())
             {
                 juce::Logger::writeToLog ("FAILED to load insert: " + name + (error.isNotEmpty() ? " - " + error : juce::String()));
                 if (callback) callback (false, error.isNotEmpty() ? error : juce::String ("The channel is gone"));
@@ -1024,7 +1034,7 @@ void AudioEngine::addInsert (AudioChannelId channelId, int slot, const juce::Plu
 
 void AudioEngine::removeInsert (AudioChannelId channelId, int slot)
 {
-    if (auto it = audioChannels.find (channelId); it != audioChannels.end())
+    if (auto it = channelMapFor (channelId).find (channelId); it != channelMapFor (channelId).end())
         if (auto insert = it->second.inserts.find (slot); insert != it->second.inserts.end())
         {
             graph.removeNode (insert->second.node, updateKind());
@@ -1036,7 +1046,7 @@ void AudioEngine::removeInsert (AudioChannelId channelId, int slot)
 
 void AudioEngine::setInsertBypassed (AudioChannelId channelId, int slot, bool bypassed)
 {
-    if (auto it = audioChannels.find (channelId); it != audioChannels.end())
+    if (auto it = channelMapFor (channelId).find (channelId); it != channelMapFor (channelId).end())
         if (auto insert = it->second.inserts.find (slot); insert != it->second.inserts.end())
         {
             insert->second.bypassed = bypassed;
@@ -1047,7 +1057,7 @@ void AudioEngine::setInsertBypassed (AudioChannelId channelId, int slot, bool by
 
 void AudioEngine::setInsertsEnabled (AudioChannelId channelId, bool enabled)
 {
-    if (auto it = audioChannels.find (channelId); it != audioChannels.end() && it->second.insertsOn != enabled)
+    if (auto it = channelMapFor (channelId).find (channelId); it != channelMapFor (channelId).end() && it->second.insertsOn != enabled)
     {
         it->second.insertsOn = enabled;
         applyInsertBypass (channelId);
@@ -1057,13 +1067,13 @@ void AudioEngine::setInsertsEnabled (AudioChannelId channelId, bool enabled)
 
 bool AudioEngine::areInsertsEnabled (AudioChannelId channelId) const
 {
-    const auto it = audioChannels.find (channelId);
-    return it == audioChannels.end() || it->second.insertsOn;
+    const auto it = channelMapFor (channelId).find (channelId);
+    return it == channelMapFor (channelId).end() || it->second.insertsOn;
 }
 
 void AudioEngine::applyInsertBypass (AudioChannelId channelId)
 {
-    if (auto it = audioChannels.find (channelId); it != audioChannels.end())
+    if (auto it = channelMapFor (channelId).find (channelId); it != channelMapFor (channelId).end())
         for (auto& [slot, insert] : it->second.inserts)
             if (auto* node = graph.getNodeForId (insert.node))
                 node->setBypassed (insert.bypassed || ! it->second.insertsOn);
@@ -1073,7 +1083,7 @@ std::vector<AudioEngine::InsertInfo> AudioEngine::getInserts (AudioChannelId cha
 {
     std::vector<InsertInfo> result;
 
-    if (auto it = audioChannels.find (channelId); it != audioChannels.end())
+    if (auto it = channelMapFor (channelId).find (channelId); it != channelMapFor (channelId).end())
         for (auto& [slot, insert] : it->second.inserts)
             result.push_back ({ slot, insert.name, insert.bypassed });
 
@@ -1082,7 +1092,7 @@ std::vector<AudioEngine::InsertInfo> AudioEngine::getInserts (AudioChannelId cha
 
 juce::AudioPluginInstance* AudioEngine::getInsertPlugin (AudioChannelId channelId, int slot) const
 {
-    if (auto it = audioChannels.find (channelId); it != audioChannels.end())
+    if (auto it = channelMapFor (channelId).find (channelId); it != channelMapFor (channelId).end())
         if (auto insert = it->second.inserts.find (slot); insert != it->second.inserts.end())
             if (auto* node = graph.getNodeForId (insert->second.node))
                 return dynamic_cast<juce::AudioPluginInstance*> (node->getProcessor());
@@ -1094,14 +1104,16 @@ juce::AudioPluginInstance* AudioEngine::getInsertPlugin (AudioChannelId channelI
 // audio connections out of the instrument and the inserts are made afresh (MIDI ones stay).
 void AudioEngine::rewireChannelInputs (AudioChannelId channelId)
 {
-    auto it = audioChannels.find (channelId);
+    auto it = channelMapFor (channelId).find (channelId);
 
-    if (it == audioChannels.end())
+    if (it == channelMapFor (channelId).end())
         return;
 
     std::vector<NodeID> chain;
 
-    if (auto* instrument = findInstrument (it->second.input))
+    if (it->second.inputNode != NodeID())   // a bus: what is routed to it comes in here
+        chain.push_back (it->second.inputNode);
+    else if (auto* instrument = findInstrument (it->second.input))
         chain.push_back (instrument->pluginNode);
 
     for (auto& [slot, insert] : it->second.inserts)
@@ -1197,6 +1209,7 @@ AudioEngine::AudioChannelId AudioEngine::addBus (const juce::String& name)
 {
     AudioChannel bus;
     bus.node = graph.addNode (std::make_unique<AudioChannelProcessor>(), std::nullopt, updateKind())->nodeID;
+    bus.inputNode = graph.addNode (std::make_unique<PassThroughProcessor>(), std::nullopt, updateKind())->nodeID;
     bus.name = name.trim().isNotEmpty() ? name.trim() : "Bus " + juce::String ((int) buses.size() + 1);
     bus.named = true;
     bus.position = (int) buses.size();
@@ -1204,6 +1217,7 @@ AudioEngine::AudioChannelId AudioEngine::addBus (const juce::String& name)
 
     const auto id = nextAudioChannelId++;
     buses[id] = bus;
+    rewireChannelInputs (id);   // its input straight to its strip (no inserts yet)
 
     auto data = juce::DynamicObject::Ptr (new juce::DynamicObject());
     data->setProperty ("id", id);
@@ -1235,6 +1249,13 @@ void AudioEngine::removeBus (AudioChannelId id)
         if (instrument.groupBus == id)
             instrument.groupBus = 0;
 
+    if (onBeforeChannelGoes && ! it->second.inserts.empty())
+        onBeforeChannelGoes (id);   // its effects' windows close before the effects go
+
+    for (auto& [slot, insert] : it->second.inserts)
+        graph.removeNode (insert.node, updateKind());
+
+    graph.removeNode (it->second.inputNode, updateKind());
     graph.removeNode (it->second.node, updateKind());
     buses.erase (it);
 
@@ -1297,6 +1318,9 @@ void AudioEngine::removeAudioTrack (AudioChannelId id)
 
     if (it == audioChannels.end() || ! it->second.audioTrack)
         return;
+
+    if (onBeforeChannelGoes && ! it->second.inserts.empty())
+        onBeforeChannelGoes (id);   // its effects' windows close before the effects go
 
     for (auto& [slot, insert] : it->second.inserts)
         graph.removeNode (insert.node, updateKind());
@@ -1576,12 +1600,15 @@ void AudioEngine::routeStrip (NodeID node, AudioChannelId target)
     auto targetNode = masterNode;
 
     if (auto it = buses.find (target); it != buses.end())
-        targetNode = it->second.node;
+        targetNode = it->second.inputNode;   // through its inserts to its strip
 
     std::set<NodeID> outputs { masterNode };
 
     for (auto& [id, bus] : buses)
+    {
         outputs.insert (bus.node);
+        outputs.insert (bus.inputNode);
+    }
 
     for (auto& connection : graph.getConnections())
         if (connection.source.nodeID == node && outputs.count (connection.destination.nodeID) > 0)
@@ -3334,6 +3361,31 @@ juce::int64 AudioEngine::getLoopEndTicks() const
 //==============================================================================
 bool AudioEngine::saveProject (const juce::File& file)
 {
+    // A channel's inserts (an instrument's channel, an audio track, a bus): each effect, its plugin, its state
+    const auto saveInserts = [this] (juce::XmlElement& parent, AudioChannelId channelId, const AudioChannel& channel)
+    {
+        parent.setAttribute ("insertsOn", channel.insertsOn);
+
+        for (auto& [slot, insert] : channel.inserts)
+        {
+            auto* i = parent.createNewChildElement ("INSERT");
+            i->setAttribute ("slot", slot);
+            i->setAttribute ("name", insert.name);
+            i->setAttribute ("bypassed", insert.bypassed);
+
+            if (auto* plugin = getInsertPlugin (channelId, slot))
+            {
+                i->addChildElement (insert.description.createXml().release());
+                juce::MemoryBlock pluginState;
+                juce::Logger::writeToLog ("Saving the state of insert " + insert.name);
+                plugin->getStateInformation (pluginState);
+
+                if (pluginState.getSize() > 0)
+                    i->createNewChildElement ("STATE")->addTextElement (pluginState.toBase64Encoding());
+            }
+        }
+    };
+
     juce::XmlElement root ("ORCHESTRAL_DAW_PROJECT");
     root.setAttribute ("version", 1);
     root.addChildElement (masterTempoMap->toXml().release());
@@ -3388,6 +3440,8 @@ bool AudioEngine::saveProject (const juce::File& file)
                 if (const auto value = processor->getStrip().get (param); value != AnalogStrip::info (param).initial)
                     b->setAttribute (AnalogStrip::info (param).name, value);
         }
+
+        saveInserts (*b, id, bus);
     }
 
     for (auto& [id, channel] : audioChannels)
@@ -3416,6 +3470,8 @@ bool AudioEngine::saveProject (const juce::File& file)
                 if (const auto value = processor->getStrip().get (param); value != AnalogStrip::info (param).initial)
                     a->setAttribute (AnalogStrip::info (param).name, value);
         }
+
+        saveInserts (*a, id, channel);
     }
 
     for (auto& [id, instrument] : instruments)
@@ -3482,7 +3538,6 @@ bool AudioEngine::saveProject (const juce::File& file)
             {
                 a->setAttribute ("position", it->second.position);
                 a->setAttribute ("soloed", it->second.soloed);
-                a->setAttribute ("insertsOn", it->second.insertsOn);
 
                 if (it->second.output != 0)
                     a->setAttribute ("output", it->second.output);
@@ -3490,24 +3545,7 @@ bool AudioEngine::saveProject (const juce::File& file)
                 if (it->second.named)
                     a->setAttribute ("name", it->second.name);
 
-                for (auto& [slot, insert] : it->second.inserts)
-                {
-                    auto* i = a->createNewChildElement ("INSERT");
-                    i->setAttribute ("slot", slot);
-                    i->setAttribute ("name", insert.name);
-                    i->setAttribute ("bypassed", insert.bypassed);
-
-                    if (auto* plugin = getInsertPlugin (instrument.audioChannel, slot))
-                    {
-                        i->addChildElement (insert.description.createXml().release());
-                        juce::MemoryBlock pluginState;
-                        juce::Logger::writeToLog ("Saving the state of insert " + insert.name);
-                        plugin->getStateInformation (pluginState);
-
-                        if (pluginState.getSize() > 0)
-                            i->createNewChildElement ("STATE")->addTextElement (pluginState.toBase64Encoding());
-                    }
-                }
+                saveInserts (*a, instrument.audioChannel, it->second);
             }
         }
     }
@@ -3661,10 +3699,15 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
     // Buses: made now (they have no plugins), so channels can be routed to them as they load
     std::map<int, AudioChannelId> busIdMap;
 
+    std::vector<std::pair<AudioChannelId, const juce::XmlElement*>> pendingInserts;   // restored after the instruments
+
     for (auto* b : xml->getChildWithTagNameIterator ("BUS"))
     {
         const auto id = addBus (b->getStringAttribute ("name"));
         busIdMap[b->getIntAttribute ("id")] = id;
+
+        if (b->getChildByName ("INSERT") != nullptr)
+            pendingInserts.push_back ({ id, b });
 
         if (auto folder = folderIdMap.find (b->getIntAttribute ("groupOf")); folder != folderIdMap.end())
         {
@@ -3689,6 +3732,9 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
         const auto folder = folderIdMap.count (a->getIntAttribute ("folder")) > 0 ? folderIdMap[a->getIntAttribute ("folder")] : 0;
         const auto id = addAudioTrack (a->getStringAttribute ("name"), a->getBoolAttribute ("stereo", true), folder);
         audioChannels[id].firstInput = a->getIntAttribute ("firstInput");
+
+        if (a->getChildByName ("INSERT") != nullptr)
+            pendingInserts.push_back ({ id, a });
         audioChannels[id].colour = a->getStringAttribute ("colour");
 
         if (a->hasAttribute ("position"))
@@ -3716,6 +3762,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
     {
         std::unique_ptr<juce::XmlElement> xml;
         std::map<int, AudioChannelId> busIdMap;
+        std::vector<std::pair<AudioChannelId, const juce::XmlElement*>> pendingInserts;   // the buses' and audio tracks'
         std::vector<juce::XmlElement*> instrumentElements;
         size_t next = 0;
         std::map<int, InstrumentId> idMap;
@@ -3729,6 +3776,7 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
     state->xml = std::move (xml);
     state->folderIdMap = std::move (folderIdMap);
     state->busIdMap = std::move (busIdMap);
+    state->pendingInserts = std::move (pendingInserts);
     state->path = file.getFullPathName();
     state->done = std::move (done);
 
@@ -3740,6 +3788,15 @@ void AudioEngine::loadProject (const juce::File& file, std::function<void (bool,
 
     *step = [this, state, step]
     {
+        if (state->next >= state->instrumentElements.size() && ! state->pendingInserts.empty())
+        {
+            // Then the buses' and audio tracks' effects, one channel after another
+            const auto [channelId, element] = state->pendingInserts.front();
+            state->pendingInserts.erase (state->pendingInserts.begin());
+            restoreInserts (channelId, element, [step] { (*step)(); });
+            return;
+        }
+
         if (state->next >= state->instrumentElements.size())
         {
             busyStatus.update ("Restoring tracks and building the audio graph...", 1.0);
