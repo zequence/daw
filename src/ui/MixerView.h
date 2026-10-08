@@ -1011,10 +1011,8 @@ private:
         void paintModernBackground (juce::Graphics& g, bool isHighlighted) const
         {
             const auto bounds = getLocalBounds().toFloat();
-            auto base = juce::Colour (0xff1b1e23);
-
-            if (backgroundSummed)   // a channel a group sums: dark as the others, a shade lighter (well short of selected)
-                base = juce::Colour (0xff23272d);
+            // The channels a group sums: a shade darker than the others
+            const auto base = juce::Colour (backgroundSummed ? 0xff1b1e23 : 0xff23272d);
 
             if (isHighlighted)
                 base = base.brighter (0.35f);
