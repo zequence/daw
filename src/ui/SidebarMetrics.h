@@ -119,7 +119,7 @@ namespace sidebar
     }
 
     inline juce::Font trackNameFont()    { return interFont (13.0f, false); }
-    inline juce::Font folderNameFont()   { return interFont (12.0f, true).withExtraKerningFactor (0.08f); }
+    inline juce::Font folderNameFont()   { return interFont (14.0f, true).withExtraKerningFactor (0.08f); }
 
     inline const juce::Colour rowTextColour { 0xffd4d6da };   // the rows' names: a very light grey, not white
 

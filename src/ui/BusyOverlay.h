@@ -60,6 +60,16 @@ public:
                 stopTimer();
                 native.hide();
 
+                // The whole window again: while this thread was blocked the window system's paint
+                // requests could be lost (on Linux, at startup: the window stayed black until hovered).
+                // Now, and once more when the native card's window has gone
+                if (auto* top = getTopLevelComponent())
+                {
+                    top->repaint();
+                    juce::Timer::callAfterDelay (150, [safe = juce::Component::SafePointer<juce::Component> (top)]
+                                                 { if (safe != nullptr) safe->repaint(); });
+                }
+
                 // Smoothness report: how often we managed to draw, and where it froze
                 // (JUCE-drawn frames; the native card animates independently)
                 const auto nowMs = juce::Time::getMillisecondCounterHiRes();

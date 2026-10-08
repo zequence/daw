@@ -175,7 +175,7 @@ public:
         nameLabel.setText (engine.getFolderName (folderId).toUpperCase(), juce::dontSendNotification);
         nameLabel.setEditable (false, true);
         nameLabel.setColour (juce::Label::outlineColourId, juce::Colours::transparentBlack);
-        // Same text color as the tracks; the bold smaller font sets folders apart (ISSUES.md)
+        // Same text color as the tracks; the bold capitals set folders apart (ISSUES.md)
         nameLabel.setFont (sidebar::folderNameFont());
         nameLabel.onEditorShow = [this]   // shown in capitals; renamed as written
         {
