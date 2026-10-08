@@ -26,5 +26,8 @@ if [[ -z "${YABRIDGE_DEBUG_FILE:-}" ]]; then
   mkdir -p "$logs"
   export YABRIDGE_DEBUG_FILE="$logs/yabridge.log"
 fi
+# (for now: every call between the app and a bridged plugin, but not audio - tracking down the crash
+# in yabridge on saving; YABRIDGE_DEBUG_LEVEL=0 for the short log)
+export YABRIDGE_DEBUG_LEVEL="${YABRIDGE_DEBUG_LEVEL:-1}"
 
 exec "build/$config/OrchestralDAW_artefacts/$config/Daw+"
