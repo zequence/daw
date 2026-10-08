@@ -830,6 +830,32 @@ public:
             return;
         }
 
+        if (engine.isBus (channelId))   // a bus: rename, remove (what went to it goes to the master)
+        {
+            const auto id = channelId;
+            auto& eng = engine;
+            const auto safe = juce::Component::SafePointer<AudioRow> (this);
+            juce::PopupMenu menu;
+            menu.addItem ("Rename", [safe]
+            {
+                if (safe != nullptr)
+                {
+                    safe->nameLabel.setText (safe->engine.getAudioChannelName (safe->channelId), juce::dontSendNotification);
+                    safe->nameLabel.showEditor();
+                }
+            });
+            menu.addSeparator();
+            menu.addItem ("Remove bus", [&eng, id, list = juce::Component::SafePointer<TrackList> (&owner)]
+            {
+                eng.removeBus (id);
+
+                if (list != nullptr)
+                    list->refreshSoon();
+            });
+            menu.showMenuAsync (juce::PopupMenu::Options());
+            return;
+        }
+
         if (owner.onInstrumentMenu)
             if (const auto instrument = engine.getAudioChannelInput (channelId); instrument != 0)
                 owner.onInstrumentMenu (instrument);
