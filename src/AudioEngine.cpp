@@ -3426,6 +3426,7 @@ bool AudioEngine::saveProject (const juce::File& file)
             e->addChildElement (plugin->getPluginDescription().createXml().release());
 
             juce::MemoryBlock state;
+            juce::Logger::writeToLog ("Saving the state of " + instrument.name);   // (a plugin that crashes here shows in the log)
             plugin->getStateInformation (state);
 
             if (state.getSize() > 0)
@@ -3492,6 +3493,7 @@ bool AudioEngine::saveProject (const juce::File& file)
                     {
                         i->addChildElement (plugin->getPluginDescription().createXml().release());
                         juce::MemoryBlock pluginState;
+                        juce::Logger::writeToLog ("Saving the state of insert " + insert.name);
                         plugin->getStateInformation (pluginState);
 
                         if (pluginState.getSize() > 0)

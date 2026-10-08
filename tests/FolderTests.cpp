@@ -227,6 +227,32 @@ public:
             file.deleteFile();
             engine.clearProject();
         }
+
+        beginTest ("a grouped folder with its colour saves and loads (its audio track summed by its bus)");
+        {
+            const auto folder = engine.addFolder (true, "Strings");
+            const auto audio = engine.addAudioTrack ("Room", true, folder);
+            engine.setFolderGrouped (folder, true);
+            engine.setFolderColour (folder, "#4080c0");
+            const auto bus = engine.getFolderGroupBus (folder);
+            expect (bus != 0 && engine.getAudioChannelOutput (audio) == bus);
+
+            const auto file = juce::File::getSpecialLocation (juce::File::tempDirectory).getChildFile ("grouped-folder.odaw");
+            expect (engine.saveProject (file));
+
+            bool loaded = false;
+            engine.loadProject (file, [&loaded] (bool ok, const juce::String&) { loaded = ok; });
+            expect (loaded);
+
+            const auto folders = engine.getFolderIds (true);
+            expectEquals ((int) folders.size(), 1);
+            expect (engine.isFolderGrouped (folders.front()));
+            expectEquals (engine.getFolderColour (folders.front()), juce::String ("#4080c0"));
+            expectEquals (engine.getChannelTagColour (engine.getFolderGroupBus (folders.front())), juce::String ("#4080c0"));
+
+            file.deleteFile();
+            engine.clearProject();
+        }
     }
 };
 

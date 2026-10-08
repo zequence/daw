@@ -23,6 +23,14 @@ public:
         logger = std::make_unique<juce::FileLogger> (UserData::getAppLog(),
                                                      getApplicationName() + " " + getApplicationVersion());
         juce::Logger::setCurrentLogger (logger.get());
+
+        // A crash leaves its call stack in the log (Windows and Linux: JUCE's handler for fatal
+        // exceptions / signals). Written straight to the file: nothing else can be trusted by then
+        juce::SystemStats::setApplicationCrashHandler ([] (void*)
+        {
+            UserData::getAppLog().appendText ("\n*** CRASH ***\n" + juce::SystemStats::getStackBacktrace() + "\n");
+            std::_Exit (1);
+        });
         juce::Logger::writeToLog ("User data dir: " + UserData::getDir().getFullPathName());
 
         juce::PropertiesFile::Options options;
