@@ -286,7 +286,7 @@ private:
     // The tallest a default mixer's strip must be: the sections, then the faders at their smallest
     int minimumModernHeight() const
     {
-        return 4 + 36 + 4 + insertsHeight + dividerGap + emptyHeight + dividerGap + 62 + minFaderHeight + 16 + 4 + 20 + 2 + 16 + 4;
+        return 4 + 36 + 6 + insertsHeight + dividerGap + emptyHeight + dividerGap + 62 + minFaderHeight + 16 + 4 + 20 + 2 + 16 + 4;
     }
 
     // The Aux buses (the console only) and the master
@@ -1036,13 +1036,13 @@ private:
             }
 
             // A group's own strip: the area behind its tag (at the foot) in the group's colour, as its row in the track view
-            if (owner.engine.isGroupBus (channelId) && backgroundStripe.isNotEmpty())
+            if (owner.engine.isGroupBus (channelId))   // (no colour chosen: the default tag colour, as in the track view)
             {
                 // Inside the strip's edge, its top corners following the strip's; square where it ends below the tag
                 const auto tag = juce::Rectangle<float> (1.0f, 1.0f, bounds.getWidth() - 2.0f, (float) name.getBottom() + 3.0f);
                 juce::Path band;
                 band.addRoundedRectangle (tag.getX(), tag.getY(), tag.getWidth(), tag.getHeight(), 3.0f, 3.0f, true, true, false, false);
-                g.setColour (AudioEngine::colourFromHex (backgroundStripe, juce::Colour (0xff7d9cc0)));
+                g.setColour (AudioEngine::colourFromHex (backgroundStripe, mixer::tape::cream));
                 g.fillPath (band);
             }
 
@@ -1220,6 +1220,7 @@ private:
 
             if (owner.modern)   // the default mixer: the tape at the top (as above), its name small at the foot
             {
+                area.removeFromTop (2);   // a little room between a group's coloured top and the inserts' switch
                 layoutModern (area);
                 return;
             }
