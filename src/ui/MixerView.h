@@ -385,6 +385,8 @@ private:
                         if (engine.getInstrumentGroupBus (instrument) == channelId)
                             engine.setInstrumentName (instrument, name.getText());
                 }
+                else if (const auto instrument = singleOutputInstrument(); instrument != 0)
+                    engine.setInstrumentName (instrument, name.getText());
                 else
                     engine.setAudioChannelName (channelId, name.getText());
 
@@ -671,20 +673,47 @@ private:
             return nullptr;
         }
 
+        // An instrument with one output IS its channel (the track view hides its audio row): the strip
+        // goes by the instrument's name, and renaming it renames the instrument
+        AudioEngine::InstrumentId singleOutputInstrument() const
+        {
+            auto& engine = owner.engine;
+
+            if (kind != Kind::channel || engine.isGroupBus (channelId))
+                return 0;
+
+            const auto instrument = engine.getAudioChannelInput (channelId);
+            return instrument != 0 && engine.isSingleOutputInstrument (instrument) ? instrument : 0;
+        }
+
+        juce::String channelName() const
+        {
+            const auto instrument = singleOutputInstrument();
+            return instrument != 0 ? owner.engine.getInstrumentName (instrument) : owner.engine.getAudioChannelName (channelId);
+        }
+
         void refreshName()
         {
             refreshOutput();
+
+            // The background (an image, kept) follows a group's colour: drawn again when it changes
+            const auto group = owner.engine.getAudioChannelOutput (channelId);
+            const auto stripe = owner.engine.isGroupBus (group) ? owner.engine.getChannelTagColour (group)
+                              : owner.engine.isGroupBus (channelId) ? owner.engine.getChannelTagColour (channelId) : juce::String();
+
+            if (stripe != backgroundStripe)
+                repaint();
 
             if (name.isBeingEdited())
                 return;
 
             topName.setText (kind == Kind::master ? juce::String ("Master")
                                : kind == Kind::aux ? "Aux " + juce::String (auxNumber)
-                                                   : owner.engine.getAudioChannelName (channelId),
+                                                   : channelName(),
                              juce::dontSendNotification);
             name.setText (kind == Kind::master ? juce::String ("Master")
                             : kind == Kind::aux ? "Aux " + juce::String (auxNumber)
-                                                : owner.engine.getAudioChannelName (channelId),
+                                                : channelName(),
                           juce::dontSendNotification);
 
             expandButton.setButtonText (juce::String::fromUTF8 (owner.expandedGroups.count (channelId) > 0 ? "\xe2\x97\x82" : "\xe2\x96\xb8"));
@@ -1009,8 +1038,8 @@ private:
             // A group's own strip: the area behind its tag (at the foot) in the group's colour, as its row in the track view
             if (owner.engine.isGroupBus (channelId) && backgroundStripe.isNotEmpty())
             {
-                const auto tag = name.getBounds().toFloat().expanded (3.0f, 3.0f).withRight (bounds.getRight() - 1.0f).withX (1.0f)
-                                     .withBottom (bounds.getBottom() - 1.0f);
+                const auto tag = juce::Rectangle<float> (1.0f, (float) name.getY() - 6.0f, bounds.getWidth() - 2.0f,
+                                                         bounds.getBottom() - 1.0f - ((float) name.getY() - 6.0f));
                 g.setColour (AudioEngine::colourFromHex (backgroundStripe, juce::Colour (0xff7d9cc0)));
                 g.fillRoundedRectangle (tag, 3.0f);
             }
