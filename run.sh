@@ -20,4 +20,11 @@ done
 if [[ -z "${WINEPREFIX:-}" && -d ../prefix/drive_c ]]; then
   export WINEPREFIX="$(cd ../prefix && pwd)"
 fi
+# yabridge (Windows plugins under Wine) writes its log - and the Wine side's errors - next to the app's
+if [[ -z "${YABRIDGE_DEBUG_FILE:-}" ]]; then
+  logs="${XDG_CONFIG_HOME:-$HOME/.config}/DawPlus/Logs"
+  mkdir -p "$logs"
+  export YABRIDGE_DEBUG_FILE="$logs/yabridge.log"
+fi
+
 exec "build/$config/OrchestralDAW_artefacts/$config/Daw+"
