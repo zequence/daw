@@ -844,7 +844,7 @@ struct Placeholder final : juce::Component, juce::SettableTooltipClient
             if (name.isNotEmpty())
             {
                 g.setColour (juce::Colours::white.withAlpha (off ? 0.35f : 0.85f));
-                g.setFont (juce::FontOptions (juce::jmin (10.0f, slot.getHeight() - 3.0f)));
+                g.setFont (juce::FontOptions (juce::jmin (12.5f, slot.getHeight() - 6.0f)));   // (readable: as large as the slot allows)
                 g.drawText (name, slot.reduced (4.0f, 0.0f).toNearestInt(), juce::Justification::centredLeft, true);
             }
         }

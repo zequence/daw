@@ -250,11 +250,29 @@ private:   // where a channel strip's pan and fader begin (the other strips foll
 
 private:
     enum class Kind { channel, aux, master };
-    static constexpr int stripWidth = 118, stripHeight = 1310;
+    static constexpr int stripWidth = 118, stripHeight = 1310, subStripWidth = stripWidth * 2 / 3;
+    int channelsRight = 0;   // where the channels' strips end (the Aux buses follow)
+
+    // Whether 'next' stands in the same group unit as 'previous' (next is summed by a group that previous
+    // is, or that sums previous too - its channels, groups within it, theirs)
+    bool inGroupUnit (AudioEngine::AudioChannelId previous, AudioEngine::AudioChannelId next) const
+    {
+        const auto group = engine.getAudioChannelOutput (next);
+
+        if (! engine.isGroupBus (group))
+            return false;
+
+        for (auto along = previous; along != 0; along = engine.getAudioChannelOutput (along))
+            if (along == group)
+                return true;
+
+        return false;
+    }
 
     // The default mixer's sections: the inserts at most their 16 slots' height (smaller hides the
     // last ones), the empty section; the edges between them (and the faders') drag
-    static constexpr int insertsFullHeight = 330, maxEmptyHeight = 1000, dividerGap = 8, minFaderHeight = 140;
+    static constexpr int insertsFullHeight = 13 + 16 * 24,   // the caption, 16 slots of 24 px
+                          maxEmptyHeight = 1000, dividerGap = 8, minFaderHeight = 140;
     bool modern = true;
     int insertsHeight = insertsFullHeight, emptyHeight = 140;
 
@@ -989,10 +1007,12 @@ private:
                                        : owner.engine.isGroupBus (channelId) ? owner.engine.getChannelTagColour (channelId) : juce::String();
 
             const auto layout = juce::Rectangle<int> (dividerY[0], dividerY[1], name.getY(), name.getHeight());
+            const auto joins = (joinedLeft ? 1 : 0) + (joinedRight ? 2 : 0);
 
             if (background.getWidth() != getWidth() || background.getHeight() != getHeight() || isHighlighted != backgroundHighlighted
-                || summed != backgroundSummed || stripe != backgroundStripe || layout != backgroundLayout)
+                || summed != backgroundSummed || stripe != backgroundStripe || layout != backgroundLayout || joins != backgroundJoins)
             {
+                backgroundJoins = joins;
                 backgroundLayout = layout;
                 backgroundStripe = stripe;
                 backgroundHighlighted = isHighlighted;
@@ -1006,40 +1026,49 @@ private:
         bool backgroundSummed = false;
         juce::String backgroundStripe;   // a summed channel's: its group's colour
         juce::Rectangle<int> backgroundLayout;   // (the sections' edges and the tag's place)
+        bool joinedLeft = false, joinedRight = false;   // the default mixer: in a group's unit, a neighbour flush on that side
+        int backgroundJoins = -1;
 
         // The default mixer's strip: dark, plain, a faint edge; the empty section recessed; grips on the edges
         void paintModernBackground (juce::Graphics& g, bool isHighlighted) const
         {
             const auto bounds = getLocalBounds().toFloat();
-            // The channels a group sums: a shade darker than the others
-            auto base = juce::Colour (backgroundSummed ? 0xff1b1e23 : 0xff23272d);
+            auto base = juce::Colour (0xff1b1e23);
 
             if (isHighlighted)
                 base = base.brighter (0.35f);
 
-            g.setGradientFill (juce::ColourGradient (base.brighter (0.06f), 0.0f, 0.0f, base.darker (0.25f), 0.0f, bounds.getBottom(), false));
-            g.fillRoundedRectangle (bounds, 4.0f);
-            g.setColour (juce::Colours::white.withAlpha (isHighlighted ? 0.16f : 0.06f));
-            g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
-
-            if (backgroundStripe.isNotEmpty() && ! owner.engine.isGroupBus (channelId))   // the channels a group sums: its colour along the top
+            // A group and the channels it sums (shown expanded) stand together as one unit: square where
+            // they meet, rounded only at the unit's outer corners
+            const auto outline = [&] (juce::Rectangle<float> r, float corner)
             {
-                g.setColour (AudioEngine::colourFromHex (backgroundStripe, juce::Colour (0xff7d9cc0)));
-                g.fillRoundedRectangle (juce::Rectangle<float> (1.0f, 0.0f, bounds.getWidth() - 2.0f, 3.0f), 1.5f);
-            }
-            else if (kind == Kind::master)
+                juce::Path path;
+                path.addRoundedRectangle (r.getX(), r.getY(), r.getWidth(), r.getHeight(), corner, corner,
+                                          ! joinedLeft, ! joinedRight, ! joinedLeft, ! joinedRight);
+                return path;
+            };
+
+            g.setGradientFill (juce::ColourGradient (base.brighter (0.06f), 0.0f, 0.0f, base.darker (0.25f), 0.0f, bounds.getBottom(), false));
+            g.fillPath (outline (bounds, 4.0f));
+            g.setColour (juce::Colours::white.withAlpha (isHighlighted ? 0.16f : 0.06f));
+            g.strokePath (outline (bounds.reduced (0.5f), 4.0f), juce::PathStrokeType (1.0f));
+
+            if (kind == Kind::master)
             {
                 g.setColour (juce::Colour (0xffc23b33));
                 g.fillRoundedRectangle (juce::Rectangle<float> (1.0f, 0.0f, bounds.getWidth() - 2.0f, 3.0f), 1.5f);
             }
 
-            // A group's own strip: the area behind its tag (at the foot) in the group's colour, as its row in the track view
-            if (owner.engine.isGroupBus (channelId))   // (no colour chosen: the default tag colour, as in the track view)
+            // A group's colour behind the tags, across the whole unit (the group's strip and those it sums, expanded):
+            // inside the edge, rounded only at the unit's outer top corners, square below the tags
+            // (no colour chosen: the default tag colour, as in the track view)
+            if (owner.engine.isGroupBus (channelId) || joinedLeft)
             {
-                // Inside the strip's edge, its top corners following the strip's; square where it ends below the tag
-                const auto tag = juce::Rectangle<float> (1.0f, 1.0f, bounds.getWidth() - 2.0f, (float) name.getBottom() + 3.0f);
+                const auto left = joinedLeft ? 0.0f : 1.0f, right = joinedRight ? bounds.getWidth() : bounds.getWidth() - 1.0f;
+                const auto tag = juce::Rectangle<float> (left, 1.0f, right - left, (float) name.getBottom() + 3.0f);
                 juce::Path band;
-                band.addRoundedRectangle (tag.getX(), tag.getY(), tag.getWidth(), tag.getHeight(), 3.0f, 3.0f, true, true, false, false);
+                band.addRoundedRectangle (tag.getX(), tag.getY(), tag.getWidth(), tag.getHeight(), 3.0f, 3.0f,
+                                          ! joinedLeft, ! joinedRight, false, false);
                 g.setColour (AudioEngine::colourFromHex (backgroundStripe, mixer::tape::cream));
                 g.fillPath (band);
             }
@@ -2206,7 +2235,32 @@ private:
         const auto width = outer.getMaximumVisibleWidth();
         const auto gap = 14;   // between the channels and the Aux buses
         const auto count = (int) channelStrips.size();
-        const auto stripsWidth = count * (stripWidth + 4) + (auxStrips.empty() ? 0 : gap + (int) auxStrips.size() * (stripWidth + 4)) + 4;
+        // The default mixer: the channels a group sums (expanded) are 2/3 wide and flush against each other
+        // and their group, one unit; everything else 4 px apart
+        std::vector<int> xs, widths;
+        {
+            int x = 4;
+
+            for (int i = 0; i < count; ++i)
+            {
+                auto& strip = *channelStrips[(size_t) i];
+                const auto joined = modern && i > 0 && inGroupUnit (channelStrips[(size_t) i - 1]->channelId, strip.channelId);
+                strip.joinedLeft = joined;
+                strip.joinedRight = modern && i + 1 < count && inGroupUnit (strip.channelId, channelStrips[(size_t) i + 1]->channelId);
+
+                if (i > 0 && ! joined)
+                    x += 4;
+
+                const auto w = joined ? subStripWidth : stripWidth;
+                xs.push_back (x);
+                widths.push_back (w);
+                x += w;
+            }
+
+            channelsRight = x + 4;
+        }
+
+        const auto stripsWidth = channelsRight + (auxStrips.empty() ? 0 : gap + (int) auxStrips.size() * (stripWidth + 4));
         const auto viewWidth = width - stripWidth - 20;
         const auto scrollbar = stripsWidth > viewWidth ? channelsViewport.getScrollBarThickness() : 0;
         // The default mixer's strips reach the window's foot (scrolling only when it's shorter than the sections)
@@ -2220,10 +2274,13 @@ private:
         strips.setSize (stripsWidth, stripsHeight);
 
         for (int i = 0; i < count; ++i)
-            channelStrips[(size_t) i]->setBounds (4 + i * (stripWidth + 4), 4, stripWidth, stripsHeight - 8);
+        {
+            channelStrips[(size_t) i]->setBounds (xs[(size_t) i], 4, widths[(size_t) i], stripsHeight - 8);
+            channelStrips[(size_t) i]->repaint();   // (its joins may have changed, its size not)
+        }
 
         for (int i = 0; i < (int) auxStrips.size(); ++i)
-            auxStrips[(size_t) i]->setBounds (4 + count * (stripWidth + 4) + gap + i * (stripWidth + 4), 4, stripWidth, stripsHeight - 8);
+            auxStrips[(size_t) i]->setBounds (channelsRight + gap + i * (stripWidth + 4), 4, stripWidth, stripsHeight - 8);
 
         for (auto& strip : auxStrips)   // now that the channels have set levelTop
             strip->resized();
