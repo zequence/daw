@@ -1013,8 +1013,8 @@ private:
             const auto bounds = getLocalBounds().toFloat();
             auto base = juce::Colour (0xff1b1e23);
 
-            if (backgroundSummed)
-                base = base.interpolatedWith (juce::Colour (0xff3d5470), 0.25f);
+            if (backgroundSummed)   // a channel a group sums: as the others, a little brighter
+                base = base.brighter (0.3f);
 
             if (isHighlighted)
                 base = base.brighter (0.35f);
