@@ -3151,7 +3151,7 @@ void CommandDispatcher::applyVeproSync (const std::vector<vepro::SyncInstance>& 
 
         for (auto& player : instance.players)
         {
-            AudioEngine::MidiChannelInfo channel { player.midiPort, player.midiChannel, player.name, true };
+            AudioEngine::MidiChannelInfo channel { .midiPort = player.midiPort, .midiChannel = player.midiChannel, .name = player.name, .synced = true };
             channel.veproInstanceId = instance.id;
             channel.veproChannelAddress = player.channelAddress;
             channel.veproPluginId = player.pluginId;

@@ -999,7 +999,14 @@ void MainComponent::showTrackContextMenu (AudioEngine::TrackId id)
     if (instrument == 0)   // (in an instrument folder only the folder is coloured)
         menu.addSubMenu ("Color", colours::buildMenu (engine.getTrackColour (id),
                                                       [safe, id] (juce::String hex)
-                                                      { if (safe != nullptr) safe->engine.setTrackColour (id, hex); }));
+                                                      {
+                                                          if (safe != nullptr)
+                                                          {
+                                                              safe->engine.setTrackColour (id, hex);
+                                                              safe->trackList.refresh();   // its tag, at once
+                                                              safe->arrangementView.repaint();
+                                                          }
+                                                      }));
     menu.addSeparator();
     menu.addItem ("Demo clip", [safe, id]
     {

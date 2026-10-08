@@ -959,7 +959,7 @@ private:
             const auto stripe = summed ? owner.engine.getChannelTagColour (group)   // the group's colour: its cover, its channels' stripes
                                        : owner.engine.isGroupBus (channelId) ? owner.engine.getChannelTagColour (channelId) : juce::String();
 
-            const auto layout = juce::Point<int> (dividerY[0], dividerY[1]);
+            const auto layout = juce::Rectangle<int> (dividerY[0], dividerY[1], name.getY(), name.getHeight());
 
             if (background.getWidth() != getWidth() || background.getHeight() != getHeight() || isHighlighted != backgroundHighlighted
                 || summed != backgroundSummed || stripe != backgroundStripe || layout != backgroundLayout)
@@ -976,7 +976,7 @@ private:
 
         bool backgroundSummed = false;
         juce::String backgroundStripe;   // a summed channel's: its group's colour
-        juce::Point<int> backgroundLayout;
+        juce::Rectangle<int> backgroundLayout;   // (the sections' edges and the tag's place)
 
         // The default mixer's strip: dark, plain, a faint edge; the empty section recessed; grips on the edges
         void paintModernBackground (juce::Graphics& g, bool isHighlighted) const
@@ -1004,6 +1004,15 @@ private:
             {
                 g.setColour (juce::Colour (0xffc23b33));
                 g.fillRoundedRectangle (juce::Rectangle<float> (1.0f, 0.0f, bounds.getWidth() - 2.0f, 3.0f), 1.5f);
+            }
+
+            // A group's own strip: the area behind its tag (at the foot) in the group's colour, as its row in the track view
+            if (owner.engine.isGroupBus (channelId) && backgroundStripe.isNotEmpty())
+            {
+                const auto tag = name.getBounds().toFloat().expanded (3.0f, 3.0f).withRight (bounds.getRight() - 1.0f).withX (1.0f)
+                                     .withBottom (bounds.getBottom() - 1.0f);
+                g.setColour (AudioEngine::colourFromHex (backgroundStripe, juce::Colour (0xff7d9cc0)));
+                g.fillRoundedRectangle (tag, 3.0f);
             }
 
             if (! emptyArea.isEmpty())

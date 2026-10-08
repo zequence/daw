@@ -805,9 +805,13 @@ public:
             const auto id = channelId;
             auto& eng = engine;
             juce::PopupMenu menu;
-            menu.addSubMenu ("Color", colours::buildMenu (eng.getAudioTrackColour (id), [&eng, id] (juce::String hex)
+            menu.addSubMenu ("Color", colours::buildMenu (eng.getAudioTrackColour (id),
+                                                          [&eng, id, list = juce::Component::SafePointer<TrackList> (&owner)] (juce::String hex)
             {
                 eng.setAudioTrackColour (id, hex);
+
+                if (list != nullptr)
+                    list->refreshSoon();   // its tag, at once (deferred: this row may be rebuilt)
             }));
             menu.addSeparator();
             menu.addItem ("Remove audio track", [&eng, id] { eng.removeAudioTrack (id); });

@@ -386,11 +386,11 @@ public:
 
         for (auto* e : xml.getChildWithTagNameIterator ("NOTE"))
         {
-            Note note { e->getStringAttribute ("start").getLargeIntValue(),
-                        e->getStringAttribute ("length").getLargeIntValue(),
-                        e->getIntAttribute ("channel", 1),
-                        e->getIntAttribute ("key", 60),
-                        e->getIntAttribute ("velocity", 100) };
+            Note note { .startTick = e->getStringAttribute ("start").getLargeIntValue(),
+                        .lengthTicks = e->getStringAttribute ("length").getLargeIntValue(),
+                        .channel = e->getIntAttribute ("channel", 1),
+                        .key = e->getIntAttribute ("key", 60),
+                        .velocity = e->getIntAttribute ("velocity", 100) };
 
             note.region = e->getIntAttribute ("region", 0);
 

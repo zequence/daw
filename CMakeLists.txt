@@ -7,6 +7,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(external/JUCE)
 
+# Linux: link with mold when it's installed (GNU ld takes far longer on binaries this size)
+if(UNIX AND NOT APPLE AND CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    find_program(MOLD_LINKER mold)
+    if(MOLD_LINKER)
+        add_link_options(-fuse-ld=mold)
+    endif()
+endif()
+
 # zstd reference decoder (BSD licence, decompression only): Synchron Player
 # state embeds zstd-compressed JSON (key ranges etc.).
 add_library(zstd_decoder STATIC
@@ -75,8 +83,16 @@ target_link_libraries(OrchestralDAW
         juce::juce_audio_processors
     PUBLIC
         juce::juce_recommended_config_flags
-        juce::juce_recommended_lto_flags
         juce::juce_recommended_warning_flags)
+
+# Link-time optimisation (Release): JUCE's flags on MSVC; with GCC / Clang -flto=auto, so the link-time
+# code generation runs on every core (JUCE's plain -flto runs it serially - minutes on one core)
+if(MSVC)
+    target_link_libraries(OrchestralDAW PUBLIC juce::juce_recommended_lto_flags)
+else()
+    target_compile_options(OrchestralDAW PRIVATE $<$<CONFIG:Release>:-flto=auto>)
+    target_link_options(OrchestralDAW PRIVATE $<$<CONFIG:Release>:-flto=auto>)
+endif()
 
 # The busy card's own X11 window on Linux (NativeBusyWindow.cpp; JUCE loads X11 at run time itself)
 if(UNIX AND NOT APPLE)
@@ -194,3 +210,11 @@ add_dependencies(OrchestralDAW OrchestralDAWScanner)
 add_custom_command(TARGET OrchestralDAW POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
             $<TARGET_FILE:OrchestralDAWScanner> $<TARGET_FILE_DIR:OrchestralDAW>)
+
+# GCC: -Wextra's missing-field-initializers fires on aggregates whose members all have default
+# initializers (they start at those defaults) - noise; MSVC and Clang don't warn about them
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+    foreach(target OrchestralDAW OrchestralDAWScanner OrchestralDAWTests)
+        target_compile_options(${target} PRIVATE -Wno-missing-field-initializers)
+    endforeach()
+endif()

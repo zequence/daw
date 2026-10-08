@@ -128,9 +128,9 @@ private:
 
     void closeNote (const OpenNote& note, juce::int64 endTick)
     {
-        pending.notes.push_back ({ note.startTick,
-                                   juce::jmax ((juce::int64) 1, endTick - note.startTick),
-                                   note.channel, note.key, note.velocity });
+        pending.notes.push_back ({ .startTick = note.startTick,
+                                   .lengthTicks = juce::jmax ((juce::int64) 1, endTick - note.startTick),
+                                   .channel = note.channel, .key = note.key, .velocity = note.velocity });
     }
 
     void closeAllOpenNotes (juce::int64 endTick)
